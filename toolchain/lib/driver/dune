@@ -1,0 +1,14 @@
+(library
+ (name sigma_driver)
+ (public_name sigma.driver)
+ (libraries
+  sigma_common
+  sigma_diagnostics
+  sigma_syntax
+  sigma_sema
+  sigma_ir
+  sigma_interp
+  sigma_codegen
+  sigma_linter
+  sigma_debugger
+  sigma_pkg))

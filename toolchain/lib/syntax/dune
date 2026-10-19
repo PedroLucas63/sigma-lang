@@ -1,0 +1,4 @@
+(library
+ (name sigma_syntax)
+ (public_name sigma.syntax)
+ (libraries sigma_common sigma_diagnostics))

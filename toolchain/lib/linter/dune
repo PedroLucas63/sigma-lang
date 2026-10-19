@@ -1,0 +1,4 @@
+(library
+ (name sigma_linter)
+ (public_name sigma.linter)
+ (libraries sigma_common sigma_diagnostics sigma_sema))

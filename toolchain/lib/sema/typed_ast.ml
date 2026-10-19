@@ -1,0 +1,30 @@
+open Sigma_common
+
+type expr_desc =
+  | TExprInt of int64
+  | TExprIdent of string
+
+type expr = {
+  desc : expr_desc;
+  ty : Ty.t;
+  span : Span.t;
+}
+
+type var_decl = {
+  name : string;
+  name_span : Span.t;
+  ty : Ty.t;
+  init : expr;
+  was_default_initialized : bool;
+}
+
+type stmt_desc =
+  | TStmtVarDecl of var_decl
+  | TStmtExpr of expr
+
+type stmt = {
+  desc : stmt_desc;
+  span : Span.t;
+}
+
+type program = stmt list

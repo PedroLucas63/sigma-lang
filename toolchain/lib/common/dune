@@ -1,0 +1,3 @@
+(library
+ (name sigma_common)
+ (public_name sigma.common))

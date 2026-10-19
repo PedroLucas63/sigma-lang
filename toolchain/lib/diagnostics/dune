@@ -1,0 +1,4 @@
+(library
+ (name sigma_diagnostics)
+ (public_name sigma.diagnostics)
+ (libraries sigma_common))

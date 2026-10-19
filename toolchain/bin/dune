@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (public_name sigma)
+ (package sigma)
+ (libraries sigma_common sigma_diagnostics sigma_driver sigma_pkg))

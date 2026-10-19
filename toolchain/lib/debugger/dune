@@ -1,0 +1,4 @@
+(library
+ (name sigma_debugger)
+ (public_name sigma.debugger)
+ (libraries sigma_ir sigma_interp))

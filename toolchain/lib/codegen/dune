@@ -1,0 +1,4 @@
+(library
+ (name sigma_codegen)
+ (public_name sigma.codegen)
+ (libraries sigma_sema))
