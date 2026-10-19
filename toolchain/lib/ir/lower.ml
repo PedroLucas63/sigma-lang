@@ -5,17 +5,34 @@ let lower_expr acc (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt n ->
     { Ir.op = Ir.OP_CONST_I64 n; span = e.span } :: acc
+  | Typed_ast.TExprBool b ->
+    { Ir.op = Ir.OP_CONST_BOOL b; span = e.span } :: acc
   | Typed_ast.TExprIdent name ->
-    { Ir.op = Ir.OP_GET_GLOBAL_I64 name; span = e.span } :: acc
+    let op =
+      match e.ty with
+      | Ty.Int -> Ir.OP_GET_GLOBAL_I64 name
+      | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
+    in
+    { Ir.op; span = e.span } :: acc
 
 let lower_stmt acc (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     let acc = lower_expr acc v.init in
-    { Ir.op = Ir.OP_DEF_GLOBAL_I64 v.name; span = s.span } :: acc
+    let op =
+      match v.ty with
+      | Ty.Int -> Ir.OP_DEF_GLOBAL_I64 v.name
+      | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL v.name
+    in
+    { Ir.op; span = s.span } :: acc
   | Typed_ast.TStmtExpr e ->
     let acc = lower_expr acc e in
-    { Ir.op = Ir.OP_PRINT_I64; span = s.span } :: acc
+    let op =
+      match e.ty with
+      | Ty.Int -> Ir.OP_PRINT_I64
+      | Ty.Bool -> Ir.OP_PRINT_BOOL
+    in
+    { Ir.op; span = s.span } :: acc
 
 let lower_program (prog : Typed_ast.program) : Ir.program =
   let rev_instrs = List.fold_left lower_stmt [] prog in

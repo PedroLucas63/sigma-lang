@@ -2,6 +2,7 @@ open Sigma_common
 
 type expr_desc =
   | ExprInt of int64
+  | ExprBool of bool
   | ExprIdent of string
 
 and expr = {
@@ -30,6 +31,7 @@ type program = stmt list
 let pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
+  | ExprBool b -> Format.fprintf fmt "%B" b
   | ExprIdent id -> Format.fprintf fmt "%s" id
 
 let pp_stmt fmt (s : stmt) =

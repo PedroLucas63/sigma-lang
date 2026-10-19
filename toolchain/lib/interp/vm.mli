@@ -2,10 +2,16 @@
 
 open Sigma_ir
 
+type value =
+  | VInt of int64
+  | VBool of bool
+
+val value_to_string : value -> string
+
 type state = {
   mutable ip : int;
-  mutable stack : int64 list;
-  globals : (string, int64) Hashtbl.t;
+  mutable stack : value list;
+  globals : (string, value) Hashtbl.t;
   mutable halted : bool;
 }
 

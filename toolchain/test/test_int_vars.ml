@@ -35,6 +35,11 @@ var m2 := 1_000_000;
 var m3 : int = 100_00_00;
 var m4 : int = 10_00_00_00;
 var m5 := -1_000_000;
+// 6. Booleans (inferred, explicit, zero-init = false, and copy)
+var b1 := true;
+var b2 : bool = false;
+var b3 : bool;
+var b4 : bool = b1;
 
 // Debug print expression statements
 a;
@@ -47,10 +52,16 @@ m2;
 m3;
 m4;
 m5;
+b1;
+b2;
+b3;
+b4;
 |}
   in
   let src = Source.of_string ~filename:"valid.sgm" ~content:code in
-  let expected_stdout = "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\n" in
+  let expected_stdout =
+    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n"
+  in
 
   (* 1. Interpreter (VM) *)
   (match Driver.run_source src with
@@ -151,7 +162,27 @@ let test_syntax_and_semantic_errors () =
   let s8 = Source.of_string ~filename:"err8.sgm" ~content:"var a := _1000;" in
   (match Driver.run_source s8 with
    | Ok _ -> assert_true ~msg:"leading underscore _1000 must fail as undeclared ident" false
-   | Error errs -> assert_true ~msg:"E0102 expected for _1000" (has_code "E0102" errs))
+   | Error errs -> assert_true ~msg:"E0102 expected for _1000" (has_code "E0102" errs));
+
+  (* E0104: strong typing - cannot assign bool to int *)
+  let s9 = Source.of_string ~filename:"err9.sgm" ~content:"var a : int = true;" in
+  (match Driver.run_source s9 with
+   | Ok _ -> assert_true ~msg:"var a : int = true; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for int = true" (has_code "E0104" errs));
+
+  (* E0104: strong typing - cannot assign int to bool *)
+  let s10 = Source.of_string ~filename:"err10.sgm" ~content:"var b : bool = 1;" in
+  (match Driver.run_source s10 with
+   | Ok _ -> assert_true ~msg:"var b : bool = 1; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for bool = 1" (has_code "E0104" errs));
+
+  (* E0104: strong typing across variables *)
+  let s11 =
+    Source.of_string ~filename:"err11.sgm" ~content:"var flag := true; var n : int = flag;"
+  in
+  (match Driver.run_source s11 with
+   | Ok _ -> assert_true ~msg:"var n : int = flag; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for int = bool var" (has_code "E0104" errs))
 
 let () =
   test_valid_declarations_and_parity ();

@@ -8,13 +8,13 @@ let format_globals globals =
   in
   let inner =
     pairs
-    |> List.map (fun (k, v) -> Printf.sprintf "%s=%Ld" k v)
+    |> List.map (fun (k, v) -> Printf.sprintf "%s=%s" k (Vm.value_to_string v))
     |> String.concat ", "
   in
   "{" ^ inner ^ "}"
 
 let format_stack stack =
-  let inner = stack |> List.map Int64.to_string |> String.concat "; " in
+  let inner = stack |> List.map Vm.value_to_string |> String.concat "; " in
   "[" ^ inner ^ "]"
 
 let trace_execution (prog : Ir.program) : (string, string) result =

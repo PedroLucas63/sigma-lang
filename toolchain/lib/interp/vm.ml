@@ -1,9 +1,17 @@
 open Sigma_ir
 
+type value =
+  | VInt of int64
+  | VBool of bool
+
+let value_to_string = function
+  | VInt n -> Int64.to_string n
+  | VBool b -> if b then "true" else "false"
+
 type state = {
   mutable ip : int;
-  mutable stack : int64 list;
-  globals : (string, int64) Hashtbl.t;
+  mutable stack : value list;
+  globals : (string, value) Hashtbl.t;
   mutable halted : bool;
 }
 
@@ -19,16 +27,19 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     st.ip <- st.ip + 1;
     match instr.op with
     | Ir.OP_CONST_I64 n ->
-      st.stack <- n :: st.stack;
+      st.stack <- VInt n :: st.stack;
       Ok ()
-    | Ir.OP_DEF_GLOBAL_I64 name ->
+    | Ir.OP_CONST_BOOL b ->
+      st.stack <- VBool b :: st.stack;
+      Ok ()
+    | Ir.OP_DEF_GLOBAL_I64 name | Ir.OP_DEF_GLOBAL_BOOL name ->
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
          Hashtbl.replace st.globals name v;
          Ok ()
-       | [] -> Error "VM stack underflow on OP_DEF_GLOBAL_I64")
-    | Ir.OP_GET_GLOBAL_I64 name ->
+       | [] -> Error "VM stack underflow on OP_DEF_GLOBAL")
+    | Ir.OP_GET_GLOBAL_I64 name | Ir.OP_GET_GLOBAL_BOOL name ->
       (match Hashtbl.find_opt st.globals name with
        | Some v ->
          st.stack <- v :: st.stack;
@@ -36,11 +47,20 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
        | None -> Error (Printf.sprintf "VM undefined global '%s'" name))
     | Ir.OP_PRINT_I64 ->
       (match st.stack with
-       | v :: rest ->
+       | VInt n :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Printf.sprintf "%Ld\n" v);
+         Buffer.add_string out_buf (Printf.sprintf "%Ld\n" n);
          Ok ()
+       | VBool _ :: _ -> Error "VM type error on OP_PRINT_I64"
        | [] -> Error "VM stack underflow on OP_PRINT_I64")
+    | Ir.OP_PRINT_BOOL ->
+      (match st.stack with
+       | VBool b :: rest ->
+         st.stack <- rest;
+         Buffer.add_string out_buf (if b then "true\n" else "false\n");
+         Ok ()
+       | VInt _ :: _ -> Error "VM type error on OP_PRINT_BOOL"
+       | [] -> Error "VM stack underflow on OP_PRINT_BOOL")
     | Ir.OP_HALT ->
       st.halted <- true;
       Ok ()

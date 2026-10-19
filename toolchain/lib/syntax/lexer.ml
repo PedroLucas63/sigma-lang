@@ -76,7 +76,13 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
         done;
         let end_pos = cur_pos st in
         let word = Buffer.contents buf in
-        let kind = if word = "var" then Token.KW_VAR else Token.IDENT word in
+        let kind =
+          match word with
+          | "var" -> Token.KW_VAR
+          | "true" -> Token.BOOL true
+          | "false" -> Token.BOOL false
+          | _ -> Token.IDENT word
+        in
         emit kind start_pos end_pos
       end else if is_digit c then begin
         let raw_buf = Buffer.create 16 in

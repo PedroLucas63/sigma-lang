@@ -2,6 +2,7 @@ open Sigma_common
 
 type expr_desc =
   | TExprInt of int64
+  | TExprBool of bool
   | TExprIdent of string
 
 type expr = {

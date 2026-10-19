@@ -6,6 +6,7 @@ type kind =
   | KW_VAR
   | IDENT of string
   | INT of int64
+  | BOOL of bool
   | COLON
   | EQUAL
   | COLON_EQUAL

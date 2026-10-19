@@ -30,6 +30,9 @@ let parse_expr st : (Ast.expr, Diagnostic.t) result =
   | Token.INT n ->
     bump st;
     Ok { Ast.desc = Ast.ExprInt n; span = tok.span }
+  | Token.BOOL b ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprBool b; span = tok.span }
   | Token.MINUS ->
     bump st;
     let next_tok = cur st in

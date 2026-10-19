@@ -4,6 +4,7 @@ open Sigma_common
 
 type expr_desc =
   | ExprInt of int64
+  | ExprBool of bool
   | ExprIdent of string
 
 and expr = {
