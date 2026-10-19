@@ -1,0 +1,17 @@
+// Showcase Sigma (.sgm) — Variáveis, Separadores Numéricos (_) e Booleanos
+var iteracoes := 10;
+var populacao : int = 1_000_000;
+var orcamento : int = 10_00_00_00;
+var saldo_inicial : int;
+
+var convergiu := true;
+var modo_debug : bool = false;
+var alerta : bool;
+
+iteracoes;
+populacao;
+orcamento;
+saldo_inicial;
+convergiu;
+modo_debug;
+alerta;

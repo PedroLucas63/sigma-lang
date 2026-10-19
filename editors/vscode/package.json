@@ -1,0 +1,34 @@
+{
+  "name": "sigma-lang",
+  "displayName": "Sigma Language (.sgm)",
+  "description": "Official VSCode support for the Sigma scientific and general-purpose programming language",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "sigma",
+        "aliases": [
+          "Sigma",
+          "sigma"
+        ],
+        "extensions": [
+          ".sgm"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sigma",
+        "scopeName": "source.sigma",
+        "path": "./syntaxes/sigma.tmLanguage.json"
+      }
+    ]
+  }
+}

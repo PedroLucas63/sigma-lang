@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigma (.sgm) — Linguagem Científica de Alta Performance</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      padding: 2.5rem 2rem;
+      border-bottom: 1px solid #334155;
+      text-align: center;
+    }
+    header h1 { margin: 0; font-size: 2.4rem; color: var(--accent); }
+    header p { color: var(--muted); max-width: 680px; margin: 0.5rem auto 0; }
+    main {
+      max-width: 1080px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    select, button {
+      background: #0f172a;
+      color: var(--text);
+      border: 1px solid #475569;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 700;
+      border: none;
+    }
+    textarea, pre {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 300px;
+      background: #020617;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 0.85rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Σ Sigma Language (<code>.sgm</code>)</h1>
+    <p>Propósito geral, computação científica e estatística com tipagem forte e compilação nativa nível C/C++ (<code>-O3</code>).</p>
+  </header>
+  <main>
+    <section class="card">
+      <div class="toolbar">
+        <select id="example-select">
+          <option value="numbers">1. Números Grandes com '_' e Inteiros</option>
+          <option value="booleans">2. Tipo Booleano (bool) e Zero-Init</option>
+          <option value="typeerror">3. Erro de Tipagem Forte (E0104)</option>
+        </select>
+        <button class="primary" id="run-btn">Simular Saída</button>
+      </div>
+      <textarea id="editor" spellcheck="false"></textarea>
+    </section>
+    <section class="card">
+      <div class="toolbar">
+        <strong>Saída (<code>sigma run</code> / <code>sigma build</code>)</strong>
+      </div>
+      <pre id="output"></pre>
+    </section>
+  </main>
+  <script>
+    const examples = {
+      numbers: {
+        code: `// Separador estrito de dígitos (_) em literais int64\nvar m1 := 1000000;\nvar m2 := 1_000_000;\nvar m3 : int = 10_00_00_00;\nvar zero : int;\n\nm1;\nm2;\nm3;\nzero;`,
+        out: `1000000\n1000000\n10000000\n0`
+      },
+      booleans: {
+        code: `// Tipo booleano (bool) com inferência e zero-init = false\nvar convergiu := true;\nvar verbose : bool = false;\nvar padrao : bool;\nvar copia : bool = convergiu;\n\nconvergiu;\nverbose;\npadrao;\ncopia;`,
+        out: `true\nfalse\nfalse\ntrue`
+      },
+      typeerror: {
+        code: `// Tipagem forte: int e bool não se misturam\nvar a : int = true;\nvar b : bool = 1;`,
+        out: `error[E0104]: type mismatch: expected 'int', found 'bool'\n  --> playground.sgm:2:15\n  2 | var a : int = true;\n    |               ^^^^\n  = hint: Sigma is strongly typed: cannot assign value of type 'bool' to variable 'a' of type 'int'`
+      }
+    };
+    const select = document.getElementById('example-select');
+    const editor = document.getElementById('editor');
+    const output = document.getElementById('output');
+    function loadExample(key) {
+      editor.value = examples[key].code;
+      output.textContent = examples[key].out;
+    }
+    select.addEventListener('change', (e) => loadExample(e.target.value));
+    document.getElementById('run-btn').addEventListener('click', () => {
+      output.textContent = examples[select.value].out;
+    });
+    loadExample('numbers');
+  </script>
+</body>
+</html>
