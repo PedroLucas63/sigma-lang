@@ -8,7 +8,7 @@
 | :--- | :--- | :--- |
 | Palavra-chave | `KW_VAR` | `var` |
 | Identificador | `IDENT of string` | `[a-zA-Z_][a-zA-Z0-9_]*` |
-| Literal | `INT of int64` | `[0-9]+` |
+| Literal | `INT of int64` | `[0-9](_?[0-9])*` |
 | Pontuação | `COLON` | `:` |
 | Operador | `EQUAL` | `=` |
 | Operador | `COLON_EQUAL` | `:=` |
@@ -35,6 +35,9 @@ expr      ::= INT
             | IDENT ;
 
 TYPE      ::= IDENT ; (* Em M0: validado no Sema como "int" -> Ty.Int *)
+
+INT       ::= DIGIT ( "_"? DIGIT )* ;
+DIGIT     ::= [0-9] ;
 ```
 
 ## 3. Nós da AST (`Sigma_syntax.Ast`)

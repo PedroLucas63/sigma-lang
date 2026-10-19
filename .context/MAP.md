@@ -32,7 +32,7 @@
 | `sigma_driver` | `Driver` | [`driver.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/driver/driver.mli) | `compile_frontend`, `run_source`, `build_source`, `lint_source`, `debug_source` |
 
 ## 3. Catálogo de Códigos de Diagnóstico Ativos
-- `E0001`: Caractere ilegal ou overflow de literal inteiro no Lexer.
+- `E0001`: Caractere ilegal, literal inteiro com `_` malformado (`1_000_` / `1__000`) ou overflow de literal inteiro no Lexer.
 - `E0002`: Erro de sintaxe em expressão ou declaração `var` (ex: `var x = 10;` sem tipo).
 - `E0003`: Instrução sem ponto-e-vírgula `;` final.
 - `E0101`: Tipo desconhecido ou ainda não suportado em M0 (ex: `float`).
