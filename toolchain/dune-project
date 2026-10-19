@@ -1,0 +1,13 @@
+(lang dune 3.16)
+(name sigma)
+(generate_opam_files true)
+(source (github pedrolcs/sigma))
+(license MIT)
+
+(package
+ (name sigma)
+ (allow_empty)
+ (synopsis "Sigma (.sgm) — High-performance general-purpose & statistical programming language toolchain")
+ (description "Unified CLI for the Sigma interpreter, native compiler, linter, debugger, and package manager.")
+ (depends
+  (ocaml (>= 5.1))))
