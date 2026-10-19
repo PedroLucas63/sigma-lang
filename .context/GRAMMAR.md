@@ -7,6 +7,7 @@
 | Categoria | Token OCaml | Representação Textual |
 | :--- | :--- | :--- |
 | Palavra-chave | `KW_VAR` | `var` |
+| Literal | `BOOL of bool` | `true` \| `false` |
 | Identificador | `IDENT of string` | `[a-zA-Z_][a-zA-Z0-9_]*` |
 | Literal | `INT of int64` | `[0-9](_?[0-9])*` |
 | Pontuação | `COLON` | `:` |
@@ -32,10 +33,12 @@ expr_stmt ::= expr ;
 
 expr      ::= INT
             | "-" INT
+            | BOOL
             | IDENT ;
 
-TYPE      ::= IDENT ; (* Em M0: validado no Sema como "int" -> Ty.Int *)
+TYPE      ::= IDENT ; (* Validado no Sema: "int" -> Ty.Int, "bool" -> Ty.Bool *)
 
+BOOL      ::= "true" | "false" ;
 INT       ::= DIGIT ( "_"? DIGIT )* ;
 DIGIT     ::= [0-9] ;
 ```
@@ -45,6 +48,7 @@ DIGIT     ::= [0-9] ;
 ```ocaml
 type expr_desc =
   | ExprInt of int64
+  | ExprBool of bool
   | ExprIdent of string
 
 and expr = {
@@ -74,16 +78,22 @@ type program = stmt list
 ## 4. Tipos (`Sigma_sema.Ty`) & Semântica
 
 - `Ty.Int`: Inteiro de 64 bits com sinal (`int64` / `int64_t`), *unboxed*.
-- **Zero-Initialization (Estilo Go):** `var c : int;` sem inicializador atribui automaticamente o valor padrão `0L`.
-- **Debug Expression Statement (`expr;`):** Avalia `expr` e escreve o valor resultante no `stdout` seguido de `\n`.
+- `Ty.Bool`: Booleano (`bool` nativo em OCaml e `<stdbool.h>` em C99), *unboxed*.
+- **Tipagem Forte:** Sem coerção implícita entre `int` e `bool` (`E0104`).
+- **Zero-Initialization (Estilo Go):** `var c : int;` -> `0L`; `var d : bool;` -> `false`.
+- **Debug Expression Statement (`expr;`):** Avalia `expr` e escreve o valor resultante no `stdout` seguido de `\n` (`true` / `false` para `bool`).
 
 ## 5. Instruções de IR (`Sigma_ir.Ir`)
 
 ```ocaml
-type instr =
+type opcode =
   | OP_CONST_I64 of int64         (* Empilha constante int64 *)
-  | OP_DEF_GLOBAL_I64 of string   (* Desempilha topo e define variável global *)
-  | OP_GET_GLOBAL_I64 of string   (* Empilha valor atual da variável global *)
+  | OP_CONST_BOOL of bool         (* Empilha constante bool *)
+  | OP_DEF_GLOBAL_I64 of string   (* Desempilha topo int64 e define variável global *)
+  | OP_DEF_GLOBAL_BOOL of string  (* Desempilha topo bool e define variável global *)
+  | OP_GET_GLOBAL_I64 of string   (* Empilha valor atual int64 da variável global *)
+  | OP_GET_GLOBAL_BOOL of string  (* Empilha valor atual bool da variável global *)
   | OP_PRINT_I64                  (* Desempilha topo e imprime int64 + '\n' *)
+  | OP_PRINT_BOOL                 (* Desempilha topo e imprime "true\n" ou "false\n" *)
   | OP_HALT                       (* Encerra execução *)
 ```

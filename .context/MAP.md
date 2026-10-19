@@ -15,16 +15,16 @@
 | `sigma_common` | `Span` | [`span.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/span.mli) | `pos`, `t`, `dummy`, `make`, `merge`, `to_string`, `pp` |
 | `sigma_common` | `Source` | [`source.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/source.mli) | `t`, `of_string`, `load`, `get_line` |
 | `sigma_diagnostics` | `Diagnostic` | [`diagnostic.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/diagnostics/diagnostic.mli) | `severity`, `t`, `error`, `warning`, `render`, `pp` |
-| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `IDENT`, `INT`, `COLON`, `EQUAL`, `COLON_EQUAL`, `MINUS`, `SEMI`, `EOF`), `t` |
-| `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `expr` (`ExprInt`, `ExprIdent`), `var_decl`, `stmt` (`StmtVarDecl`, `StmtExpr`), `program` |
+| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `IDENT`, `INT`, `BOOL`, `COLON`, `EQUAL`, `COLON_EQUAL`, `MINUS`, `SEMI`, `EOF`), `t` |
+| `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `expr` (`ExprInt`, `ExprBool`, `ExprIdent`), `var_decl`, `stmt` (`StmtVarDecl`, `StmtExpr`), `program` |
 | `sigma_syntax` | `Lexer` | [`lexer.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/lexer.mli) | `tokenize : Source.t -> (Token.t list, Diagnostic.t list) result` |
 | `sigma_syntax` | `Parser` | [`parser.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/parser.mli) | `parse : Token.t list -> (Ast.program, Diagnostic.t list) result` |
-| `sigma_sema` | `Ty` | [`ty.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/ty.mli) | `t = Int`, `equal`, `to_string`, `of_string`, `default_int_value` (`0L`) |
-| `sigma_sema` | `Typed_ast` | [`typed_ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typed_ast.mli) | `expr` (`TExprInt`, `TExprIdent`), `var_decl`, `stmt`, `program` |
+| `sigma_sema` | `Ty` | [`ty.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/ty.mli) | `t = Int \| Bool`, `equal`, `to_string`, `of_string`, `default_int_value` (`0L`), `default_bool_value` (`false`) |
+| `sigma_sema` | `Typed_ast` | [`typed_ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typed_ast.mli) | `expr` (`TExprInt`, `TExprBool`, `TExprIdent`), `var_decl`, `stmt`, `program` |
 | `sigma_sema` | `Typecheck` | [`typecheck.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typecheck.mli) | `check_program : Ast.program -> (Typed_ast.program, Diagnostic.t list) result` |
-| `sigma_ir` | `Ir` | [`ir.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/ir.mli) | `opcode` (`OP_CONST_I64`, `OP_DEF_GLOBAL_I64`, `OP_GET_GLOBAL_I64`, `OP_PRINT_I64`, `OP_HALT`), `program` |
+| `sigma_ir` | `Ir` | [`ir.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/ir.mli) | `opcode` (`OP_CONST_{I64,BOOL}`, `OP_DEF_GLOBAL_{I64,BOOL}`, `OP_GET_GLOBAL_{I64,BOOL}`, `OP_PRINT_{I64,BOOL}`, `OP_HALT`), `program` |
 | `sigma_ir` | `Lower` | [`lower.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/lower.mli) | `lower_program : Typed_ast.program -> Ir.program` |
-| `sigma_interp` | `Vm` | [`vm.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/interp/vm.mli) | `state`, `create_state`, `step`, `run : Ir.program -> (string, string) result` |
+| `sigma_interp` | `Vm` | [`vm.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/interp/vm.mli) | `value` (`VInt`, `VBool`), `state`, `create_state`, `step`, `run : Ir.program -> (string, string) result` |
 | `sigma_codegen` | `Codegen_c` | [`codegen_c.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/codegen/codegen_c.mli) | `emit_c`, `compile_executable : output_path:string -> Typed_ast.program -> (unit, string) result` |
 | `sigma_linter` | `Linter` | [`linter.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/linter/linter.mli) | `lint_program : Typed_ast.program -> Diagnostic.t list` (`W0001` unused var) |
 | `sigma_debugger` | `Debugger` | [`debugger.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/debugger/debugger.mli) | `trace_execution : Ir.program -> (string, string) result` |
@@ -38,4 +38,5 @@
 - `E0101`: Tipo desconhecido ou ainda não suportado em M0 (ex: `float`).
 - `E0102`: Uso de variável não declarada.
 - `E0103`: Redeclaração de variável já existente no mesmo escopo.
+- `E0104`: Incompatibilidade de tipos (*Type mismatch*: sem coerção implícita entre `int` e `bool`).
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_`).

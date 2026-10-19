@@ -10,6 +10,7 @@
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
 - [x] Declaração de variáveis `int` (`int64`): `var a := 10;`, `var b : int = 15;`, `var c : int;` (zero-init = `0`), inteiros negativos (`-42`), separador de dígitos estrito `_` (`1_000_000`, `10_00_00_00`) e cópia entre variáveis (`var e := a;`).
+- [x] Suporte completo ao tipo `bool` (`true` / `false`, zero-init `var d : bool;` = `false`) com tipagem forte (`E0104` rejeita `var a : int = true;` e `var b : bool = 1;`).
 - [x] Debug print inicial via instrução de expressão: `a; b; c;`.
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`):
   - `sigma run <file.sgm>` (Interpretador VM)
@@ -29,3 +30,4 @@
 - **2026-10-19:** Bootstrap do ambiente OCaml 5.5.1 + Dune 3.24.2 e identidade da linguagem **Sigma (`.sgm`)** (`6799309`).
 - **2026-10-19:** Implementação completa da `feature/int-variables` (Lexer, Parser, Sema, IR, VM, Compilador C99 `-O3`, Linter, Debugger, CLI `sigma` e suíte de testes de paridade).
 - **2026-10-19:** Suporte a separador de dígitos estrito (`_`) em literais inteiros (`feature/numeric-underscores`, `ADR-010`).
+- **2026-10-19:** Implementação completa do tipo `bool` (`true`/`false`, zero-init `false`) e verificação de tipagem forte `E0104` (`feature/bool-type`, `ADR-011`).
