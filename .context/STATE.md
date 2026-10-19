@@ -23,7 +23,7 @@
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
 - [ ] Adicionar tipo `float` (`f64` / `double` nativo) para habilitar `var c : float;` e literais decimais.
 - [ ] Adicionar operadores aritméticos (`+`, `-`, `*`, `/`, `^` ou `**`) e atribuição (`a = 20;`).
-- [ ] Propagar a gramática inicial para `editors/vscode/` e `docs/` via skill `ecosystem-sync`.
+- [x] Propagar a gramática inicial (`int`, `_`, `bool`) para `editors/vscode/`, `docs/` e `web/` via skill `ecosystem-sync`.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, regras `AGENTS.md`, `.context/`, skills e Git Flow (`84f1f70`).
@@ -31,3 +31,4 @@
 - **2026-10-19:** Implementação completa da `feature/int-variables` (Lexer, Parser, Sema, IR, VM, Compilador C99 `-O3`, Linter, Debugger, CLI `sigma` e suíte de testes de paridade).
 - **2026-10-19:** Suporte a separador de dígitos estrito (`_`) em literais inteiros (`feature/numeric-underscores`, `ADR-010`).
 - **2026-10-19:** Implementação completa do tipo `bool` (`true`/`false`, zero-init `false`) e verificação de tipagem forte `E0104` (`feature/bool-type`, `ADR-011`).
+- **2026-10-19:** Sincronização do ecossistema (`docs/`, `editors/vscode/` e `web/`) via skill `ecosystem-sync` (`feature/ecosystem-sync-m0`).
