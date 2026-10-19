@@ -1,0 +1,16 @@
+# OCaml / Dune
+_build/
+*.install
+.merlin
+*.opam.locked
+
+# Node / VSCode / Web
+node_modules/
+dist/
+out/
+*.vsix
+
+# OS / Editor
+.DS_Store
+*~
+*.swp
