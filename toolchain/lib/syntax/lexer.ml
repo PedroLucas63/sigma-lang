@@ -79,23 +79,56 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
         let kind = if word = "var" then Token.KW_VAR else Token.IDENT word in
         emit kind start_pos end_pos
       end else if is_digit c then begin
-        let buf = Buffer.create 16 in
-        while not (is_eof st) && is_digit (peek st) do
-          Buffer.add_char buf (peek st);
+        let raw_buf = Buffer.create 16 in
+        let digits_buf = Buffer.create 16 in
+        let prev_underscore = ref false in
+        let consecutive_underscore = ref false in
+        while not (is_eof st) && (is_digit (peek st) || peek st = '_') do
+          let ch = peek st in
+          Buffer.add_char raw_buf ch;
+          if ch = '_' then begin
+            if !prev_underscore then consecutive_underscore := true;
+            prev_underscore := true
+          end else begin
+            Buffer.add_char digits_buf ch;
+            prev_underscore := false
+          end;
           advance st
         done;
         let end_pos = cur_pos st in
-        let raw = Buffer.contents buf in
+        let raw = Buffer.contents raw_buf in
+        let clean_digits = Buffer.contents digits_buf in
         let span = Span.make ~file:src.filename ~start_pos ~end_pos in
-        match Int64.of_string_opt raw with
-        | Some n -> emit (Token.INT n) start_pos end_pos
-        | None ->
+        if !prev_underscore then
           errors :=
             Diagnostic.error
               ~code:"E0001"
               ~span
-              (Printf.sprintf "integer literal '%s' overflows 64-bit signed integer" raw)
+              (Printf.sprintf
+                 "invalid trailing underscore '_' in integer literal '%s'"
+                 raw)
             :: !errors
+        else if !consecutive_underscore then
+          errors :=
+            Diagnostic.error
+              ~code:"E0001"
+              ~span
+              (Printf.sprintf
+                 "consecutive underscores '__' are not allowed in integer literal '%s'"
+                 raw)
+            :: !errors
+        else
+          match Int64.of_string_opt clean_digits with
+          | Some n -> emit (Token.INT n) start_pos end_pos
+          | None ->
+            errors :=
+              Diagnostic.error
+                ~code:"E0001"
+                ~span
+                (Printf.sprintf
+                   "integer literal '%s' overflows 64-bit signed integer"
+                   raw)
+              :: !errors
       end else begin
         match c with
         | ':' ->

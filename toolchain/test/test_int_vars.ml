@@ -29,6 +29,12 @@ var c : int;
 // 4. Negative int and variable copy
 var d : int = -42;
 var e := a;
+// 5. Numeric digit separators (_)
+var m1 := 1000000;
+var m2 := 1_000_000;
+var m3 : int = 100_00_00;
+var m4 : int = 10_00_00_00;
+var m5 := -1_000_000;
 
 // Debug print expression statements
 a;
@@ -36,10 +42,15 @@ b;
 c;
 d;
 e;
+m1;
+m2;
+m3;
+m4;
+m5;
 |}
   in
   let src = Source.of_string ~filename:"valid.sgm" ~content:code in
-  let expected_stdout = "10\n15\n0\n-42\n10\n" in
+  let expected_stdout = "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\n" in
 
   (* 1. Interpreter (VM) *)
   (match Driver.run_source src with
@@ -122,7 +133,25 @@ let test_syntax_and_semantic_errors () =
   let s5 = Source.of_string ~filename:"err5.sgm" ~content:"var a := 1; var a := 2;" in
   (match Driver.run_source s5 with
    | Ok _ -> assert_true ~msg:"duplicate variable must fail" false
-   | Error errs -> assert_true ~msg:"E0103 expected" (has_code "E0103" errs))
+   | Error errs -> assert_true ~msg:"E0103 expected" (has_code "E0103" errs));
+
+  (* E0001: trailing underscore in integer literal *)
+  let s6 = Source.of_string ~filename:"err6.sgm" ~content:"var a := 1_000_;" in
+  (match Driver.run_source s6 with
+   | Ok _ -> assert_true ~msg:"trailing underscore in int must fail" false
+   | Error errs -> assert_true ~msg:"E0001 expected for 1_000_" (has_code "E0001" errs));
+
+  (* E0001: consecutive underscores in integer literal *)
+  let s7 = Source.of_string ~filename:"err7.sgm" ~content:"var a := 1__000;" in
+  (match Driver.run_source s7 with
+   | Ok _ -> assert_true ~msg:"consecutive underscores in int must fail" false
+   | Error errs -> assert_true ~msg:"E0001 expected for 1__000" (has_code "E0001" errs));
+
+  (* E0102: leading underscore is lexed as identifier *)
+  let s8 = Source.of_string ~filename:"err8.sgm" ~content:"var a := _1000;" in
+  (match Driver.run_source s8 with
+   | Ok _ -> assert_true ~msg:"leading underscore _1000 must fail as undeclared ident" false
+   | Error errs -> assert_true ~msg:"E0102 expected for _1000" (has_code "E0102" errs))
 
 let () =
   test_valid_declarations_and_parity ();
