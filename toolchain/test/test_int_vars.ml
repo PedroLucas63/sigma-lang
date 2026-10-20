@@ -224,6 +224,24 @@ var bw_shr : int = 1024 >> 3;             # 128
 var bw_shr_neg : int = -16 >> 2;          # -4 (arithmetic shift preserves sign)
 var bw_prec : int = 1 << 4 - 1 and not 2; # (1 << (4 - 1)) and (not 2) = 8 and -3 = 8
 
+# 8. Relational operations (2 and 3 operands) + Short-Circuit Evaluation
+var mid := 18;
+var r1 : bool = 7 < mid and mid <= 30;    # true
+var r2 : bool = 7 < mid <= 30;            # true (3-operand chain)
+var r3 : bool = 8 < 10 != 11;             # true (3-operand chain)
+var r4 : bool = 7 < 35 <= 30;             # false
+var r5 : bool = 10 == 10.0f <= 10.5d;     # true (mixed int/float/double promotion)
+var r6 : bool = 10 == 10.0m < 10.01m;     # true (mixed int/decimal promotion)
+var r7 : bool = 'a' < 'm' <= 'z';         # true (Unicode char chain)
+var r8 : bool = "Sigma" == "Sigma" and "a" != "b"; # true
+var r9 : bool = true == true and true != false;    # true
+
+# Short-circuit proof: (10 // zero) is NOT evaluated when the 1st condition decides the result!
+var zero := 0;
+var sc_and   : bool = 10 < 8 and (10 // zero > 1);  # false
+var sc_or    : bool = 15 > 9 or (10 // zero > 1);   # true
+var sc_chain : bool = 10 < 5 < (10 // zero);        # false
+
 u1; u2; p1; p2; p3; p4; p5;
 i_add; i_sub; i_mul; i_div; i_idiv1; i_idiv2; i_idiv3; i_mod1; i_mod2; i_mod3; i_mod4;
 f_mix; d_mix; f_idiv; d_idiv; f_mod; d_mod; d_pow;
@@ -231,10 +249,12 @@ m_add; m_sub; m_mul; m_div; m_idiv1; m_idiv2; m_mod; m_pow;
 c_add_c; c_sub_c; c_add_s; s_add_c; s_add_s; c_add_i; c_sub_i; c_mul_i; s_mul_i; s_mul_0; interp_expr;
 l1; l2; l3; l4; l5; l6; l7; l8; l9; l10; l11;
 bw_not; bw_and; bw_xor; bw_or; bw_shl; bw_shr; bw_shr_neg; bw_prec;
+r1; r2; r3; r4; r5; r6; r7; r8; r9;
+sc_and; sc_or; sc_chain;
 |}
   in
   let expected_stdout =
-    "42\n42\n-4\n4\n512\n14\n20\n42\n-12\n42\n3.5\n3\n-3\n-3\n1\n1\n1\n1\n15\n12.75\n-3\n-3\n0.5\n0.5\n8\n0.3\n6.75\n5\n2.5\n-3\n3\n0.5\n2.25\nAB\n25\nSigma\nSigma\nSigma\nd\na\nxxxx\nhahaha\n\ncalc=30, exact=0.3\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\nlogic=true\ntrue\nfalse\ntrue\n-1\n2\n5\n7\n1024\n128\n-4\n8\n"
+    "42\n42\n-4\n4\n512\n14\n20\n42\n-12\n42\n3.5\n3\n-3\n-3\n1\n1\n1\n1\n15\n12.75\n-3\n-3\n0.5\n0.5\n8\n0.3\n6.75\n5\n2.5\n-3\n3\n0.5\n2.25\nAB\n25\nSigma\nSigma\nSigma\nd\na\nxxxx\nhahaha\n\ncalc=30, exact=0.3\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\nlogic=true\ntrue\nfalse\ntrue\n-1\n2\n5\n7\n1024\n128\n-4\n8\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\ntrue\nfalse\n"
   in
   run_and_check_parity ~name:"arithmetic" ~code ~expected_stdout
 
@@ -342,6 +362,33 @@ let test_all_operations_csv_matrix () =
       ("bool", "bool", "and", "bool");
       ("bool", "bool", "or", "bool");
       ("bool", "bool", "xor", "bool");
+      ("bool", "bool", "==", "bool");
+      ("bool", "bool", "!=", "bool");
+      ("char", "char", "==", "bool");
+      ("char", "char", "!=", "bool");
+      ("char", "char", "<", "bool");
+      ("char", "char", ">", "bool");
+      ("char", "char", "<=", "bool");
+      ("char", "char", ">=", "bool");
+      ("string", "string", "==", "bool");
+      ("string", "string", "!=", "bool");
+      ("int", "int", "==", "bool");
+      ("int", "int", "!=", "bool");
+      ("int", "int", "<", "bool");
+      ("int", "int", ">", "bool");
+      ("int", "int", "<=", "bool");
+      ("int", "int", ">=", "bool");
+      ("int", "float", "<", "bool");
+      ("int", "double", "<=", "bool");
+      ("int", "decimal", "==", "bool");
+      ("float", "int", ">", "bool");
+      ("float", "float", "==", "bool");
+      ("float", "double", "!=", "bool");
+      ("double", "int", ">=", "bool");
+      ("double", "float", "<", "bool");
+      ("double", "double", "==", "bool");
+      ("decimal", "int", ">", "bool");
+      ("decimal", "decimal", "<=", "bool");
     ]
   in
   let sample_of = function
@@ -540,14 +587,20 @@ let test_syntax_and_semantic_errors () =
       | Error errs -> assert_true ~msg:("E0104 expected for " ^ expr_str) (has_code "E0104" errs))
     [ "1.0f + 1.0m"; "1.0d + 1.0m"; "1.0m - 2.0f"; "1.0m * 2.0d"; "1.0m / 2.0f"; "1.0m // 2.0d"; "1.0m ^ 2.0f"; "1.0m % 2.0d" ];
 
-  (* E0104: invalid unary and non-commutative char/string ops *)
+  (* E0002: relational chain with 4+ operands *)
+  let s_chain4 = Source.of_string ~filename:"chain4.sgm" ~content:"var x := 1 < 2 < 3 < 4;" in
+  (match Driver.run_source s_chain4 with
+   | Ok _ -> assert_true ~msg:"1 < 2 < 3 < 4 must fail with E0002" false
+   | Error errs -> assert_true ~msg:"E0002 expected for 4-operand chain" (has_code "E0002" errs));
+
+  (* E0104: invalid unary, binary, and relational combinations *)
   List.iter
     (fun expr_str ->
       let s = Source.of_string ~filename:"bad_op.sgm" ~content:("var x := " ^ expr_str ^ ";") in
       match Driver.run_source s with
       | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0104") false
       | Error errs -> assert_true ~msg:("E0104 expected for " ^ expr_str) (has_code "E0104" errs))
-    [ "+\"hello\""; "-'a'"; "-true"; "3 * \"ha\""; "3 * 'a'"; "1 + 'a'"; "not 0.0"; "not \"true\""; "true and 1"; "0 or false"; "true xor 1"; "1.0f << 2"; "2 >> 1.0f"; "true << 1" ];
+    [ "+\"hello\""; "-'a'"; "-true"; "3 * \"ha\""; "3 * 'a'"; "1 + 'a'"; "not 0.0"; "not \"true\""; "true and 1"; "0 or false"; "true xor 1"; "1.0f << 2"; "2 >> 1.0f"; "true << 1"; "\"abc\" < \"def\""; "\"abc\" <= \"def\""; "true < false"; "true >= false"; "1.0f == 1.0m"; "1.0d < 1.0m"; "'a' == \"a\""; "1 < 2 < \"a\"" ];
 
   (* E0105: static division or modulo by zero *)
   List.iter

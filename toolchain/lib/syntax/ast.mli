@@ -17,6 +17,12 @@ type binop =
   | BinMod
   | BinShl
   | BinShr
+  | BinEq
+  | BinNe
+  | BinLt
+  | BinGt
+  | BinLe
+  | BinGe
   | BinAnd
   | BinXor
   | BinOr
@@ -33,6 +39,7 @@ type expr_desc =
   | ExprIdent of string
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
+  | ExprChainCmp of expr * binop * expr * binop * expr
 
 and interp_part =
   | InterpLit of string

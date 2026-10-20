@@ -15,6 +15,12 @@ type binop =
   | BinMod
   | BinShl
   | BinShr
+  | BinEq
+  | BinNe
+  | BinLt
+  | BinGt
+  | BinLe
+  | BinGe
   | BinAnd
   | BinXor
   | BinOr
@@ -31,6 +37,7 @@ type expr_desc =
   | ExprIdent of string
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
+  | ExprChainCmp of expr * binop * expr * binop * expr
 
 and interp_part =
   | InterpLit of string
@@ -74,6 +81,12 @@ let binop_to_string = function
   | BinMod -> "%"
   | BinShl -> "<<"
   | BinShr -> ">>"
+  | BinEq -> "=="
+  | BinNe -> "!="
+  | BinLt -> "<"
+  | BinGt -> ">"
+  | BinLe -> "<="
+  | BinGe -> ">="
   | BinAnd -> "and"
   | BinXor -> "xor"
   | BinOr -> "or"
@@ -97,9 +110,14 @@ let rec pp_expr fmt (e : expr) =
     Format.fprintf fmt "\""
   | ExprIdent id -> Format.fprintf fmt "%s" id
   | ExprUnary (op, sub) ->
-    Format.fprintf fmt "(%s%a)" (unop_to_string op) pp_expr sub
+    Format.fprintf fmt "(%s %a)" (unop_to_string op) pp_expr sub
   | ExprBinary (op, lhs, rhs) ->
     Format.fprintf fmt "(%a %s %a)" pp_expr lhs (binop_to_string op) pp_expr rhs
+  | ExprChainCmp (e1, op1, e2, op2, e3) ->
+    Format.fprintf fmt "(%a %s %a %s %a)"
+      pp_expr e1 (binop_to_string op1)
+      pp_expr e2 (binop_to_string op2)
+      pp_expr e3
 
 let pp_stmt fmt (s : stmt) =
   match s.desc with

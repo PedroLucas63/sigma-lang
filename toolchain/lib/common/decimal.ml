@@ -156,6 +156,16 @@ let align_scales (a : t) (b : t) : u128 * u128 * int =
   done;
   (!ac, !bc, !asc)
 
+let compare (a : t) (b : t) : int =
+  if is_zero a && is_zero b then 0
+  else if is_zero a then if b.neg then 1 else -1
+  else if is_zero b then if a.neg then -1 else 1
+  else if a.neg <> b.neg then if a.neg then -1 else 1
+  else
+    let ac, bc, _ = align_scales a b in
+    let c = u128_cmp ac bc in
+    if a.neg then -c else c
+
 let add (a : t) (b : t) : t =
   if is_zero a then b
   else if is_zero b then a

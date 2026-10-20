@@ -27,6 +27,12 @@ type kind =
   | PERCENT
   | LSHIFT
   | RSHIFT
+  | EQ_EQ
+  | BANG_EQ
+  | LT
+  | GT
+  | LT_EQ
+  | GT_EQ
   | LPAREN
   | RPAREN
   | SEMI
@@ -68,6 +74,12 @@ let kind_to_string = function
   | PERCENT -> "'%'"
   | LSHIFT -> "'<<'"
   | RSHIFT -> "'>>'"
+  | EQ_EQ -> "'=='"
+  | BANG_EQ -> "'!='"
+  | LT -> "'<'"
+  | GT -> "'>'"
+  | LT_EQ -> "'<='"
+  | GT_EQ -> "'>='"
   | LPAREN -> "'('"
   | RPAREN -> "')'"
   | SEMI -> "';'"

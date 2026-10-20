@@ -17,46 +17,54 @@ let check_unary_type (op : Ast.unop) (ty : Ty.t) : Ty.t option =
 
 let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   match lty, rty, op with
-  (* logical operations on bool *)
-  | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr | Ast.BinXor) -> Some Ty.Bool
+  (* logical & equality operations on bool *)
+  | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinEq | Ast.BinNe) -> Some Ty.Bool
   (* bitwise operations on int *)
   | Ty.Int, Ty.Int, (Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinShl | Ast.BinShr) -> Some Ty.Int
   (* char & string operations *)
   | Ty.Char, Ty.Char, Ast.BinAdd -> Some Ty.String
   | Ty.Char, Ty.Char, Ast.BinSub -> Some Ty.Int
+  | Ty.Char, Ty.Char, (Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe) -> Some Ty.Bool
   | Ty.Char, Ty.String, Ast.BinAdd -> Some Ty.String
   | Ty.Char, Ty.Int, Ast.BinAdd -> Some Ty.Char
   | Ty.Char, Ty.Int, Ast.BinSub -> Some Ty.Char
   | Ty.Char, Ty.Int, Ast.BinMul -> Some Ty.String
   | Ty.String, Ty.Char, Ast.BinAdd -> Some Ty.String
   | Ty.String, Ty.String, Ast.BinAdd -> Some Ty.String
+  | Ty.String, Ty.String, (Ast.BinEq | Ast.BinNe) -> Some Ty.Bool
   | Ty.String, Ty.Int, Ast.BinMul -> Some Ty.String
   (* exact base-10 decimal hierarchy (only mixes with int or decimal) *)
   | Ty.Decimal, Ty.Decimal, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod)
   | Ty.Decimal, Ty.Int, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod)
   | Ty.Int, Ty.Decimal, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod) ->
     Some Ty.Decimal
+  | Ty.Decimal, Ty.Decimal, (Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe)
+  | Ty.Decimal, Ty.Int, (Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe)
+  | Ty.Int, Ty.Decimal, (Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe) ->
+    Some Ty.Bool
   | Ty.Decimal, Ty.Decimal, Ast.BinIntDiv
   | Ty.Decimal, Ty.Int, Ast.BinIntDiv
   | Ty.Int, Ty.Decimal, Ast.BinIntDiv ->
     Some Ty.Int
-    (* IEEE-754 binary hierarchy: int < float < double *)
-    | (Ty.Int | Ty.Float | Ty.Double), (Ty.Int | Ty.Float | Ty.Double), _ ->
-      let wider =
-        if lty = Ty.Double || rty = Ty.Double then Ty.Double
-        else if lty = Ty.Float || rty = Ty.Float then Ty.Float
-        else Ty.Int
-      in
-      (match op with
-       | Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinPow | Ast.BinMod ->
-         Some wider
-       | Ast.BinDiv ->
-         Some (if wider = Ty.Int then Ty.Float else wider)
-       | Ast.BinIntDiv ->
-         Some Ty.Int
-       | Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinShl | Ast.BinShr ->
-         None)
-    | _ -> None
+  (* IEEE-754 binary hierarchy: int < float < double *)
+  | (Ty.Int | Ty.Float | Ty.Double), (Ty.Int | Ty.Float | Ty.Double), _ ->
+    let wider =
+      if lty = Ty.Double || rty = Ty.Double then Ty.Double
+      else if lty = Ty.Float || rty = Ty.Float then Ty.Float
+      else Ty.Int
+    in
+    (match op with
+     | Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinPow | Ast.BinMod ->
+       Some wider
+     | Ast.BinDiv ->
+       Some (if wider = Ty.Int then Ty.Float else wider)
+     | Ast.BinIntDiv ->
+       Some Ty.Int
+     | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe ->
+       Some Ty.Bool
+     | Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinShl | Ast.BinShr ->
+       None)
+  | _ -> None
 
 let rec is_zero_literal (e : Typed_ast.expr) : bool =
   match e.desc with
@@ -177,6 +185,38 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                    ty = res_ty;
                    span = e.span;
                  })))
+  | Ast.ExprChainCmp (e1, op1, e2, op2, e3) ->
+    (match check_expr env e1, check_expr env e2, check_expr env e3 with
+     | Error err, _, _ | _, Error err, _ | _, _, Error err -> Error err
+     | Ok te1, Ok te2, Ok te3 ->
+       (match check_binary_type op1 te1.ty te2.ty with
+        | None ->
+          Error
+            (Diagnostic.error
+               ~code:"E0104"
+               ~span:(Span.merge te1.span te2.span)
+               (Printf.sprintf "invalid relational operation: '%s' between '%s' and '%s'"
+                  (Ast.binop_to_string op1)
+                  (Ty.to_string te1.ty)
+                  (Ty.to_string te2.ty)))
+        | Some _ ->
+          (match check_binary_type op2 te2.ty te3.ty with
+           | None ->
+             Error
+               (Diagnostic.error
+                  ~code:"E0104"
+                  ~span:(Span.merge te2.span te3.span)
+                  (Printf.sprintf "invalid relational operation: '%s' between '%s' and '%s'"
+                     (Ast.binop_to_string op2)
+                     (Ty.to_string te2.ty)
+                     (Ty.to_string te3.ty)))
+           | Some _ ->
+             Ok
+               {
+                 Typed_ast.desc = Typed_ast.TExprChainCmp (te1, op1, te2, op2, te3);
+                 ty = Ty.Bool;
+                 span = e.span;
+               })))
 
 let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   match Ty.of_string ty_name with

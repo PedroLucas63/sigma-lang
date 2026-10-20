@@ -91,7 +91,50 @@ and parse_logical_not st : (Ast.expr, Diagnostic.t) result =
      | Ok sub ->
        let span = Span.merge tok.span sub.span in
        Ok { Ast.desc = Ast.ExprUnary (Ast.UnNot, sub); span })
-  | _ -> parse_shift st
+  | _ -> parse_relational st
+
+and match_rel_op (k : Token.kind) : Ast.binop option =
+  match k with
+  | Token.EQ_EQ -> Some Ast.BinEq
+  | Token.BANG_EQ -> Some Ast.BinNe
+  | Token.LT -> Some Ast.BinLt
+  | Token.GT -> Some Ast.BinGt
+  | Token.LT_EQ -> Some Ast.BinLe
+  | Token.GT_EQ -> Some Ast.BinGe
+  | _ -> None
+
+and parse_relational st : (Ast.expr, Diagnostic.t) result =
+  match parse_shift st with
+  | Error e -> Error e
+  | Ok e1 ->
+    (match match_rel_op (cur st).kind with
+     | None -> Ok e1
+     | Some op1 ->
+       bump st;
+       (match parse_shift st with
+        | Error e -> Error e
+        | Ok e2 ->
+          (match match_rel_op (cur st).kind with
+           | None ->
+             let span = Span.merge e1.span e2.span in
+             Ok { Ast.desc = Ast.ExprBinary (op1, e1, e2); span }
+           | Some op2 ->
+             bump st;
+             (match parse_shift st with
+              | Error e -> Error e
+              | Ok e3 ->
+                let tok3 = cur st in
+                (match match_rel_op tok3.kind with
+                 | Some _ ->
+                   Error
+                     (Diagnostic.error
+                        ~hint:"chained relational expressions support at most 3 operands (e.g. 'a < b <= c'); combine further conditions with 'and'"
+                        ~code:"E0002"
+                        ~span:tok3.span
+                        "relational chain exceeds maximum of 3 operands")
+                 | None ->
+                   let span = Span.merge e1.span e3.span in
+                   Ok { Ast.desc = Ast.ExprChainCmp (e1, op1, e2, op2, e3); span })))))
 
 and parse_shift st : (Ast.expr, Diagnostic.t) result =
   match parse_additive st with

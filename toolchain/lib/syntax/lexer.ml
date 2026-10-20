@@ -488,7 +488,15 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
             emit Token.COLON start_pos (cur_pos st)
         | '=' ->
           advance st;
-          emit Token.EQUAL start_pos (cur_pos st)
+          if peek st = '=' then begin
+            advance st;
+            emit Token.EQ_EQ start_pos (cur_pos st)
+          end else
+            emit Token.EQUAL start_pos (cur_pos st)
+        | '!' when peek_next st = '=' ->
+          advance st;
+          advance st;
+          emit Token.BANG_EQ start_pos (cur_pos st)
         | '+' ->
           advance st;
           emit Token.PLUS start_pos (cur_pos st)
@@ -511,14 +519,26 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         | '%' ->
           advance st;
           emit Token.PERCENT start_pos (cur_pos st)
-        | '<' when peek_next st = '<' ->
+        | '<' ->
           advance st;
+          if peek st = '<' then begin
+            advance st;
+            emit Token.LSHIFT start_pos (cur_pos st)
+          end else if peek st = '=' then begin
+            advance st;
+            emit Token.LT_EQ start_pos (cur_pos st)
+          end else
+            emit Token.LT start_pos (cur_pos st)
+        | '>' ->
           advance st;
-          emit Token.LSHIFT start_pos (cur_pos st)
-        | '>' when peek_next st = '>' ->
-          advance st;
-          advance st;
-          emit Token.RSHIFT start_pos (cur_pos st)
+          if peek st = '>' then begin
+            advance st;
+            emit Token.RSHIFT start_pos (cur_pos st)
+          end else if peek st = '=' then begin
+            advance st;
+            emit Token.GT_EQ start_pos (cur_pos st)
+          end else
+            emit Token.GT start_pos (cur_pos st)
         | '(' ->
           advance st;
           emit Token.LPAREN start_pos (cur_pos st)

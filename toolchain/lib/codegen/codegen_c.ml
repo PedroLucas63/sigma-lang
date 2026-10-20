@@ -32,6 +32,49 @@ let emit_promote (c_expr : string) (from_ty : Ty.t) (to_ty : Ty.t) : string =
     | Ty.Float, Ty.Double -> Printf.sprintf "((double)(%s))" c_expr
     | _ -> c_expr
 
+let c_type_of_ty = function
+  | Ty.Int -> "int64_t"
+  | Ty.Float -> "float"
+  | Ty.Double -> "double"
+  | Ty.Decimal -> "sgm_decimal_t"
+  | Ty.Bool -> "bool"
+  | Ty.Char | Ty.String -> "const char*"
+
+let is_rel_op = function
+  | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
+  | _ -> false
+
+let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (cr_raw : string) : string =
+  let common_ty =
+    if lty = Ty.Decimal || rty = Ty.Decimal then Ty.Decimal
+    else if lty = Ty.Double || rty = Ty.Double then Ty.Double
+    else if lty = Ty.Float || rty = Ty.Float then Ty.Float
+    else lty
+  in
+  let cl = emit_promote cl_raw lty common_ty in
+  let cr = emit_promote cr_raw rty common_ty in
+  let c_op =
+    match op with
+    | Ast.BinEq -> "=="
+    | Ast.BinNe -> "!="
+    | Ast.BinLt -> "<"
+    | Ast.BinGt -> ">"
+    | Ast.BinLe -> "<="
+    | Ast.BinGe -> ">="
+    | _ -> "=="
+  in
+  match common_ty with
+  | Ty.Decimal ->
+    Printf.sprintf "(sgm_dec_cmp(%s, %s) %s 0)" cl cr c_op
+  | Ty.String ->
+    Printf.sprintf "(strcmp(%s, %s) %s 0)" cl cr c_op
+  | Ty.Char ->
+    Printf.sprintf "(sgm_decode_utf8(%s) %s sgm_decode_utf8(%s))" cl c_op cr
+  | _ ->
+    Printf.sprintf "((%s) %s (%s))" cl c_op cr
+
+let chain_counter = ref 0
+
 let rec emit_expr (e : Typed_ast.expr) : string =
   match e.desc with
   | Typed_ast.TExprInt n ->
@@ -101,6 +144,8 @@ let rec emit_expr (e : Typed_ast.expr) : string =
        Printf.sprintf "sgm_shl_i64(%s, %s)" (emit_expr lhs) (emit_expr rhs)
      | Ty.Int, Ty.Int, Ast.BinShr ->
        Printf.sprintf "sgm_shr_i64(%s, %s)" (emit_expr lhs) (emit_expr rhs)
+     | _, _, _ when is_rel_op binop ->
+       emit_cmp_raw binop lhs.ty rhs.ty (emit_expr lhs) (emit_expr rhs)
      | (Ty.Char | Ty.String), (Ty.Char | Ty.String), Ast.BinAdd ->
        Printf.sprintf "sgm_concat(2, (const char*[]){ %s, %s })"
          (emit_expr lhs) (emit_expr rhs)
@@ -150,14 +195,18 @@ let rec emit_expr (e : Typed_ast.expr) : string =
         | Ast.BinPow, Ty.Double -> Printf.sprintf "pow(%s, %s)" cl cr
         | Ast.BinPow, Ty.Decimal -> Printf.sprintf "sgm_dec_pow(%s, %s)" cl cr
         | _ -> Printf.sprintf "((%s) + (%s))" cl cr))
-
-let c_type_of_ty = function
-  | Ty.Int -> "int64_t"
-  | Ty.Float -> "float"
-  | Ty.Double -> "double"
-  | Ty.Decimal -> "sgm_decimal_t"
-  | Ty.Bool -> "bool"
-  | Ty.Char | Ty.String -> "const char*"
+  | Typed_ast.TExprChainCmp (e1, op1, e2, op2, e3) ->
+    incr chain_counter;
+    let id = !chain_counter in
+    let t1_name = Printf.sprintf "_sgm_c1_%d" id in
+    let t2_name = Printf.sprintf "_sgm_c2_%d" id in
+    let cmp1 = emit_cmp_raw op1 e1.ty e2.ty t1_name t2_name in
+    let cmp2 = emit_cmp_raw op2 e2.ty e3.ty t2_name (emit_expr e3) in
+    Printf.sprintf
+      "__extension__ ({ %s %s = (%s); %s %s = (%s); (%s) && (%s); })"
+      (c_type_of_ty e1.ty) t1_name (emit_expr e1)
+      (c_type_of_ty e2.ty) t2_name (emit_expr e2)
+      cmp1 cmp2
 
 let c_decimal_runtime =
   {|#include <stdlib.h>
@@ -217,6 +266,18 @@ __attribute__((unused)) static void sgm_dec_align(sgm_decimal_t a, sgm_decimal_t
     else { *ac /= 10; asc--; }
   }
   *sc = asc;
+}
+
+__attribute__((unused)) static int sgm_dec_cmp(sgm_decimal_t a, sgm_decimal_t b) {
+  if (a.coeff == 0 && b.coeff == 0) return 0;
+  if (a.coeff == 0) return b.neg ? 1 : -1;
+  if (b.coeff == 0) return a.neg ? -1 : 1;
+  if (a.neg != b.neg) return a.neg ? -1 : 1;
+  sgm_u128 ac, bc;
+  int sc;
+  sgm_dec_align(a, b, &ac, &bc, &sc);
+  int c = (ac < bc) ? -1 : ((ac > bc) ? 1 : 0);
+  return a.neg ? -c : c;
 }
 
 __attribute__((unused)) static sgm_decimal_t sgm_dec_add(sgm_decimal_t a, sgm_decimal_t b) {

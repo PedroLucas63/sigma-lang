@@ -510,6 +510,172 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          st.stack <- VInt res :: rest;
          Ok ()
        | _ -> Error "VM type error on OP_SHR_I64")
+    | Ir.OP_EQ_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a = b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_I64")
+    | Ir.OP_EQ_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a = b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_F32")
+    | Ir.OP_EQ_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a = b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_F64")
+    | Ir.OP_EQ_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b = 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_DEC")
+    | Ir.OP_EQ_BOOL ->
+      (match st.stack with
+       | VBool b :: VBool a :: rest -> st.stack <- VBool (a = b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_BOOL")
+    | Ir.OP_EQ_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (String.equal a b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_CHAR")
+    | Ir.OP_EQ_STR ->
+      (match st.stack with
+       | VString b :: VString a :: rest -> st.stack <- VBool (String.equal a b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_EQ_STR")
+    | Ir.OP_NE_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a <> b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_I64")
+    | Ir.OP_NE_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a <> b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_F32")
+    | Ir.OP_NE_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a <> b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_F64")
+    | Ir.OP_NE_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b <> 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_DEC")
+    | Ir.OP_NE_BOOL ->
+      (match st.stack with
+       | VBool b :: VBool a :: rest -> st.stack <- VBool (a <> b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_BOOL")
+    | Ir.OP_NE_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (not (String.equal a b)) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_CHAR")
+    | Ir.OP_NE_STR ->
+      (match st.stack with
+       | VString b :: VString a :: rest -> st.stack <- VBool (not (String.equal a b)) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_NE_STR")
+    | Ir.OP_LT_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a < b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LT_I64")
+    | Ir.OP_LT_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a < b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LT_F32")
+    | Ir.OP_LT_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a < b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LT_F64")
+    | Ir.OP_LT_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b < 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LT_DEC")
+    | Ir.OP_LT_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a < decode_utf8 b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LT_CHAR")
+    | Ir.OP_GT_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a > b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GT_I64")
+    | Ir.OP_GT_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a > b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GT_F32")
+    | Ir.OP_GT_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a > b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GT_F64")
+    | Ir.OP_GT_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b > 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GT_DEC")
+    | Ir.OP_GT_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a > decode_utf8 b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GT_CHAR")
+    | Ir.OP_LE_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a <= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LE_I64")
+    | Ir.OP_LE_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a <= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LE_F32")
+    | Ir.OP_LE_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a <= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LE_F64")
+    | Ir.OP_LE_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b <= 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LE_DEC")
+    | Ir.OP_LE_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a <= decode_utf8 b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_LE_CHAR")
+    | Ir.OP_GE_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest -> st.stack <- VBool (a >= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GE_I64")
+    | Ir.OP_GE_F32 ->
+      (match st.stack with
+       | VFloat b :: VFloat a :: rest -> st.stack <- VBool (a >= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GE_F32")
+    | Ir.OP_GE_F64 ->
+      (match st.stack with
+       | VDouble b :: VDouble a :: rest -> st.stack <- VBool (a >= b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GE_F64")
+    | Ir.OP_GE_DEC ->
+      (match st.stack with
+       | VDecimal b :: VDecimal a :: rest -> st.stack <- VBool (Decimal.compare a b >= 0) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GE_DEC")
+    | Ir.OP_GE_CHAR ->
+      (match st.stack with
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a >= decode_utf8 b) :: rest; Ok ()
+       | _ -> Error "VM type error on OP_GE_CHAR")
+    | Ir.OP_JUMP target ->
+      st.ip <- target;
+      Ok ()
+    | Ir.OP_JUMP_IF_FALSE target ->
+      (match st.stack with
+       | VBool cond :: rest ->
+         st.stack <- rest;
+         if not cond then st.ip <- target;
+         Ok ()
+       | _ -> Error "VM type error on OP_JUMP_IF_FALSE")
+    | Ir.OP_JUMP_IF_TRUE target ->
+      (match st.stack with
+       | VBool cond :: rest ->
+         st.stack <- rest;
+         if cond then st.ip <- target;
+         Ok ()
+       | _ -> Error "VM type error on OP_JUMP_IF_TRUE")
+    | Ir.OP_SET_TEMP id ->
+      (match st.stack with
+       | v :: rest ->
+         st.stack <- rest;
+         Hashtbl.replace st.globals (Printf.sprintf "$tmp_%d" id) v;
+         Ok ()
+       | [] -> Error "VM stack underflow on OP_SET_TEMP")
+    | Ir.OP_GET_TEMP id ->
+      (match Hashtbl.find_opt st.globals (Printf.sprintf "$tmp_%d" id) with
+       | Some v ->
+         st.stack <- v :: st.stack;
+         Ok ()
+       | None -> Error "VM undefined temporary slot")
     | Ir.OP_DEF_GLOBAL_I64 name
     | Ir.OP_DEF_GLOBAL_F32 name
     | Ir.OP_DEF_GLOBAL_F64 name

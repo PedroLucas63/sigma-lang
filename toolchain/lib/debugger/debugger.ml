@@ -3,7 +3,10 @@ open Sigma_interp
 
 let format_globals globals =
   let pairs =
-    Hashtbl.fold (fun k v acc -> (k, v) :: acc) globals []
+    Hashtbl.fold
+      (fun k v acc ->
+        if String.starts_with ~prefix:"$" k then acc else (k, v) :: acc)
+      globals []
     |> List.sort (fun (a, _) (b, _) -> String.compare a b)
   in
   let inner =

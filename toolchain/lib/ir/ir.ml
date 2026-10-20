@@ -59,6 +59,45 @@ type opcode =
   | OP_XOR_I64
   | OP_SHL_I64
   | OP_SHR_I64
+  | OP_EQ_I64
+  | OP_EQ_F32
+  | OP_EQ_F64
+  | OP_EQ_DEC
+  | OP_EQ_BOOL
+  | OP_EQ_CHAR
+  | OP_EQ_STR
+  | OP_NE_I64
+  | OP_NE_F32
+  | OP_NE_F64
+  | OP_NE_DEC
+  | OP_NE_BOOL
+  | OP_NE_CHAR
+  | OP_NE_STR
+  | OP_LT_I64
+  | OP_LT_F32
+  | OP_LT_F64
+  | OP_LT_DEC
+  | OP_LT_CHAR
+  | OP_GT_I64
+  | OP_GT_F32
+  | OP_GT_F64
+  | OP_GT_DEC
+  | OP_GT_CHAR
+  | OP_LE_I64
+  | OP_LE_F32
+  | OP_LE_F64
+  | OP_LE_DEC
+  | OP_LE_CHAR
+  | OP_GE_I64
+  | OP_GE_F32
+  | OP_GE_F64
+  | OP_GE_DEC
+  | OP_GE_CHAR
+  | OP_JUMP of int
+  | OP_JUMP_IF_FALSE of int
+  | OP_JUMP_IF_TRUE of int
+  | OP_SET_TEMP of int
+  | OP_GET_TEMP of int
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
@@ -148,6 +187,45 @@ let pp_opcode fmt = function
   | OP_XOR_I64 -> Format.fprintf fmt "OP_XOR_I64"
   | OP_SHL_I64 -> Format.fprintf fmt "OP_SHL_I64"
   | OP_SHR_I64 -> Format.fprintf fmt "OP_SHR_I64"
+  | OP_EQ_I64 -> Format.fprintf fmt "OP_EQ_I64"
+  | OP_EQ_F32 -> Format.fprintf fmt "OP_EQ_F32"
+  | OP_EQ_F64 -> Format.fprintf fmt "OP_EQ_F64"
+  | OP_EQ_DEC -> Format.fprintf fmt "OP_EQ_DEC"
+  | OP_EQ_BOOL -> Format.fprintf fmt "OP_EQ_BOOL"
+  | OP_EQ_CHAR -> Format.fprintf fmt "OP_EQ_CHAR"
+  | OP_EQ_STR -> Format.fprintf fmt "OP_EQ_STR"
+  | OP_NE_I64 -> Format.fprintf fmt "OP_NE_I64"
+  | OP_NE_F32 -> Format.fprintf fmt "OP_NE_F32"
+  | OP_NE_F64 -> Format.fprintf fmt "OP_NE_F64"
+  | OP_NE_DEC -> Format.fprintf fmt "OP_NE_DEC"
+  | OP_NE_BOOL -> Format.fprintf fmt "OP_NE_BOOL"
+  | OP_NE_CHAR -> Format.fprintf fmt "OP_NE_CHAR"
+  | OP_NE_STR -> Format.fprintf fmt "OP_NE_STR"
+  | OP_LT_I64 -> Format.fprintf fmt "OP_LT_I64"
+  | OP_LT_F32 -> Format.fprintf fmt "OP_LT_F32"
+  | OP_LT_F64 -> Format.fprintf fmt "OP_LT_F64"
+  | OP_LT_DEC -> Format.fprintf fmt "OP_LT_DEC"
+  | OP_LT_CHAR -> Format.fprintf fmt "OP_LT_CHAR"
+  | OP_GT_I64 -> Format.fprintf fmt "OP_GT_I64"
+  | OP_GT_F32 -> Format.fprintf fmt "OP_GT_F32"
+  | OP_GT_F64 -> Format.fprintf fmt "OP_GT_F64"
+  | OP_GT_DEC -> Format.fprintf fmt "OP_GT_DEC"
+  | OP_GT_CHAR -> Format.fprintf fmt "OP_GT_CHAR"
+  | OP_LE_I64 -> Format.fprintf fmt "OP_LE_I64"
+  | OP_LE_F32 -> Format.fprintf fmt "OP_LE_F32"
+  | OP_LE_F64 -> Format.fprintf fmt "OP_LE_F64"
+  | OP_LE_DEC -> Format.fprintf fmt "OP_LE_DEC"
+  | OP_LE_CHAR -> Format.fprintf fmt "OP_LE_CHAR"
+  | OP_GE_I64 -> Format.fprintf fmt "OP_GE_I64"
+  | OP_GE_F32 -> Format.fprintf fmt "OP_GE_F32"
+  | OP_GE_F64 -> Format.fprintf fmt "OP_GE_F64"
+  | OP_GE_DEC -> Format.fprintf fmt "OP_GE_DEC"
+  | OP_GE_CHAR -> Format.fprintf fmt "OP_GE_CHAR"
+  | OP_JUMP target -> Format.fprintf fmt "OP_JUMP %04d" target
+  | OP_JUMP_IF_FALSE target -> Format.fprintf fmt "OP_JUMP_IF_FALSE %04d" target
+  | OP_JUMP_IF_TRUE target -> Format.fprintf fmt "OP_JUMP_IF_TRUE %04d" target
+  | OP_SET_TEMP id -> Format.fprintf fmt "OP_SET_TEMP %d" id
+  | OP_GET_TEMP id -> Format.fprintf fmt "OP_GET_TEMP %d" id
   | OP_DEF_GLOBAL_I64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_I64 %s" name
   | OP_DEF_GLOBAL_F32 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F32 %s" name
   | OP_DEF_GLOBAL_F64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F64 %s" name

@@ -13,6 +13,7 @@ val zero : t
 val is_zero : t -> bool
 val negate : t -> t
 val equal : t -> t -> bool
+val compare : t -> t -> int
 
 val of_int64 : int64 -> t
 val to_float : t -> float

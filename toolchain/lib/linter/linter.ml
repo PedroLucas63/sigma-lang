@@ -32,6 +32,10 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   | Typed_ast.TExprBinary (_, lhs, rhs) ->
     mark_expr_usage tbl lhs;
     mark_expr_usage tbl rhs
+  | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
+    mark_expr_usage tbl e1;
+    mark_expr_usage tbl e2;
+    mark_expr_usage tbl e3
 
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in
