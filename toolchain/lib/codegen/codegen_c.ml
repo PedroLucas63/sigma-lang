@@ -7,12 +7,21 @@ let emit_expr (e : Typed_ast.expr) : string =
   | Typed_ast.TExprInt n ->
     if n = Int64.min_int then "(-9223372036854775807LL - 1LL)"
     else Printf.sprintf "INT64_C(%Ld)" n
+  | Typed_ast.TExprFloat f ->
+    Printf.sprintf "((float)%h)" f
+  | Typed_ast.TExprDouble d ->
+    Printf.sprintf "((double)%h)" d
+  | Typed_ast.TExprDecimal m ->
+    Printf.sprintf "((double)%h)" m
   | Typed_ast.TExprBool b ->
     if b then "true" else "false"
   | Typed_ast.TExprIdent name -> mangle_ident name
 
 let c_type_of_ty = function
   | Ty.Int -> "int64_t"
+  | Ty.Float -> "float"
+  | Ty.Double -> "double"
+  | Ty.Decimal -> "double"
   | Ty.Bool -> "bool"
 
 let emit_c (prog : Typed_ast.program) : string =
@@ -39,6 +48,16 @@ let emit_c (prog : Typed_ast.program) : string =
            Buffer.add_string
              buf
              (Printf.sprintf "  printf(\"%%\" PRId64 \"\\n\", (int64_t)(%s));\n"
+                (emit_expr e))
+         | Ty.Float ->
+           Buffer.add_string
+             buf
+             (Printf.sprintf "  printf(\"%%.6g\\n\", (double)(%s));\n"
+                (emit_expr e))
+         | Ty.Double | Ty.Decimal ->
+           Buffer.add_string
+             buf
+             (Printf.sprintf "  printf(\"%%.15g\\n\", (double)(%s));\n"
                 (emit_expr e))
          | Ty.Bool ->
            Buffer.add_string

@@ -40,6 +40,21 @@ var b1 := true;
 var b2 : bool = false;
 var b3 : bool;
 var b4 : bool = b1;
+// 7. Floating-point types: float, double, decimal
+var f1 : float = 1.0;
+var f2 := 10.0;
+var f3 := 1e1;
+var f4 := 1.e1;
+var f5 := 1.5e13;
+var f6 := 1.5e-3;
+var f7 := 1_000.5f;
+var f8 : float;
+var d1 : double = 10d;
+var d2 := 1_000.25d;
+var d3 : double;
+var dec1 : decimal = 10.9m;
+var dec2 := -1_000.75m;
+var dec3 : decimal;
 
 // Debug print expression statements
 a;
@@ -56,11 +71,25 @@ b1;
 b2;
 b3;
 b4;
+f1;
+f2;
+f3;
+f4;
+f5;
+f6;
+f7;
+f8;
+d1;
+d2;
+d3;
+dec1;
+dec2;
+dec3;
 |}
   in
   let src = Source.of_string ~filename:"valid.sgm" ~content:code in
   let expected_stdout =
-    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n"
+    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n"
   in
 
   (* 1. Interpreter (VM) *)
@@ -128,10 +157,10 @@ let test_syntax_and_semantic_errors () =
    | Ok _ -> assert_true ~msg:"missing semicolon must fail" false
    | Error errs -> assert_true ~msg:"E0003 expected" (has_code "E0003" errs));
 
-  (* E0101: unsupported type in M0 (e.g., float) *)
-  let s3 = Source.of_string ~filename:"err3.sgm" ~content:"var c : float;" in
+  (* E0101: unknown type (e.g., matrix) *)
+  let s3 = Source.of_string ~filename:"err3.sgm" ~content:"var c : matrix;" in
   (match Driver.run_source s3 with
-   | Ok _ -> assert_true ~msg:"var c : float; must fail in M0" false
+   | Ok _ -> assert_true ~msg:"var c : matrix; must fail" false
    | Error errs -> assert_true ~msg:"E0101 expected" (has_code "E0101" errs));
 
   (* E0102: undeclared variable *)
@@ -182,7 +211,34 @@ let test_syntax_and_semantic_errors () =
   in
   (match Driver.run_source s11 with
    | Ok _ -> assert_true ~msg:"var n : int = flag; must fail" false
-   | Error errs -> assert_true ~msg:"E0104 expected for int = bool var" (has_code "E0104" errs))
+   | Error errs -> assert_true ~msg:"E0104 expected for int = bool var" (has_code "E0104" errs));
+
+  (* E0104: strong typing - double cannot receive float (10.0 is float by default) *)
+  let s12 = Source.of_string ~filename:"err12.sgm" ~content:"var c : double = 10.0;" in
+  (match Driver.run_source s12 with
+   | Ok _ -> assert_true ~msg:"var c : double = 10.0; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for double = 10.0" (has_code "E0104" errs));
+
+  (* E0104: strong typing - decimal cannot receive float *)
+  let s13 = Source.of_string ~filename:"err13.sgm" ~content:"var c : decimal = 10.9;" in
+  (match Driver.run_source s13 with
+   | Ok _ -> assert_true ~msg:"var c : decimal = 10.9; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for decimal = 10.9" (has_code "E0104" errs));
+
+  (* E0104: strong typing - float cannot receive int *)
+  let s14 = Source.of_string ~filename:"err14.sgm" ~content:"var a : float = 10;" in
+  (match Driver.run_source s14 with
+   | Ok _ -> assert_true ~msg:"var a : float = 10; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for float = 10" (has_code "E0104" errs));
+
+  (* E0001: malformed float literals *)
+  List.iter
+    (fun bad_lit ->
+      let s = Source.of_string ~filename:"bad_float.sgm" ~content:("var x := " ^ bad_lit ^ ";") in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(bad_lit ^ " must fail with E0001") false
+      | Error errs -> assert_true ~msg:("E0001 expected for " ^ bad_lit) (has_code "E0001" errs))
+    [ "1_.0"; "1._0"; "1.0_"; "1.5e"; "1.5e-"; "1.5e_2"; "10F"; "10x" ]
 
 let () =
   test_valid_declarations_and_parity ();

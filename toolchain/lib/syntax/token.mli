@@ -6,6 +6,9 @@ type kind =
   | KW_VAR
   | IDENT of string
   | INT of int64
+  | FLOAT of float
+  | DOUBLE of float
+  | DECIMAL of float
   | BOOL of bool
   | COLON
   | EQUAL

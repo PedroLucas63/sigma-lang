@@ -4,6 +4,9 @@ type kind =
   | KW_VAR
   | IDENT of string
   | INT of int64
+  | FLOAT of float
+  | DOUBLE of float
+  | DECIMAL of float
   | BOOL of bool
   | COLON
   | EQUAL
@@ -21,6 +24,9 @@ let kind_to_string = function
   | KW_VAR -> "'var'"
   | IDENT s -> Printf.sprintf "identifier '%s'" s
   | INT n -> Printf.sprintf "integer '%Ld'" n
+  | FLOAT f -> Printf.sprintf "float '%.6g'" f
+  | DOUBLE d -> Printf.sprintf "double '%.15g'" d
+  | DECIMAL m -> Printf.sprintf "decimal '%.15g'" m
   | BOOL b -> Printf.sprintf "boolean '%B'" b
   | COLON -> "':'"
   | EQUAL -> "'='"

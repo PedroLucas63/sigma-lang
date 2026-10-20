@@ -4,6 +4,9 @@ open Sigma_common
 
 type expr_desc =
   | ExprInt of int64
+  | ExprFloat of float
+  | ExprDouble of float
+  | ExprDecimal of float
   | ExprBool of bool
   | ExprIdent of string
 

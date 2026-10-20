@@ -13,6 +13,12 @@ let check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) resul
   match e.desc with
   | Ast.ExprInt n ->
     Ok { Typed_ast.desc = Typed_ast.TExprInt n; ty = Ty.Int; span = e.span }
+  | Ast.ExprFloat f ->
+    Ok { Typed_ast.desc = Typed_ast.TExprFloat f; ty = Ty.Float; span = e.span }
+  | Ast.ExprDouble d ->
+    Ok { Typed_ast.desc = Typed_ast.TExprDouble d; ty = Ty.Double; span = e.span }
+  | Ast.ExprDecimal m ->
+    Ok { Typed_ast.desc = Typed_ast.TExprDecimal m; ty = Ty.Decimal; span = e.span }
   | Ast.ExprBool b ->
     Ok { Typed_ast.desc = Typed_ast.TExprBool b; ty = Ty.Bool; span = e.span }
   | Ast.ExprIdent name ->
@@ -31,15 +37,9 @@ let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   match Ty.of_string ty_name with
   | Some ty -> Ok ty
   | None ->
-    let hint =
-      if ty_name = "float" then
-        "supported types right now: 'int', 'bool' ('float' will be added in a future slice)"
-      else
-        "supported types: 'int', 'bool'"
-    in
     Error
       (Diagnostic.error
-         ~hint
+         ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool'"
          ~code:"E0101"
          ~span:ty_span
          (Printf.sprintf "unknown or unsupported type '%s'" ty_name))
@@ -48,6 +48,12 @@ let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   match ty with
   | Ty.Int ->
     { Typed_ast.desc = Typed_ast.TExprInt Ty.default_int_value; ty = Ty.Int; span }
+  | Ty.Float ->
+    { Typed_ast.desc = Typed_ast.TExprFloat Ty.default_float_value; ty = Ty.Float; span }
+  | Ty.Double ->
+    { Typed_ast.desc = Typed_ast.TExprDouble Ty.default_float_value; ty = Ty.Double; span }
+  | Ty.Decimal ->
+    { Typed_ast.desc = Typed_ast.TExprDecimal Ty.default_float_value; ty = Ty.Decimal; span }
   | Ty.Bool ->
     { Typed_ast.desc = Typed_ast.TExprBool Ty.default_bool_value; ty = Ty.Bool; span }
 

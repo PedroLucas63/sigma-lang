@@ -10,7 +10,11 @@ type var_usage = {
 
 let mark_expr_usage tbl (e : Typed_ast.expr) =
   match e.desc with
-  | Typed_ast.TExprInt _ | Typed_ast.TExprBool _ -> ()
+  | Typed_ast.TExprInt _
+  | Typed_ast.TExprFloat _
+  | Typed_ast.TExprDouble _
+  | Typed_ast.TExprDecimal _
+  | Typed_ast.TExprBool _ -> ()
   | Typed_ast.TExprIdent name ->
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true

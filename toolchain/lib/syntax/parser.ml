@@ -30,6 +30,15 @@ let parse_expr st : (Ast.expr, Diagnostic.t) result =
   | Token.INT n ->
     bump st;
     Ok { Ast.desc = Ast.ExprInt n; span = tok.span }
+  | Token.FLOAT f ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprFloat f; span = tok.span }
+  | Token.DOUBLE d ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprDouble d; span = tok.span }
+  | Token.DECIMAL m ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprDecimal m; span = tok.span }
   | Token.BOOL b ->
     bump st;
     Ok { Ast.desc = Ast.ExprBool b; span = tok.span }
@@ -41,12 +50,24 @@ let parse_expr st : (Ast.expr, Diagnostic.t) result =
        bump st;
        let span = Span.merge tok.span next_tok.span in
        Ok { Ast.desc = Ast.ExprInt (Int64.neg n); span }
+     | Token.FLOAT f ->
+       bump st;
+       let span = Span.merge tok.span next_tok.span in
+       Ok { Ast.desc = Ast.ExprFloat (-.f); span }
+     | Token.DOUBLE d ->
+       bump st;
+       let span = Span.merge tok.span next_tok.span in
+       Ok { Ast.desc = Ast.ExprDouble (-.d); span }
+     | Token.DECIMAL m ->
+       bump st;
+       let span = Span.merge tok.span next_tok.span in
+       Ok { Ast.desc = Ast.ExprDecimal (-.m); span }
      | _ ->
        Error
          (Diagnostic.error
             ~code:"E0002"
             ~span:next_tok.span
-            (Printf.sprintf "expected integer literal after '-', found %s"
+            (Printf.sprintf "expected numeric literal after '-', found %s"
                (Token.kind_to_string next_tok.kind))))
   | Token.IDENT name ->
     bump st;

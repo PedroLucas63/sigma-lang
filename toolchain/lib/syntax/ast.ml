@@ -2,6 +2,9 @@ open Sigma_common
 
 type expr_desc =
   | ExprInt of int64
+  | ExprFloat of float
+  | ExprDouble of float
+  | ExprDecimal of float
   | ExprBool of bool
   | ExprIdent of string
 
@@ -31,6 +34,9 @@ type program = stmt list
 let pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
+  | ExprFloat f -> Format.fprintf fmt "%.6g" f
+  | ExprDouble d -> Format.fprintf fmt "%.15gd" d
+  | ExprDecimal m -> Format.fprintf fmt "%.15gm" m
   | ExprBool b -> Format.fprintf fmt "%B" b
   | ExprIdent id -> Format.fprintf fmt "%s" id
 
