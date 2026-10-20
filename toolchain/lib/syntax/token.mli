@@ -16,7 +16,15 @@ type kind =
   | COLON
   | EQUAL
   | COLON_EQUAL
+  | PLUS
   | MINUS
+  | STAR
+  | SLASH
+  | SLASH_SLASH
+  | CARET
+  | PERCENT
+  | LPAREN
+  | RPAREN
   | SEMI
   | EOF
 

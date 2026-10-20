@@ -9,6 +9,57 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
+let check_unary_type (_op : Ast.unop) (ty : Ty.t) : Ty.t option =
+  match ty with
+  | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal -> Some ty
+  | Ty.Bool | Ty.Char | Ty.String -> None
+
+let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
+  match lty, rty, op with
+  (* char & string operations *)
+  | Ty.Char, Ty.Char, Ast.BinAdd -> Some Ty.String
+  | Ty.Char, Ty.Char, Ast.BinSub -> Some Ty.Int
+  | Ty.Char, Ty.String, Ast.BinAdd -> Some Ty.String
+  | Ty.Char, Ty.Int, Ast.BinAdd -> Some Ty.Char
+  | Ty.Char, Ty.Int, Ast.BinSub -> Some Ty.Char
+  | Ty.Char, Ty.Int, Ast.BinMul -> Some Ty.String
+  | Ty.String, Ty.Char, Ast.BinAdd -> Some Ty.String
+  | Ty.String, Ty.String, Ast.BinAdd -> Some Ty.String
+  | Ty.String, Ty.Int, Ast.BinMul -> Some Ty.String
+  (* exact base-10 decimal hierarchy (only mixes with int or decimal) *)
+  | Ty.Decimal, Ty.Decimal, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod)
+  | Ty.Decimal, Ty.Int, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod)
+  | Ty.Int, Ty.Decimal, (Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinDiv | Ast.BinPow | Ast.BinMod) ->
+    Some Ty.Decimal
+  | Ty.Decimal, Ty.Decimal, Ast.BinIntDiv
+  | Ty.Decimal, Ty.Int, Ast.BinIntDiv
+  | Ty.Int, Ty.Decimal, Ast.BinIntDiv ->
+    Some Ty.Int
+  (* IEEE-754 binary hierarchy: int < float < double *)
+  | (Ty.Int | Ty.Float | Ty.Double), (Ty.Int | Ty.Float | Ty.Double), _ ->
+    let wider =
+      if lty = Ty.Double || rty = Ty.Double then Ty.Double
+      else if lty = Ty.Float || rty = Ty.Float then Ty.Float
+      else Ty.Int
+    in
+    (match op with
+     | Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinPow | Ast.BinMod ->
+       Some wider
+     | Ast.BinDiv ->
+       Some (if wider = Ty.Int then Ty.Float else wider)
+     | Ast.BinIntDiv ->
+       Some Ty.Int)
+  | _ -> None
+
+let rec is_zero_literal (e : Typed_ast.expr) : bool =
+  match e.desc with
+  | Typed_ast.TExprInt 0L -> true
+  | Typed_ast.TExprFloat f -> f = 0.0
+  | Typed_ast.TExprDouble d -> d = 0.0
+  | Typed_ast.TExprDecimal m -> Decimal.is_zero m
+  | Typed_ast.TExprUnary (_, sub) -> is_zero_literal sub
+  | _ -> false
+
 let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match e.desc with
   | Ast.ExprInt n ->
@@ -50,6 +101,75 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
             ~code:"E0102"
             ~span:e.span
             (Printf.sprintf "use of undeclared variable '%s'" name)))
+  | Ast.ExprUnary (op, sub) ->
+    (match check_expr env sub with
+     | Error err -> Error err
+     | Ok tsub ->
+       (match check_unary_type op tsub.ty with
+        | Some res_ty ->
+          Ok
+            {
+              Typed_ast.desc = Typed_ast.TExprUnary (op, tsub);
+              ty = res_ty;
+              span = e.span;
+            }
+        | None ->
+          Error
+            (Diagnostic.error
+               ~hint:"unary '+' and '-' are only supported on numeric types ('int', 'float', 'double', 'decimal')"
+               ~code:"E0104"
+               ~span:e.span
+               (Printf.sprintf "invalid unary operator '%s' for operand of type '%s'"
+                  (Ast.unop_to_string op)
+                  (Ty.to_string tsub.ty)))))
+  | Ast.ExprBinary (op, lhs, rhs) ->
+    (match check_expr env lhs with
+     | Error err -> Error err
+     | Ok tlhs ->
+       (match check_expr env rhs with
+        | Error err -> Error err
+        | Ok trhs ->
+          (match check_binary_type op tlhs.ty trhs.ty with
+           | None ->
+             let hint =
+               if
+                 (tlhs.ty = Ty.Decimal && (trhs.ty = Ty.Float || trhs.ty = Ty.Double))
+                 || (trhs.ty = Ty.Decimal && (tlhs.ty = Ty.Float || tlhs.ty = Ty.Double))
+               then
+                 "mixing binary floating-point ('float'/'double') with exact base-10 'decimal' is forbidden to prevent precision loss"
+               else
+                 Printf.sprintf "operator '%s' is not defined for (%s, %s)"
+                   (Ast.binop_to_string op)
+                   (Ty.to_string tlhs.ty)
+                   (Ty.to_string trhs.ty)
+             in
+             Error
+               (Diagnostic.error
+                  ~hint
+                  ~code:"E0104"
+                  ~span:e.span
+                  (Printf.sprintf "invalid binary operation: '%s' between '%s' and '%s'"
+                     (Ast.binop_to_string op)
+                     (Ty.to_string tlhs.ty)
+                     (Ty.to_string trhs.ty)))
+           | Some res_ty ->
+             if
+               (op = Ast.BinDiv || op = Ast.BinIntDiv || op = Ast.BinMod)
+               && is_zero_literal trhs
+             then
+               Error
+                 (Diagnostic.error
+                    ~code:"E0105"
+                    ~span:e.span
+                    (Printf.sprintf "division or modulo by zero in '%s' operation"
+                       (Ast.binop_to_string op)))
+             else
+               Ok
+                 {
+                   Typed_ast.desc = Typed_ast.TExprBinary (op, tlhs, trhs);
+                   ty = res_ty;
+                   span = e.span;
+                 })))
 
 let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   match Ty.of_string ty_name with

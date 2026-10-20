@@ -14,7 +14,15 @@ type kind =
   | COLON
   | EQUAL
   | COLON_EQUAL
+  | PLUS
   | MINUS
+  | STAR
+  | SLASH
+  | SLASH_SLASH
+  | CARET
+  | PERCENT
+  | LPAREN
+  | RPAREN
   | SEMI
   | EOF
 
@@ -41,7 +49,15 @@ let kind_to_string = function
   | COLON -> "':'"
   | EQUAL -> "'='"
   | COLON_EQUAL -> "':='"
+  | PLUS -> "'+'"
   | MINUS -> "'-'"
+  | STAR -> "'*'"
+  | SLASH -> "'/'"
+  | SLASH_SLASH -> "'//'"
+  | CARET -> "'^'"
+  | PERCENT -> "'%'"
+  | LPAREN -> "'('"
+  | RPAREN -> "')'"
   | SEMI -> "';'"
   | EOF -> "end of file"
 

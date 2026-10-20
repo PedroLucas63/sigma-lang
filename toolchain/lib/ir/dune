@@ -1,4 +1,4 @@
 (library
  (name sigma_ir)
  (public_name sigma.ir)
- (libraries sigma_common sigma_sema))
+ (libraries sigma_common sigma_syntax sigma_sema))

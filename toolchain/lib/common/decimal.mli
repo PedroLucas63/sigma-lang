@@ -10,8 +10,21 @@ type t = {
 }
 
 val zero : t
+val is_zero : t -> bool
 val negate : t -> t
 val equal : t -> t -> bool
+
+val of_int64 : int64 -> t
+val to_float : t -> float
+
+(** Operações aritméticas em Base 10 de 128 bits. *)
+val add : t -> t -> t
+val sub : t -> t -> t
+val mul : t -> t -> t
+val div : t -> t -> (t, string) result
+val div_trunc_i64 : t -> t -> (int64, string) result
+val rem : t -> t -> (t, string) result
+val pow : t -> t -> t
 
 (** Converte uma string numérica limpa (sem '_' ou sufixo 'm') para [t] em base 10 exata.
     Retorna [None] se o coeficiente exceder 128 bits (~38 dígitos significativos) ou a escala exceder 100 casas. *)

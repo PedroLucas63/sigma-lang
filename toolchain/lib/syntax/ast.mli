@@ -2,6 +2,19 @@
 
 open Sigma_common
 
+type unop =
+  | UnPos
+  | UnNeg
+
+type binop =
+  | BinAdd
+  | BinSub
+  | BinMul
+  | BinDiv
+  | BinIntDiv
+  | BinPow
+  | BinMod
+
 type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
@@ -12,6 +25,8 @@ type expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprUnary of unop * expr
+  | ExprBinary of binop * expr * expr
 
 and interp_part =
   | InterpLit of string
@@ -40,4 +55,6 @@ and stmt = {
 
 type program = stmt list
 
+val unop_to_string : unop -> string
+val binop_to_string : binop -> string
 val pp_program : Format.formatter -> program -> unit

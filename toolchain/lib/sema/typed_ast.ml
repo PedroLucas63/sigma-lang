@@ -1,4 +1,5 @@
 open Sigma_common
+open Sigma_syntax
 
 type expr_desc =
   | TExprInt of int64
@@ -10,6 +11,8 @@ type expr_desc =
   | TExprString of string
   | TExprInterp of interp_part list
   | TExprIdent of string
+  | TExprUnary of Ast.unop * expr
+  | TExprBinary of Ast.binop * expr * expr
 
 and interp_part =
   | TInterpLit of string

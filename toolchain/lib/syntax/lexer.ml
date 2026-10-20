@@ -66,18 +66,41 @@ let read_digits st raw_buf clean_buf : digit_seq_status =
   else if !consecutive_underscore then Digits_consecutive_underscore
   else Digits_ok
 
-let skip_whitespace_and_comments st =
+let skip_whitespace_and_comments st errors =
   let rec loop () =
     if not (is_eof st) then
       match peek st with
       | ' ' | '\t' | '\r' | '\n' ->
         advance st;
         loop ()
-      | '/' when peek_next st = '/' ->
+      | '#' ->
         while not (is_eof st) && peek st <> '\n' do
           advance st
         done;
         loop ()
+      | '/' when peek_next st = '*' ->
+        let start_pos = cur_pos st in
+        advance st;
+        advance st;
+        let closed = ref false in
+        while not (is_eof st) && not !closed do
+          if peek st = '*' && peek_next st = '/' then begin
+            advance st;
+            advance st;
+            closed := true
+          end else
+            advance st
+        done;
+        if not !closed then begin
+          let span = Span.make ~file:st.src.filename ~start_pos ~end_pos:(cur_pos st) in
+          errors :=
+            Diagnostic.error
+              ~code:"E0001"
+              ~span
+              "unterminated block comment (missing closing '*/')"
+            :: !errors
+        end else
+          loop ()
       | _ -> ()
   in
   loop ()
@@ -134,7 +157,7 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
     tokens := { Token.kind; span } :: !tokens
   in
   while not (is_eof st) do
-    skip_whitespace_and_comments st;
+    skip_whitespace_and_comments st errors;
     if not (is_eof st) then begin
       let start_pos = cur_pos st in
       let c = peek st in
@@ -462,9 +485,34 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         | '=' ->
           advance st;
           emit Token.EQUAL start_pos (cur_pos st)
+        | '+' ->
+          advance st;
+          emit Token.PLUS start_pos (cur_pos st)
         | '-' ->
           advance st;
           emit Token.MINUS start_pos (cur_pos st)
+        | '*' ->
+          advance st;
+          emit Token.STAR start_pos (cur_pos st)
+        | '/' ->
+          advance st;
+          if peek st = '/' then begin
+            advance st;
+            emit Token.SLASH_SLASH start_pos (cur_pos st)
+          end else
+            emit Token.SLASH start_pos (cur_pos st)
+        | '^' ->
+          advance st;
+          emit Token.CARET start_pos (cur_pos st)
+        | '%' ->
+          advance st;
+          emit Token.PERCENT start_pos (cur_pos st)
+        | '(' ->
+          advance st;
+          emit Token.LPAREN start_pos (cur_pos st)
+        | ')' ->
+          advance st;
+          emit Token.RPAREN start_pos (cur_pos st)
         | ';' ->
           advance st;
           emit Token.SEMI start_pos (cur_pos st)

@@ -10,6 +10,45 @@ type opcode =
   | OP_CONST_STR of string
   | OP_TO_STR
   | OP_CONCAT_STR of int
+  | OP_I64_TO_F32
+  | OP_I64_TO_F64
+  | OP_I64_TO_DEC
+  | OP_F32_TO_F64
+  | OP_NEG_I64
+  | OP_NEG_F32
+  | OP_NEG_F64
+  | OP_NEG_DEC
+  | OP_ADD_I64
+  | OP_ADD_F32
+  | OP_ADD_F64
+  | OP_ADD_DEC
+  | OP_SUB_I64
+  | OP_SUB_F32
+  | OP_SUB_F64
+  | OP_SUB_DEC
+  | OP_MUL_I64
+  | OP_MUL_F32
+  | OP_MUL_F64
+  | OP_MUL_DEC
+  | OP_DIV_F32
+  | OP_DIV_F64
+  | OP_DIV_DEC
+  | OP_IDIV_I64
+  | OP_IDIV_F32
+  | OP_IDIV_F64
+  | OP_IDIV_DEC
+  | OP_MOD_I64
+  | OP_MOD_F32
+  | OP_MOD_F64
+  | OP_MOD_DEC
+  | OP_POW_I64
+  | OP_POW_F32
+  | OP_POW_F64
+  | OP_POW_DEC
+  | OP_CHAR_ADD_I64
+  | OP_CHAR_SUB_I64
+  | OP_CHAR_DIFF
+  | OP_REPEAT_STR
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
@@ -50,6 +89,45 @@ let pp_opcode fmt = function
   | OP_CONST_STR s -> Format.fprintf fmt "OP_CONST_STR %S" s
   | OP_TO_STR -> Format.fprintf fmt "OP_TO_STR"
   | OP_CONCAT_STR n -> Format.fprintf fmt "OP_CONCAT_STR %d" n
+  | OP_I64_TO_F32 -> Format.fprintf fmt "OP_I64_TO_F32"
+  | OP_I64_TO_F64 -> Format.fprintf fmt "OP_I64_TO_F64"
+  | OP_I64_TO_DEC -> Format.fprintf fmt "OP_I64_TO_DEC"
+  | OP_F32_TO_F64 -> Format.fprintf fmt "OP_F32_TO_F64"
+  | OP_NEG_I64 -> Format.fprintf fmt "OP_NEG_I64"
+  | OP_NEG_F32 -> Format.fprintf fmt "OP_NEG_F32"
+  | OP_NEG_F64 -> Format.fprintf fmt "OP_NEG_F64"
+  | OP_NEG_DEC -> Format.fprintf fmt "OP_NEG_DEC"
+  | OP_ADD_I64 -> Format.fprintf fmt "OP_ADD_I64"
+  | OP_ADD_F32 -> Format.fprintf fmt "OP_ADD_F32"
+  | OP_ADD_F64 -> Format.fprintf fmt "OP_ADD_F64"
+  | OP_ADD_DEC -> Format.fprintf fmt "OP_ADD_DEC"
+  | OP_SUB_I64 -> Format.fprintf fmt "OP_SUB_I64"
+  | OP_SUB_F32 -> Format.fprintf fmt "OP_SUB_F32"
+  | OP_SUB_F64 -> Format.fprintf fmt "OP_SUB_F64"
+  | OP_SUB_DEC -> Format.fprintf fmt "OP_SUB_DEC"
+  | OP_MUL_I64 -> Format.fprintf fmt "OP_MUL_I64"
+  | OP_MUL_F32 -> Format.fprintf fmt "OP_MUL_F32"
+  | OP_MUL_F64 -> Format.fprintf fmt "OP_MUL_F64"
+  | OP_MUL_DEC -> Format.fprintf fmt "OP_MUL_DEC"
+  | OP_DIV_F32 -> Format.fprintf fmt "OP_DIV_F32"
+  | OP_DIV_F64 -> Format.fprintf fmt "OP_DIV_F64"
+  | OP_DIV_DEC -> Format.fprintf fmt "OP_DIV_DEC"
+  | OP_IDIV_I64 -> Format.fprintf fmt "OP_IDIV_I64"
+  | OP_IDIV_F32 -> Format.fprintf fmt "OP_IDIV_F32"
+  | OP_IDIV_F64 -> Format.fprintf fmt "OP_IDIV_F64"
+  | OP_IDIV_DEC -> Format.fprintf fmt "OP_IDIV_DEC"
+  | OP_MOD_I64 -> Format.fprintf fmt "OP_MOD_I64"
+  | OP_MOD_F32 -> Format.fprintf fmt "OP_MOD_F32"
+  | OP_MOD_F64 -> Format.fprintf fmt "OP_MOD_F64"
+  | OP_MOD_DEC -> Format.fprintf fmt "OP_MOD_DEC"
+  | OP_POW_I64 -> Format.fprintf fmt "OP_POW_I64"
+  | OP_POW_F32 -> Format.fprintf fmt "OP_POW_F32"
+  | OP_POW_F64 -> Format.fprintf fmt "OP_POW_F64"
+  | OP_POW_DEC -> Format.fprintf fmt "OP_POW_DEC"
+  | OP_CHAR_ADD_I64 -> Format.fprintf fmt "OP_CHAR_ADD_I64"
+  | OP_CHAR_SUB_I64 -> Format.fprintf fmt "OP_CHAR_SUB_I64"
+  | OP_CHAR_DIFF -> Format.fprintf fmt "OP_CHAR_DIFF"
+  | OP_REPEAT_STR -> Format.fprintf fmt "OP_REPEAT_STR"
   | OP_DEF_GLOBAL_I64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_I64 %s" name
   | OP_DEF_GLOBAL_F32 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F32 %s" name
   | OP_DEF_GLOBAL_F64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F64 %s" name

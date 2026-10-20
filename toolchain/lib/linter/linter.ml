@@ -27,6 +27,11 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true
      | None -> ())
+  | Typed_ast.TExprUnary (_, sub) ->
+    mark_expr_usage tbl sub
+  | Typed_ast.TExprBinary (_, lhs, rhs) ->
+    mark_expr_usage tbl lhs;
+    mark_expr_usage tbl rhs
 
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in

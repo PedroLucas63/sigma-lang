@@ -25,6 +25,93 @@ let sync_to_semi st =
   if (cur st).kind = Token.SEMI then bump st
 
 let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
+  parse_additive st
+
+and parse_additive st : (Ast.expr, Diagnostic.t) result =
+  match parse_mult st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      let op_opt =
+        match tok.kind with
+        | Token.PLUS -> Some Ast.BinAdd
+        | Token.MINUS -> Some Ast.BinSub
+        | _ -> None
+      in
+      match op_opt with
+      | None -> Ok acc
+      | Some op ->
+        bump st;
+        (match parse_mult st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (op, acc, rhs); span })
+    in
+    loop lhs
+
+and parse_mult st : (Ast.expr, Diagnostic.t) result =
+  match parse_unary st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      let op_opt =
+        match tok.kind with
+        | Token.STAR -> Some Ast.BinMul
+        | Token.SLASH -> Some Ast.BinDiv
+        | Token.SLASH_SLASH -> Some Ast.BinIntDiv
+        | Token.PERCENT -> Some Ast.BinMod
+        | _ -> None
+      in
+      match op_opt with
+      | None -> Ok acc
+      | Some op ->
+        bump st;
+        (match parse_unary st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (op, acc, rhs); span })
+    in
+    loop lhs
+
+and parse_unary st : (Ast.expr, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.PLUS ->
+    bump st;
+    (match parse_unary st with
+     | Error e -> Error e
+     | Ok sub ->
+       let span = Span.merge tok.span sub.span in
+       Ok { Ast.desc = Ast.ExprUnary (Ast.UnPos, sub); span })
+  | Token.MINUS ->
+    bump st;
+    (match parse_unary st with
+     | Error e -> Error e
+     | Ok sub ->
+       let span = Span.merge tok.span sub.span in
+       Ok { Ast.desc = Ast.ExprUnary (Ast.UnNeg, sub); span })
+  | _ -> parse_power st
+
+and parse_power st : (Ast.expr, Diagnostic.t) result =
+  match parse_primary st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let tok = cur st in
+    (match tok.kind with
+     | Token.CARET ->
+       bump st;
+       (match parse_unary st with
+        | Error e -> Error e
+        | Ok rhs ->
+          let span = Span.merge lhs.span rhs.span in
+          Ok { Ast.desc = Ast.ExprBinary (Ast.BinPow, lhs, rhs); span })
+     | _ -> Ok lhs)
+
+and parse_primary st : (Ast.expr, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.INT n ->
@@ -81,36 +168,27 @@ let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
     (match convert_segments [] segments with
      | Ok parts -> Ok { Ast.desc = Ast.ExprInterp parts; span = tok.span }
      | Error e -> Error e)
-  | Token.MINUS ->
-    bump st;
-    let next_tok = cur st in
-    (match next_tok.kind with
-     | Token.INT n ->
-       bump st;
-       let span = Span.merge tok.span next_tok.span in
-       Ok { Ast.desc = Ast.ExprInt (Int64.neg n); span }
-     | Token.FLOAT f ->
-       bump st;
-       let span = Span.merge tok.span next_tok.span in
-       Ok { Ast.desc = Ast.ExprFloat (-.f); span }
-     | Token.DOUBLE d ->
-       bump st;
-       let span = Span.merge tok.span next_tok.span in
-       Ok { Ast.desc = Ast.ExprDouble (-.d); span }
-     | Token.DECIMAL m ->
-       bump st;
-       let span = Span.merge tok.span next_tok.span in
-       Ok { Ast.desc = Ast.ExprDecimal (Decimal.negate m); span }
-     | _ ->
-       Error
-         (Diagnostic.error
-            ~code:"E0002"
-            ~span:next_tok.span
-            (Printf.sprintf "expected numeric literal after '-', found %s"
-               (Token.kind_to_string next_tok.kind))))
   | Token.IDENT name ->
     bump st;
     Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
+  | Token.LPAREN ->
+    bump st;
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok inner ->
+       let close_tok = cur st in
+       (match close_tok.kind with
+        | Token.RPAREN ->
+          bump st;
+          let span = Span.merge tok.span close_tok.span in
+          Ok { inner with span }
+        | _ ->
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:close_tok.span
+               (Printf.sprintf "expected ')' to close parenthesized expression, found %s"
+                  (Token.kind_to_string close_tok.kind)))))
   | _ ->
     Error
       (Diagnostic.error

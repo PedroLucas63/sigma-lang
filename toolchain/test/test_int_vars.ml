@@ -17,30 +17,56 @@ let assert_true ~msg cond =
 let has_code code (diags : Diagnostic.t list) =
   List.exists (fun (d : Diagnostic.t) -> d.code = code) diags
 
+let run_and_check_parity ~name ~code ~expected_stdout =
+  let src = Source.of_string ~filename:(name ^ ".sgm") ~content:code in
+  (match Driver.run_source src with
+   | Ok out -> assert_eq ~msg:(name ^ " VM interpreter output") expected_stdout out
+   | Error errs ->
+     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+     assert_true ~msg:(name ^ " VM run should succeed") false);
+  let bin_path = Filename.temp_file "sigma_test_bin_" ".out" in
+  (match Driver.build_source ~output_path:bin_path src with
+   | Error errs ->
+     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+     assert_true ~msg:(name ^ " Native build should succeed") false
+   | Ok () ->
+     let ic = Unix.open_process_in (Filename.quote bin_path) in
+     let buf = Buffer.create 64 in
+     (try
+        while true do
+          Buffer.add_channel buf ic 1
+        done
+      with End_of_file -> ());
+     let _ = Unix.close_process_in ic in
+     (try Sys.remove bin_path with _ -> ());
+     let native_out = Buffer.contents buf in
+     assert_eq ~msg:(name ^ " Interpreter == Native Compiler parity") expected_stdout native_out)
+
 let test_valid_declarations_and_parity () =
   let code =
     {|
-// 1. Inferred int via ':='
+# 1. Inferred int via ':='
 var a := 10;
-// 2. Explicit ': int ='
+/* 2. Explicit ': int ='
+   with multi-line block comment */
 var b : int = 15;
-// 3. Explicit ': int' without init (Go-style zero initialization -> 0)
+# 3. Explicit ': int' without init (Go-style zero initialization -> 0)
 var c : int;
-// 4. Negative int and variable copy
+# 4. Negative int and variable copy
 var d : int = -42;
 var e := a;
-// 5. Numeric digit separators (_)
+# 5. Numeric digit separators (_)
 var m1 := 1000000;
 var m2 := 1_000_000;
 var m3 : int = 100_00_00;
 var m4 : int = 10_00_00_00;
 var m5 := -1_000_000;
-// 6. Booleans (inferred, explicit, zero-init = false, and copy)
+# 6. Booleans (inferred, explicit, zero-init = false, and copy)
 var b1 := true;
 var b2 : bool = false;
 var b3 : bool;
 var b4 : bool = b1;
-// 7. Floating-point types: float, double, decimal
+# 7. Floating-point types: float, double, decimal
 var f1 : float = 1.0;
 var f2 := 10.0;
 var f3 := 1e1;
@@ -57,7 +83,7 @@ var dec2 := -1_000.75m;
 var dec3 : decimal;
 var dec_high_prec : decimal = 0.1234567890123456789012345678m;
 var dec_finance : decimal = 999_999_999_999_999_999.123456789m;
-// 8. Primitive char (Unicode UTF-8) and string + interpolated strings (${...})
+# 8. Primitive char (Unicode UTF-8) and string + interpolated strings (${...})
 var ch_ascii := 'A';
 var ch_accent : char = 'ç';
 var ch_greek := 'Σ';
@@ -70,7 +96,7 @@ var s_utf8 : string = "Olá, Σ! こんにちは 🚀\nLinha 2\t(ok)";
 var s_zero : string;
 var s_interp : string = "Hello ${s_lang}! a=${a}, f=${f1}, d=${d2}, dec=${dec1}, bool=${b1}, char=${ch_greek}";
 
-// Debug print expression statements
+# Debug print expression statements
 a;
 b;
 c;
@@ -113,44 +139,212 @@ s_zero;
 s_interp;
 |}
   in
-  let src = Source.of_string ~filename:"valid.sgm" ~content:code in
   let expected_stdout =
     "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n0.1234567890123456789012345678\n999999999999999999.123456789\nA\nç\nΣ\n🚀\n\t\n\nSigma\nOlá, Σ! こんにちは 🚀\nLinha 2\t(ok)\n\nHello Sigma! a=10, f=1, d=1000.25, dec=10.9, bool=true, char=Σ\n"
   in
+  run_and_check_parity ~name:"valid" ~code ~expected_stdout
 
-  (* 1. Interpreter (VM) *)
-  (match Driver.run_source src with
-   | Ok out -> assert_eq ~msg:"VM interpreter output" expected_stdout out
-   | Error errs ->
-     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
-     assert_true ~msg:"VM run should succeed" false);
+let test_arithmetic_operations_and_parity () =
+  let code =
+    {|
+# 1. Unary operators (+ and -) and precedence with ^ and ()
+var u1 : int = +42;
+var u2 : int = -(-42);
+var p1 : int = -2 ^ 2;          # -(2^2) = -4
+var p2 : int = (-2) ^ 2;        # 4
+var p3 : int = 2 ^ 3 ^ 2;       # 2 ^ (3 ^ 2) = 512
+var p4 : int = 2 + 3 * 4;       # 14
+var p5 : int = (2 + 3) * 4;     # 20
 
-  (* 2. Native Compiler (C99 -O3) parity check *)
-  let bin_path = Filename.temp_file "sigma_test_bin_" ".out" in
-  (match Driver.build_source ~output_path:bin_path src with
-   | Error errs ->
-     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
-     assert_true ~msg:"Native build should succeed" false
-   | Ok () ->
-     let ic = Unix.open_process_in (Filename.quote bin_path) in
-     let buf = Buffer.create 64 in
-     (try
-        while true do
-          Buffer.add_channel buf ic 1
-        done
-      with End_of_file -> ());
-     let _ = Unix.close_process_in ic in
-     (try Sys.remove bin_path with _ -> ());
-     let native_out = Buffer.contents buf in
-     assert_eq ~msg:"Interpreter == Native Compiler parity" expected_stdout native_out)
+# 2. Integer arithmetic (+, -, *, /, //, %, ^)
+var i_add : int = 15 + 27;
+var i_sub : int = 15 - 27;
+var i_mul : int = 6 * 7;
+var i_div : float = 7 / 2;      # int / int -> float (3.5)
+var i_idiv1 : int = 7 // 2;     # 3
+var i_idiv2 : int = -7 // 2;    # -3 (truncation toward zero)
+var i_idiv3 : int = 7 // -2;    # -3
+var i_mod1 : int = 7 % 2;       # 1
+var i_mod2 : int = -7 % 2;      # 1 (Euclidean non-negative)
+var i_mod3 : int = -7 % -2;     # 1 (Euclidean non-negative)
+var i_mod4 : int = 7 % -2;      # 1
+
+# 3. Float & Double promotions
+var f_mix : float = 10 + 2.5f * 2;        # 15 (float)
+var d_mix : double = 10 + 2.5f + 0.25d;   # 12.75 (double)
+var f_idiv : int = -7.9f // 2;            # -3 (int)
+var d_idiv : int = -7.9d // 2.0f;         # -3 (int)
+var f_mod : float = -7.5f % 2;            # 0.5 (float)
+var d_mod : double = -7.5d % 2.0f;        # 0.5 (double)
+var d_pow : double = 2.0d ^ 3;            # 8 (double)
+
+# 4. Exact base-10 Decimal arithmetic (only with int and decimal)
+var m_add : decimal = 0.1m + 0.2m;        # 0.3 exact!
+var m_sub : decimal = 10m - 3.25m;        # 6.75
+var m_mul : decimal = 1.25m * 4;          # 5
+var m_div : decimal = 10m / 4;            # 2.5
+var m_idiv1 : int = -7.9m // 2;           # -3
+var m_idiv2 : int = 10 // 3m;             # 3
+var m_mod : decimal = -7.5m % 2m;         # 0.5
+var m_pow : decimal = 1.5m ^ 2;           # 2.25
+
+# 5. Char and String operations
+var c_add_c : string = 'A' + 'B';         # "AB"
+var c_sub_c : int = 'z' - 'a';            # 25
+var c_add_s : string = 'S' + "igma";      # "Sigma"
+var s_add_c : string = "Sigm" + 'a';      # "Sigma"
+var s_add_s : string = "Sig" + "ma";      # "Sigma"
+var c_add_i : char = 'a' + 3;             # 'd'
+var c_sub_i : char = 'd' - 3;             # 'a'
+var c_mul_i : string = 'x' * 4;           # "xxxx"
+var s_mul_i : string = "ha" * 3;          # "hahaha"
+var s_mul_0 : string = "ha" * 0;          # ""
+var interp_expr : string = "calc=${(10 + 5) * 2}, exact=${0.1m + 0.2m}";
+
+u1; u2; p1; p2; p3; p4; p5;
+i_add; i_sub; i_mul; i_div; i_idiv1; i_idiv2; i_idiv3; i_mod1; i_mod2; i_mod3; i_mod4;
+f_mix; d_mix; f_idiv; d_idiv; f_mod; d_mod; d_pow;
+m_add; m_sub; m_mul; m_div; m_idiv1; m_idiv2; m_mod; m_pow;
+c_add_c; c_sub_c; c_add_s; s_add_c; s_add_s; c_add_i; c_sub_i; c_mul_i; s_mul_i; s_mul_0; interp_expr;
+|}
+  in
+  let expected_stdout =
+    "42\n42\n-4\n4\n512\n14\n20\n42\n-12\n42\n3.5\n3\n-3\n-3\n1\n1\n1\n1\n15\n12.75\n-3\n-3\n0.5\n0.5\n8\n0.3\n6.75\n5\n2.5\n-3\n3\n0.5\n2.25\nAB\n25\nSigma\nSigma\nSigma\nd\na\nxxxx\nhahaha\n\ncalc=30, exact=0.3\n"
+  in
+  run_and_check_parity ~name:"arithmetic" ~code ~expected_stdout
+
+let test_all_operations_csv_matrix () =
+  let rows =
+    [
+      ("char", "char", "+", "string");
+      ("char", "char", "-", "int");
+      ("char", "string", "+", "string");
+      ("char", "int", "+", "char");
+      ("char", "int", "-", "char");
+      ("char", "int", "*", "string");
+      ("string", "char", "+", "string");
+      ("string", "string", "+", "string");
+      ("string", "int", "*", "string");
+      ("int", "int", "+", "int");
+      ("int", "float", "+", "float");
+      ("int", "double", "+", "double");
+      ("int", "decimal", "+", "decimal");
+      ("int", "int", "-", "int");
+      ("int", "float", "-", "float");
+      ("int", "double", "-", "double");
+      ("int", "decimal", "-", "decimal");
+      ("int", "int", "*", "int");
+      ("int", "float", "*", "float");
+      ("int", "double", "*", "double");
+      ("int", "decimal", "*", "decimal");
+      ("int", "int", "/", "float");
+      ("int", "float", "/", "float");
+      ("int", "double", "/", "double");
+      ("int", "decimal", "/", "decimal");
+      ("int", "int", "//", "int");
+      ("int", "float", "//", "int");
+      ("int", "double", "//", "int");
+      ("int", "decimal", "//", "int");
+      ("int", "int", "^", "int");
+      ("int", "float", "^", "float");
+      ("int", "double", "^", "double");
+      ("int", "decimal", "^", "decimal");
+      ("int", "int", "%", "int");
+      ("int", "float", "%", "float");
+      ("int", "double", "%", "double");
+      ("int", "decimal", "%", "decimal");
+      ("float", "int", "+", "float");
+      ("float", "float", "+", "float");
+      ("float", "double", "+", "double");
+      ("float", "int", "-", "float");
+      ("float", "float", "-", "float");
+      ("float", "double", "-", "double");
+      ("float", "int", "*", "float");
+      ("float", "float", "*", "float");
+      ("float", "double", "*", "double");
+      ("float", "int", "/", "float");
+      ("float", "float", "/", "float");
+      ("float", "double", "/", "double");
+      ("float", "int", "//", "int");
+      ("float", "float", "//", "int");
+      ("float", "double", "//", "int");
+      ("float", "int", "^", "float");
+      ("float", "float", "^", "float");
+      ("float", "double", "^", "double");
+      ("float", "int", "%", "float");
+      ("float", "float", "%", "float");
+      ("float", "double", "%", "double");
+      ("double", "int", "+", "double");
+      ("double", "float", "+", "double");
+      ("double", "double", "+", "double");
+      ("double", "int", "-", "double");
+      ("double", "float", "-", "double");
+      ("double", "double", "-", "double");
+      ("double", "int", "*", "double");
+      ("double", "float", "*", "double");
+      ("double", "double", "*", "double");
+      ("double", "int", "/", "double");
+      ("double", "float", "/", "double");
+      ("double", "double", "/", "double");
+      ("double", "int", "//", "int");
+      ("double", "float", "//", "int");
+      ("double", "double", "//", "int");
+      ("double", "int", "^", "double");
+      ("double", "float", "^", "double");
+      ("double", "double", "^", "double");
+      ("double", "int", "%", "double");
+      ("double", "float", "%", "double");
+      ("double", "double", "%", "double");
+      ("decimal", "int", "+", "decimal");
+      ("decimal", "decimal", "+", "decimal");
+      ("decimal", "int", "-", "decimal");
+      ("decimal", "decimal", "-", "decimal");
+      ("decimal", "int", "*", "decimal");
+      ("decimal", "decimal", "*", "decimal");
+      ("decimal", "int", "/", "decimal");
+      ("decimal", "decimal", "/", "decimal");
+      ("decimal", "int", "//", "int");
+      ("decimal", "decimal", "//", "int");
+      ("decimal", "int", "^", "decimal");
+      ("decimal", "decimal", "^", "decimal");
+      ("decimal", "int", "%", "decimal");
+      ("decimal", "decimal", "%", "decimal");
+    ]
+  in
+  let sample_of = function
+    | "char" -> "'d'"
+    | "string" -> "\"ab\""
+    | "int" -> "3"
+    | "float" -> "2.0f"
+    | "double" -> "2.0d"
+    | "decimal" -> "2.0m"
+    | t -> t
+  in
+  let buf = Buffer.create 2048 in
+  List.iteri
+    (fun i (lty, rty, op, res_ty) ->
+      Buffer.add_string
+        buf
+        (Printf.sprintf "var r_%d : %s = %s %s %s;\nr_%d;\n"
+           i res_ty (sample_of lty) op (sample_of rty) i))
+    rows;
+  let code = Buffer.contents buf in
+  let src = Source.of_string ~filename:"matrix.sgm" ~content:code in
+  match Driver.run_source src with
+  | Error errs ->
+    List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+    assert_true ~msg:"matrix VM run should succeed" false
+  | Ok vm_out ->
+    run_and_check_parity ~name:"matrix" ~code ~expected_stdout:vm_out
 
 let test_linter_unused_variable () =
   let code =
     {|
 var used := 10;
+var used_in_expr := 5;
 var unused : int = 20;
 var _ignored : int;
-used;
+used + used_in_expr;
 |}
   in
   let src = Source.of_string ~filename:"lint.sgm" ~content:code in
@@ -161,13 +355,13 @@ used;
     assert_true ~msg:"warning code is W0001" (has_code "W0001" warnings)
 
 let test_debugger_trace () =
-  let code = "var a := 10;\na;\n" in
+  let code = "var a := 10 + 5;\na;\n" in
   let src = Source.of_string ~filename:"debug.sgm" ~content:code in
   match Driver.debug_source src with
   | Error _ -> assert_true ~msg:"debug_source should succeed" false
   | Ok trace ->
     assert_true
-      ~msg:"debugger trace records globals={a=10}"
+      ~msg:"debugger trace records execution"
       (String.length trace > 0)
 
 let test_syntax_and_semantic_errors () =
@@ -295,11 +489,46 @@ let test_syntax_and_semantic_errors () =
   let s18 = Source.of_string ~filename:"err18.sgm" ~content:"var s := \"Hello ${nao_existe}\";" in
   (match Driver.run_source s18 with
    | Ok _ -> assert_true ~msg:"undeclared var in interpolation must fail" false
-   | Error errs -> assert_true ~msg:"E0102 expected for ${nao_existe}" (has_code "E0102" errs))
+   | Error errs -> assert_true ~msg:"E0102 expected for ${nao_existe}" (has_code "E0102" errs));
+
+  (* E0001: unterminated block comment *)
+  let s19 = Source.of_string ~filename:"err19.sgm" ~content:"/* comment without end\nvar a := 1;" in
+  (match Driver.run_source s19 with
+   | Ok _ -> assert_true ~msg:"unterminated block comment must fail" false
+   | Error errs -> assert_true ~msg:"E0001 expected for unterminated /*" (has_code "E0001" errs));
+
+  (* E0104: forbidden mixing of float/double with decimal *)
+  List.iter
+    (fun expr_str ->
+      let s = Source.of_string ~filename:"bad_mix.sgm" ~content:("var x := " ^ expr_str ^ ";") in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0104") false
+      | Error errs -> assert_true ~msg:("E0104 expected for " ^ expr_str) (has_code "E0104" errs))
+    [ "1.0f + 1.0m"; "1.0d + 1.0m"; "1.0m - 2.0f"; "1.0m * 2.0d"; "1.0m / 2.0f"; "1.0m // 2.0d"; "1.0m ^ 2.0f"; "1.0m % 2.0d" ];
+
+  (* E0104: invalid unary and non-commutative char/string ops *)
+  List.iter
+    (fun expr_str ->
+      let s = Source.of_string ~filename:"bad_op.sgm" ~content:("var x := " ^ expr_str ^ ";") in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0104") false
+      | Error errs -> assert_true ~msg:("E0104 expected for " ^ expr_str) (has_code "E0104" errs))
+    [ "+\"hello\""; "-'a'"; "-true"; "3 * \"ha\""; "3 * 'a'"; "1 + 'a'" ];
+
+  (* E0105: static division or modulo by zero *)
+  List.iter
+    (fun expr_str ->
+      let s = Source.of_string ~filename:"div_zero.sgm" ~content:("var x := " ^ expr_str ^ ";") in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0105") false
+      | Error errs -> assert_true ~msg:("E0105 expected for " ^ expr_str) (has_code "E0105" errs))
+    [ "10 / 0"; "10 // 0"; "10 % 0"; "10.0 / -0.0"; "10m / 0m" ]
 
 let () =
   test_valid_declarations_and_parity ();
+  test_arithmetic_operations_and_parity ();
+  test_all_operations_csv_matrix ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();
-  print_endline "All Sigma M0 (int-variables) tests passed!"
+  print_endline "All Sigma variable & arithmetic tests passed!"

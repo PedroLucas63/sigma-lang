@@ -1,5 +1,18 @@
 open Sigma_common
 
+type unop =
+  | UnPos
+  | UnNeg
+
+type binop =
+  | BinAdd
+  | BinSub
+  | BinMul
+  | BinDiv
+  | BinIntDiv
+  | BinPow
+  | BinMod
+
 type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
@@ -10,6 +23,8 @@ type expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprUnary of unop * expr
+  | ExprBinary of binop * expr * expr
 
 and interp_part =
   | InterpLit of string
@@ -38,6 +53,19 @@ and stmt = {
 
 type program = stmt list
 
+let unop_to_string = function
+  | UnPos -> "+"
+  | UnNeg -> "-"
+
+let binop_to_string = function
+  | BinAdd -> "+"
+  | BinSub -> "-"
+  | BinMul -> "*"
+  | BinDiv -> "/"
+  | BinIntDiv -> "//"
+  | BinPow -> "^"
+  | BinMod -> "%"
+
 let rec pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
@@ -56,6 +84,10 @@ let rec pp_expr fmt (e : expr) =
       parts;
     Format.fprintf fmt "\""
   | ExprIdent id -> Format.fprintf fmt "%s" id
+  | ExprUnary (op, sub) ->
+    Format.fprintf fmt "(%s%a)" (unop_to_string op) pp_expr sub
+  | ExprBinary (op, lhs, rhs) ->
+    Format.fprintf fmt "(%a %s %a)" pp_expr lhs (binop_to_string op) pp_expr rhs
 
 let pp_stmt fmt (s : stmt) =
   match s.desc with
