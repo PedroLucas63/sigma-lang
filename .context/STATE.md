@@ -24,7 +24,6 @@
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
 - [ ] Adicionar operadores aritméticos (`+`, `-`, `*`, `/`, `^` ou `**`), relacionais/lógicos e atribuição (`a = 20;`).
-- [ ] Sincronizar `docs/`, `editors/vscode/` e `web/` com os novos tipos `float`, `double` e `decimal` via `ecosystem-sync`.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, regras `AGENTS.md`, `.context/`, skills e Git Flow (`84f1f70`).
@@ -35,3 +34,4 @@
 - **2026-10-19:** Sincronização do ecossistema (`docs/`, `editors/vscode/` e `web/`) via skill `ecosystem-sync` (`feature/ecosystem-sync-m0`).
 - **2026-10-19:** Suporte completo aos tipos `float`, `double` e `decimal` (Base-10 Exato de 128 bits até 38 dígitos via `Decimal.t` / `__int128`), notação científica e sufixos `f`/`d`/`m` (`feature/floating-point-types`, `feature/exact-decimal-128`, `ADR-012`, `ADR-013`).
 - **2026-10-19:** Suporte completo aos tipos `char` e `string` (Unicode UTF-8 + escapes) e interpolação de strings `"${expr}"` (`feature/char-and-string`, `ADR-014`).
+- **2026-10-19:** Sincronização do ecossistema (`editors/vscode/`, `docs/`, `web/`) com `float`, `double`, `decimal`, `char`, `string` e interpolação `${...}` (`feature/ecosystem-sync-primitives`).

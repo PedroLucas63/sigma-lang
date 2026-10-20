@@ -63,7 +63,7 @@
     textarea, pre {
       width: 100%;
       box-sizing: border-box;
-      min-height: 300px;
+      min-height: 320px;
       background: #020617;
       color: #e2e8f0;
       border: 1px solid #334155;
@@ -83,9 +83,11 @@
     <section class="card">
       <div class="toolbar">
         <select id="example-select">
-          <option value="numbers">1. Números Grandes com '_' e Inteiros</option>
-          <option value="booleans">2. Tipo Booleano (bool) e Zero-Init</option>
-          <option value="typeerror">3. Erro de Tipagem Forte (E0104)</option>
+          <option value="strings">1. Strings Interpoladas, Char Unicode e Showcase</option>
+          <option value="floats">2. Float, Double e Decimal Exato de 128 bits</option>
+          <option value="numbers">3. Números Grandes com '_' e Inteiros</option>
+          <option value="booleans">4. Tipo Booleano (bool) e Zero-Init</option>
+          <option value="typeerror">5. Erro de Tipagem Forte (E0104)</option>
         </select>
         <button class="primary" id="run-btn">Simular Saída</button>
       </div>
@@ -100,6 +102,14 @@
   </main>
   <script>
     const examples = {
+      strings: {
+        code: `// Char Unicode UTF-8 e Strings com Interpolação \${...}\nvar simbolo : char = 'Σ';\nvar foguete := '🚀';\nvar linguagem := "Sigma";\nvar iteracoes := 1_000_000;\nvar erro : double = 0.0001d;\nvar ok := true;\n\nvar resumo := "[\${simbolo}] \${linguagem} \${foguete}: iter=\${iteracoes}, erro=\${erro}, ok=\${ok}";\n\nsimbolo;\nfoguete;\nresumo;`,
+        out: `Σ\n🚀\n[Σ] Sigma 🚀: iter=1000000, erro=0.0001, ok=true`
+      },
+      floats: {
+        code: `// float (32-bit), double (64-bit, 'd') e decimal (128-bit exato, 'm')\nvar f1 := 10.5;\nvar f2 : float = 1.5e2;\nvar d1 : double = 3.141592653589793d;\nvar m1 : decimal = 123_456.789_012_345_678_901_234_567_89m;\nvar m_zero : decimal;\n\nf1;\nf2;\nd1;\nm1;\nm_zero;`,
+        out: `10.5\n150.0\n3.141592653589793\n123456.78901234567890123456789\n0.0`
+      },
       numbers: {
         code: `// Separador estrito de dígitos (_) em literais int64\nvar m1 := 1000000;\nvar m2 := 1_000_000;\nvar m3 : int = 10_00_00_00;\nvar zero : int;\n\nm1;\nm2;\nm3;\nzero;`,
         out: `1000000\n1000000\n10000000\n0`
@@ -109,8 +119,8 @@
         out: `true\nfalse\nfalse\ntrue`
       },
       typeerror: {
-        code: `// Tipagem forte: int e bool não se misturam\nvar a : int = true;\nvar b : bool = 1;`,
-        out: `error[E0104]: type mismatch: expected 'int', found 'bool'\n  --> playground.sgm:2:15\n  2 | var a : int = true;\n    |               ^^^^\n  = hint: Sigma is strongly typed: cannot assign value of type 'bool' to variable 'a' of type 'int'`
+        code: `// Tipagem forte: sem coerção implícita entre float e double\nvar a : double = 10.0;\nvar b : string = 'Σ';`,
+        out: `error[E0104]: type mismatch: expected 'double', found 'float'\n  --> playground.sgm:2:18\n  2 | var a : double = 10.0;\n    |                  ^^^^\n  = hint: Sigma is strongly typed: cannot assign value of type 'float' to variable 'a' of type 'double'`
       }
     };
     const select = document.getElementById('example-select');
@@ -124,7 +134,7 @@
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('numbers');
+    loadExample('strings');
   </script>
 </body>
 </html>

@@ -7,6 +7,8 @@
     { "include": "#keywords" },
     { "include": "#types" },
     { "include": "#booleans" },
+    { "include": "#chars" },
+    { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#operators" },
     { "include": "#identifiers" }
@@ -32,7 +34,7 @@
       "patterns": [
         {
           "name": "storage.type.primitive.sigma",
-          "match": "\\b(int|bool)\\b"
+          "match": "\\b(int|float|double|decimal|bool|char|string)\\b"
         }
       ]
     },
@@ -44,11 +46,78 @@
         }
       ]
     },
+    "chars": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.char.sigma",
+          "begin": "'",
+          "end": "'|$",
+          "patterns": [
+            { "include": "#escapes" }
+          ]
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.sigma",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "include": "#escapes" },
+            {
+              "name": "meta.interpolation.sigma",
+              "begin": "\\$\\{",
+              "beginCaptures": {
+                "0": { "name": "punctuation.section.interpolation.begin.sigma" }
+              },
+              "end": "\\}",
+              "endCaptures": {
+                "0": { "name": "punctuation.section.interpolation.end.sigma" }
+              },
+              "patterns": [
+                { "include": "#booleans" },
+                { "include": "#chars" },
+                { "include": "#strings" },
+                { "include": "#numbers" },
+                { "include": "#operators" },
+                { "include": "#identifiers" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "escapes": {
+      "patterns": [
+        {
+          "name": "constant.character.escape.sigma",
+          "match": "\\\\[nrt\\\\'\"0\\$]"
+        },
+        {
+          "name": "invalid.illegal.unknown-escape.sigma",
+          "match": "\\\\."
+        }
+      ]
+    },
     "numbers": {
       "patterns": [
         {
           "name": "invalid.illegal.numeric.sigma",
           "match": "\\b[0-9][0-9_]*(__|_$)[0-9_]*\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.sigma",
+          "match": "\\b[0-9](?:_?[0-9])*(?:\\.(?:[0-9](?:_?[0-9])*)?)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?m\\b"
+        },
+        {
+          "name": "constant.numeric.double.sigma",
+          "match": "\\b[0-9](?:_?[0-9])*(?:\\.(?:[0-9](?:_?[0-9])*)?)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?d\\b"
+        },
+        {
+          "name": "constant.numeric.float.sigma",
+          "match": "\\b(?:[0-9](?:_?[0-9])*\\.(?:[0-9](?:_?[0-9])*)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?f?|[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)f?|[0-9](?:_?[0-9])*f)\\b"
         },
         {
           "name": "constant.numeric.integer.sigma",

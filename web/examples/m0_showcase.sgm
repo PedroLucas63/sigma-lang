@@ -1,17 +1,18 @@
-// Showcase Sigma (.sgm) — Variáveis, Separadores Numéricos (_) e Booleanos
-var iteracoes := 10;
-var populacao : int = 1_000_000;
-var orcamento : int = 10_00_00_00;
-var saldo_inicial : int;
-
+// Showcase Sigma (.sgm) — Todos os Tipos Primitivos e Interpolação de Strings
+var iteracoes := 1_000_000;
+var taxa_aprendizado : float = 0.01f;
+var erro_residual : double = 1.25e-6d;
+var constante_exata : decimal = 3.141592653589793238462643383279m;
 var convergiu := true;
-var modo_debug : bool = false;
-var alerta : bool;
+var simbolo : char = 'Σ';
+var foguete := '🚀';
+
+var resumo := "[${simbolo}] Sigma ${foguete} | iter=${iteracoes} | lr=${taxa_aprendizado} | erro=${erro_residual} | ok=${convergiu}";
 
 iteracoes;
-populacao;
-orcamento;
-saldo_inicial;
+taxa_aprendizado;
+erro_residual;
+constante_exata;
 convergiu;
-modo_debug;
-alerta;
+simbolo;
+resumo;

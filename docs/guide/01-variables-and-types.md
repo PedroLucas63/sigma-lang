@@ -1,93 +1,131 @@
-# 01. Variáveis, Separadores Numéricos e Tipagem Forte
+# 01. Variáveis, Tipos Primitivos, Ponto Flutuante e Strings Interpoladas
 
-Neste guia prático você aprenderá a declarar variáveis inteiras (`int`) e booleanas (`bool`) em **Sigma (`.sgm`)**, usar separadores de dígitos (`_`) para grandes constantes e entender como o verificador de tipos previne erros.
+Neste guia prático você aprenderá a declarar variáveis em **Sigma (`.sgm`)** usando todos os tipos primitivos da linguagem: inteiros (`int`), ponto flutuante (`float`, `double`, `decimal`), booleanos (`bool`), caracteres Unicode (`char`) e textos com interpolação (`string`).
 
 ---
 
-## 1. Declarando Variáveis Inteiras (`int`)
+## 1. Declarando Variáveis Inteiras (`int`) e Separador `_`
 
-A Sigma oferece três formas ergonômicas de declarar variáveis:
+A Sigma oferece três formas de declarar variáveis e suporta `_` estritamente entre dois dígitos para facilitar a leitura de grandes constantes:
 
 ```sigma
 // 1. Inferência automática de tipo com ':='
 var amostragens := 10;
 
-// 2. Tipo explícito com inicialização ': int ='
-var iteracoes : int = 15;
+// 2. Tipo explícito com inicialização ': int =' e separador '_'
+var populacao : int = 1_000_000;
+var orcamento : int = 10_00_00_00;
 
 // 3. Tipo explícito sem valor inicial (Zero-Initialization = 0)
 var acumulador : int;
 
-// 4. Números negativos e cópia entre variáveis
+// 4. Números negativos
 var offset : int = -42;
-var copia := amostragens;
 
-// Instruções de expressão imprimem o valor no stdout (debug print)
 amostragens;
-iteracoes;
+populacao;
+orcamento;
 acumulador;
 offset;
-copia;
-```
-
----
-
-## 2. Escrevendo Números Grandes com Separador `_`
-
-Em computação científica e estatística é comum lidar com milhões ou bilhões de observações. Para evitar contar zeros manualmente, você pode usar o caractere `_` entre quaisquer dígitos:
-
-```sigma
-// Todas as declarações abaixo representam exatamente 1.000.000:
-var n1 := 1000000;
-var n2 := 1_000_000;
-var n3 : int = 100_00_00;
-
-// E aqui 10.000.000:
-var n4 : int = 10_00_00_00;
-
-n1;
-n2;
-n3;
-n4;
 ```
 
 > **Regra de Legibilidade (`E0001`):** O `_` deve aparecer sempre **entre dois dígitos**. Números como `1_000_` (no final) ou `1__000` (duplo) são rejeitados pelo compilador com erro `E0001`.
 
 ---
 
+## 2. Ponto Flutuante (`float`, `double`) e Decimal Exato de 128 bits (`decimal`)
+
+Para computação científica, estatística e financeira, a Sigma distingue explicitamente três tipos reais sem conversões implícitas silenciosas:
+
+- **`float` (32 bits IEEE 754):** Padrão para literais com ponto ou notação científica sem sufixo (`10.0`, `10.`, `1e1`, `1.e1`) ou com sufixo `f` (`10f`, `10.5f`).
+- **`double` (64 bits IEEE 754):** Exige o sufixo `d` (`10d`, `10.5d`, `1.25e-4d`).
+- **`decimal` (128 bits Base-10 Exato):** Exige o sufixo `m` (`10m`, `10.9m`), preservando até **38 dígitos significativos** sem erros de arredondamento binário.
+
+```sigma
+// float (32 bits)
+var taxa := 10.0;
+var escala : float = 1.5e2;
+var f_zero : float;
+
+// double (64 bits)
+var pi : double = 3.141592653589793d;
+var d_zero : double;
+
+// decimal (128 bits base-10 exato — até 38 dígitos significativos)
+var preco := 10.90m;
+var alta_precisao : decimal = 123_456_789.012_345_678_901_234_567_89m;
+var m_zero : decimal;
+
+taxa;
+escala;
+f_zero;
+pi;
+d_zero;
+preco;
+alta_precisao;
+m_zero;
+```
+
+---
+
 ## 3. Tipo Booleano (`bool`)
 
-O tipo `bool` aceita os valores `true` e `false`. Quando declarado sem valor inicial (`var flag : bool;`), seu valor padrão é `false`:
+O tipo `bool` aceita os valores `true` e `false` (com zero-init `false`):
 
 ```sigma
 var convergiu := true;
 var mostrar_log : bool = false;
 var inicializado : bool; // false por padrão
-var status : bool = convergiu;
 
 convergiu;
 mostrar_log;
 inicializado;
-status;
 ```
 
 ---
 
-## 4. Tipagem Forte na Prática (`E0104`)
+## 4. Caracteres Unicode (`char`) e Textos com Interpolação (`string`)
 
-Diferente de C/C++ ou Python, a Sigma **não** converte `0`/`1` em booleanos nem `true`/`false` em inteiros:
+- **`char`:** Delimitado por aspas simples `'...'`, armazena exatamente **1 code point Unicode UTF-8** (qualquer idioma, símbolo matemático ou emoji).
+- **`string`:** Delimitada por aspas duplas `"..."`, suporta escapes (`\n`, `\t`, `\"`, `\\`, `\$`) e **interpolação de expressões** com `${...}` para qualquer tipo primitivo.
 
 ```sigma
-// ERRO E0104: type mismatch: expected 'int', found 'bool'
-var a : int = true;
+var letra : char = 'Σ';
+var emoji := '🚀';
 
-// ERRO E0104: type mismatch: expected 'bool', found 'int'
-var b : bool = 1;
+var linguagem := "Sigma";
+var iteracoes := 1_000;
+var erro := 0.0001d;
+var ok := true;
+
+// Interpolação direta de qualquer variável ou literal com ${...}
+var relatorio := "[${letra}] ${linguagem} ${emoji}: iter=${iteracoes}, erro=${erro}, ok=${ok}";
+
+letra;
+emoji;
+relatorio;
 ```
 
 ---
 
-## 5. Executando e Compilando seu Código
+## 5. Tipagem Forte na Prática (`E0104`)
+
+A Sigma **nunca** faz coerção implícita entre tipos distintos:
+
+```sigma
+// ERRO E0104: expected 'double', found 'float' (faltou o sufixo 'd')
+var a : double = 10.0;
+
+// ERRO E0104: expected 'string', found 'char'
+var b : string = 'a';
+
+// ERRO E0104: expected 'int', found 'bool'
+var c : int = true;
+```
+
+---
+
+## 6. Executando e Compilando seu Código
 
 Salve um dos exemplos válidos acima em `exemplo.sgm` e execute:
 
