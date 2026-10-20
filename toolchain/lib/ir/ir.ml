@@ -4,7 +4,7 @@ type opcode =
   | OP_CONST_I64 of int64
   | OP_CONST_F32 of float
   | OP_CONST_F64 of float
-  | OP_CONST_DEC of float
+  | OP_CONST_DEC of Decimal.t
   | OP_CONST_BOOL of bool
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
@@ -34,7 +34,7 @@ let pp_opcode fmt = function
   | OP_CONST_I64 n -> Format.fprintf fmt "OP_CONST_I64 %Ld" n
   | OP_CONST_F32 f -> Format.fprintf fmt "OP_CONST_F32 %.6g" f
   | OP_CONST_F64 d -> Format.fprintf fmt "OP_CONST_F64 %.15g" d
-  | OP_CONST_DEC m -> Format.fprintf fmt "OP_CONST_DEC %.15g" m
+  | OP_CONST_DEC m -> Format.fprintf fmt "OP_CONST_DEC %s" (Decimal.to_string m)
   | OP_CONST_BOOL b -> Format.fprintf fmt "OP_CONST_BOOL %B" b
   | OP_DEF_GLOBAL_I64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_I64 %s" name
   | OP_DEF_GLOBAL_F32 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F32 %s" name

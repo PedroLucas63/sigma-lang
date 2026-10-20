@@ -1,3 +1,5 @@
+open Sigma_common
+
 type t =
   | Int
   | Float
@@ -27,4 +29,5 @@ let of_string = function
 
 let default_int_value = 0L
 let default_float_value = 0.0
+let default_decimal_value = Decimal.zero
 let default_bool_value = false

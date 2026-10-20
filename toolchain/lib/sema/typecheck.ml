@@ -53,7 +53,7 @@ let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   | Ty.Double ->
     { Typed_ast.desc = Typed_ast.TExprDouble Ty.default_float_value; ty = Ty.Double; span }
   | Ty.Decimal ->
-    { Typed_ast.desc = Typed_ast.TExprDecimal Ty.default_float_value; ty = Ty.Decimal; span }
+    { Typed_ast.desc = Typed_ast.TExprDecimal Ty.default_decimal_value; ty = Ty.Decimal; span }
   | Ty.Bool ->
     { Typed_ast.desc = Typed_ast.TExprBool Ty.default_bool_value; ty = Ty.Bool; span }
 

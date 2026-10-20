@@ -6,7 +6,7 @@ type kind =
   | INT of int64
   | FLOAT of float
   | DOUBLE of float
-  | DECIMAL of float
+  | DECIMAL of Decimal.t
   | BOOL of bool
   | COLON
   | EQUAL
@@ -26,7 +26,7 @@ let kind_to_string = function
   | INT n -> Printf.sprintf "integer '%Ld'" n
   | FLOAT f -> Printf.sprintf "float '%.6g'" f
   | DOUBLE d -> Printf.sprintf "double '%.15g'" d
-  | DECIMAL m -> Printf.sprintf "decimal '%.15g'" m
+  | DECIMAL m -> Printf.sprintf "decimal '%s'" (Decimal.to_string m)
   | BOOL b -> Printf.sprintf "boolean '%B'" b
   | COLON -> "':'"
   | EQUAL -> "'='"

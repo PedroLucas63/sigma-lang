@@ -1,12 +1,13 @@
 (** Máquina Virtual (Interpretador) para execução imediata da IR da Sigma. *)
 
+open Sigma_common
 open Sigma_ir
 
 type value =
   | VInt of int64
   | VFloat of float
   | VDouble of float
-  | VDecimal of float
+  | VDecimal of Decimal.t
   | VBool of bool
 
 val value_to_string : value -> string

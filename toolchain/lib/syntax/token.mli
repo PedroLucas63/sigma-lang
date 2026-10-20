@@ -8,7 +8,7 @@ type kind =
   | INT of int64
   | FLOAT of float
   | DOUBLE of float
-  | DECIMAL of float
+  | DECIMAL of Decimal.t
   | BOOL of bool
   | COLON
   | EQUAL

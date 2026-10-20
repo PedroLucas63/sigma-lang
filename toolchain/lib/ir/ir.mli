@@ -6,7 +6,7 @@ type opcode =
   | OP_CONST_I64 of int64
   | OP_CONST_F32 of float
   | OP_CONST_F64 of float
-  | OP_CONST_DEC of float
+  | OP_CONST_DEC of Decimal.t
   | OP_CONST_BOOL of bool
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string

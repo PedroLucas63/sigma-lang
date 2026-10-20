@@ -4,7 +4,7 @@ type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
   | ExprDouble of float
-  | ExprDecimal of float
+  | ExprDecimal of Decimal.t
   | ExprBool of bool
   | ExprIdent of string
 
@@ -36,7 +36,7 @@ let pp_expr fmt (e : expr) =
   | ExprInt n -> Format.fprintf fmt "%Ld" n
   | ExprFloat f -> Format.fprintf fmt "%.6g" f
   | ExprDouble d -> Format.fprintf fmt "%.15gd" d
-  | ExprDecimal m -> Format.fprintf fmt "%.15gm" m
+  | ExprDecimal m -> Format.fprintf fmt "%sm" (Decimal.to_string m)
   | ExprBool b -> Format.fprintf fmt "%B" b
   | ExprIdent id -> Format.fprintf fmt "%s" id
 

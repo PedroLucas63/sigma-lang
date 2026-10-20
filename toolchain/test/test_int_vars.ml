@@ -55,6 +55,8 @@ var d3 : double;
 var dec1 : decimal = 10.9m;
 var dec2 := -1_000.75m;
 var dec3 : decimal;
+var dec_high_prec : decimal = 0.1234567890123456789012345678m;
+var dec_finance : decimal = 999_999_999_999_999_999.123456789m;
 
 // Debug print expression statements
 a;
@@ -85,11 +87,13 @@ d3;
 dec1;
 dec2;
 dec3;
+dec_high_prec;
+dec_finance;
 |}
   in
   let src = Source.of_string ~filename:"valid.sgm" ~content:code in
   let expected_stdout =
-    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n"
+    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n0.1234567890123456789012345678\n999999999999999999.123456789\n"
   in
 
   (* 1. Interpreter (VM) *)

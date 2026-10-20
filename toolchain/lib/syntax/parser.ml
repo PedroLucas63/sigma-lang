@@ -61,7 +61,7 @@ let parse_expr st : (Ast.expr, Diagnostic.t) result =
      | Token.DECIMAL m ->
        bump st;
        let span = Span.merge tok.span next_tok.span in
-       Ok { Ast.desc = Ast.ExprDecimal (-.m); span }
+       Ok { Ast.desc = Ast.ExprDecimal (Decimal.negate m); span }
      | _ ->
        Error
          (Diagnostic.error

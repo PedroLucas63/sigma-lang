@@ -4,7 +4,7 @@ type expr_desc =
   | TExprInt of int64
   | TExprFloat of float
   | TExprDouble of float
-  | TExprDecimal of float
+  | TExprDecimal of Decimal.t
   | TExprBool of bool
   | TExprIdent of string
 

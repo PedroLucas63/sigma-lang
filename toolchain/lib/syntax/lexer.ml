@@ -260,15 +260,17 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
                     (Printf.sprintf "double literal '%s' overflows 64-bit double" raw)
                   :: !errors)
            | "m" ->
-             (match float_of_string_opt clean with
-              | Some m when Float.is_finite m ->
+             (match Decimal.of_string_opt clean with
+              | Some m ->
                 emit (Token.DECIMAL m) start_pos end_pos
-              | _ ->
+              | None ->
                 errors :=
                   Diagnostic.error
                     ~code:"E0001"
                     ~span
-                    (Printf.sprintf "invalid decimal literal '%s'" raw)
+                    (Printf.sprintf
+                       "decimal literal '%s' overflows 128-bit base-10 decimal (~38 significant digits)"
+                       raw)
                   :: !errors)
            | bad_suffix ->
              errors :=

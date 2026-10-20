@@ -1,17 +1,18 @@
+open Sigma_common
 open Sigma_ir
 
 type value =
   | VInt of int64
   | VFloat of float
   | VDouble of float
-  | VDecimal of float
+  | VDecimal of Decimal.t
   | VBool of bool
 
 let value_to_string = function
   | VInt n -> Int64.to_string n
   | VFloat f -> Printf.sprintf "%.6g" f
   | VDouble d -> Printf.sprintf "%.15g" d
-  | VDecimal m -> Printf.sprintf "%.15g" m
+  | VDecimal m -> Decimal.to_string m
   | VBool b -> if b then "true" else "false"
 
 type state = {
@@ -96,7 +97,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VDecimal m :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Printf.sprintf "%.15g\n" m);
+         Buffer.add_string out_buf (Decimal.to_string m ^ "\n");
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_DEC"
        | [] -> Error "VM stack underflow on OP_PRINT_DEC")
