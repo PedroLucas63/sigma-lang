@@ -14,6 +14,7 @@
 | :--- | :--- | :--- | :--- |
 | `sigma_common` | `Span` | [`span.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/span.mli) | `pos`, `t`, `dummy`, `make`, `merge`, `to_string`, `pp` |
 | `sigma_common` | `Source` | [`source.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/source.mli) | `t`, `of_string`, `load`, `get_line` |
+| `sigma_common` | `Decimal` | [`decimal.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/decimal.mli) | `t` (128-bit base-10 exact decimal: `neg`, `scale`, `hi`, `lo`), `zero`, `negate`, `of_string_opt`, `to_string` |
 | `sigma_diagnostics` | `Diagnostic` | [`diagnostic.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/diagnostics/diagnostic.mli) | `severity`, `t`, `error`, `warning`, `render`, `pp` |
 | `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `IDENT`, `INT`, `FLOAT`, `DOUBLE`, `DECIMAL`, `BOOL`, `COLON`, `EQUAL`, `COLON_EQUAL`, `MINUS`, `SEMI`, `EOF`), `t` |
 | `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `expr` (`ExprInt`, `ExprFloat`, `ExprDouble`, `ExprDecimal`, `ExprBool`, `ExprIdent`), `var_decl`, `stmt` (`StmtVarDecl`, `StmtExpr`), `program` |

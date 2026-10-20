@@ -12,7 +12,7 @@
 | Literal | `INT of int64` | `[0-9](_?[0-9])*` |
 | Literal | `FLOAT of float` | `DEC_REAL "f"? \| DIGITS "f"` (32-bit float) |
 | Literal | `DOUBLE of float` | `(DEC_REAL \| DIGITS) "d"` (64-bit double) |
-| Literal | `DECIMAL of float` | `(DEC_REAL \| DIGITS) "m"` (decimal) |
+| Literal | `DECIMAL of Decimal.t` | `(DEC_REAL \| DIGITS) "m"` (128-bit base-10 decimal exato) |
 | Pontuação | `COLON` | `:` |
 | Operador | `EQUAL` | `=` |
 | Operador | `COLON_EQUAL` | `:=` |
@@ -64,7 +64,7 @@ type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
   | ExprDouble of float
-  | ExprDecimal of float
+  | ExprDecimal of Sigma_common.Decimal.t
   | ExprBool of bool
   | ExprIdent of string
 
@@ -110,7 +110,7 @@ type opcode =
   | OP_CONST_I64 of int64         (* Empilha constante int64 *)
   | OP_CONST_F32 of float         (* Empilha constante float (32-bit) *)
   | OP_CONST_F64 of float         (* Empilha constante double (64-bit) *)
-  | OP_CONST_DEC of float         (* Empilha constante decimal *)
+  | OP_CONST_DEC of Sigma_common.Decimal.t (* Empilha constante decimal 128-bit base-10 exata *)
   | OP_CONST_BOOL of bool         (* Empilha constante bool *)
   | OP_DEF_GLOBAL_I64 of string   (* Desempilha topo int64 e define variável global *)
   | OP_DEF_GLOBAL_F32 of string   (* Desempilha topo float e define variável global *)

@@ -32,4 +32,4 @@
 - **2026-10-19:** Suporte a separador de dígitos estrito (`_`) em literais inteiros (`feature/numeric-underscores`, `ADR-010`).
 - **2026-10-19:** Implementação completa do tipo `bool` (`true`/`false`, zero-init `false`) e verificação de tipagem forte `E0104` (`feature/bool-type`, `ADR-011`).
 - **2026-10-19:** Sincronização do ecossistema (`docs/`, `editors/vscode/` e `web/`) via skill `ecosystem-sync` (`feature/ecosystem-sync-m0`).
-- **2026-10-19:** Suporte completo aos tipos `float`, `double` e `decimal`, notação científica e sufixos `f`/`d`/`m` (`feature/floating-point-types`, `ADR-012`).
+- **2026-10-19:** Suporte completo aos tipos `float`, `double` e `decimal` (Base-10 Exato de 128 bits até 38 dígitos via `Decimal.t` / `__int128`), notação científica e sufixos `f`/`d`/`m` (`feature/floating-point-types`, `feature/exact-decimal-128`, `ADR-012`, `ADR-013`).
