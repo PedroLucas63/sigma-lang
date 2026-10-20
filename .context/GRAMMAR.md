@@ -32,6 +32,12 @@
 | Operador | `PERCENT` | `%` |
 | Operador | `LSHIFT` | `<<` |
 | Operador | `RSHIFT` | `>>` |
+| Operador | `EQ_EQ` | `==` |
+| Operador | `BANG_EQ` | `!=` |
+| Operador | `LT` | `<` |
+| Operador | `GT` | `>` |
+| Operador | `LT_EQ` | `<=` |
+| Operador | `GT_EQ` | `>=` |
 | Delimitador | `LPAREN` | `(` |
 | Delimitador | `RPAREN` | `)` |
 | Delimitador | `SEMI` | `;` |
@@ -56,7 +62,9 @@ logical_or    ::= logical_xor ( "or" logical_xor )* ;
 logical_xor   ::= logical_and ( "xor" logical_and )* ;
 logical_and   ::= logical_not ( "and" logical_not )* ;
 logical_not   ::= "not" logical_not
-                | shift ;
+                | relational ;
+relational    ::= shift ( REL_OP shift ( REL_OP shift )? )? ;
+REL_OP        ::= "==" | "!=" | "<" | ">" | "<=" | ">=" ;
 shift         ::= additive ( ( "<<" | ">>" ) additive )* ;
 additive      ::= mult ( ( "+" | "-" ) mult )* ;
 mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
@@ -111,6 +119,12 @@ type binop =
   | BinMod
   | BinShl
   | BinShr
+  | BinEq
+  | BinNe
+  | BinLt
+  | BinGt
+  | BinLe
+  | BinGe
   | BinAnd
   | BinXor
   | BinOr
@@ -127,6 +141,7 @@ type expr_desc =
   | ExprIdent of string
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
+  | ExprChainCmp of expr * binop * expr * binop * expr
 
 and interp_part =
   | InterpLit of string
@@ -183,6 +198,9 @@ type opcode =
   | OP_REPEAT_STR
   | OP_NOT_BOOL | OP_AND_BOOL | OP_OR_BOOL | OP_XOR_BOOL
   | OP_NOT_I64 | OP_AND_I64 | OP_OR_I64 | OP_XOR_I64 | OP_SHL_I64 | OP_SHR_I64
+  | OP_EQ_* | OP_NE_* | OP_LT_* | OP_GT_* | OP_LE_* | OP_GE_*
+  | OP_JUMP of int | OP_JUMP_IF_FALSE of int | OP_JUMP_IF_TRUE of int
+  | OP_SET_TEMP of int | OP_GET_TEMP of int
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
