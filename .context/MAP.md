@@ -14,16 +14,16 @@
 | :--- | :--- | :--- | :--- |
 | `sigma_common` | `Span` | [`span.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/span.mli) | `pos`, `t`, `dummy`, `make`, `merge`, `to_string`, `pp` |
 | `sigma_common` | `Source` | [`source.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/source.mli) | `t`, `of_string`, `load`, `get_line` |
-| `sigma_common` | `Decimal` | [`decimal.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/decimal.mli) | `t` (128-bit base-10 exact decimal: `neg`, `scale`, `hi`, `lo`), `zero`, `negate`, `of_string_opt`, `to_string` |
+| `sigma_common` | `Decimal` | [`decimal.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/decimal.mli) | `t` (128-bit base-10 exact decimal), `zero`, `is_zero`, `negate`, `of_int64`, `add`, `sub`, `mul`, `div`, `div_trunc_i64`, `rem`, `pow`, `of_string_opt`, `to_string` |
 | `sigma_diagnostics` | `Diagnostic` | [`diagnostic.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/diagnostics/diagnostic.mli) | `severity`, `t`, `error`, `warning`, `render`, `pp` |
-| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `IDENT`, `INT`, `FLOAT`, `DOUBLE`, `DECIMAL`, `BOOL`, `CHAR`, `STRING`, `INTERP_STRING`, `COLON`, `EQUAL`, `COLON_EQUAL`, `MINUS`, `SEMI`, `EOF`), `t` |
-| `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `expr` (`ExprInt`, `ExprFloat`, `ExprDouble`, `ExprDecimal`, `ExprBool`, `ExprChar`, `ExprString`, `ExprInterp`, `ExprIdent`), `var_decl`, `stmt`, `program` |
+| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `IDENT`, `INT`, `FLOAT`, `DOUBLE`, `DECIMAL`, `BOOL`, `CHAR`, `STRING`, `INTERP_STRING`, `COLON`, `EQUAL`, `COLON_EQUAL`, `PLUS`, `MINUS`, `STAR`, `SLASH`, `SLASH_SLASH`, `CARET`, `PERCENT`, `LPAREN`, `RPAREN`, `SEMI`, `EOF`), `t` |
+| `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `unop`, `binop`, `expr` (`ExprInt`, `ExprFloat`, `ExprDouble`, `ExprDecimal`, `ExprBool`, `ExprChar`, `ExprString`, `ExprInterp`, `ExprIdent`, `ExprUnary`, `ExprBinary`), `var_decl`, `stmt`, `program` |
 | `sigma_syntax` | `Lexer` | [`lexer.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/lexer.mli) | `tokenize : Source.t -> (Token.t list, Diagnostic.t list) result` |
 | `sigma_syntax` | `Parser` | [`parser.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/parser.mli) | `parse : Token.t list -> (Ast.program, Diagnostic.t list) result` |
 | `sigma_sema` | `Ty` | [`ty.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/ty.mli) | `t = Int \| Float \| Double \| Decimal \| Bool \| Char \| String`, `equal`, `to_string`, `of_string`, `default_*_value` |
-| `sigma_sema` | `Typed_ast` | [`typed_ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typed_ast.mli) | `expr` (`TExprInt`, `TExprFloat`, `TExprDouble`, `TExprDecimal`, `TExprBool`, `TExprChar`, `TExprString`, `TExprInterp`, `TExprIdent`), `var_decl`, `stmt`, `program` |
+| `sigma_sema` | `Typed_ast` | [`typed_ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typed_ast.mli) | `expr` (`TExprInt`, `TExprFloat`, `TExprDouble`, `TExprDecimal`, `TExprBool`, `TExprChar`, `TExprString`, `TExprInterp`, `TExprIdent`, `TExprUnary`, `TExprBinary`), `var_decl`, `stmt`, `program` |
 | `sigma_sema` | `Typecheck` | [`typecheck.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/sema/typecheck.mli) | `check_program : Ast.program -> (Typed_ast.program, Diagnostic.t list) result` |
-| `sigma_ir` | `Ir` | [`ir.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/ir.mli) | `opcode` (`OP_CONST_{I64,F32,F64,DEC,BOOL,CHAR,STR}`, `OP_TO_STR`, `OP_CONCAT_STR`, `OP_DEF_GLOBAL_*`, `OP_GET_GLOBAL_*`, `OP_PRINT_*`, `OP_HALT`), `program` |
+| `sigma_ir` | `Ir` | [`ir.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/ir.mli) | `opcode` (`OP_CONST_*`, `OP_TO_STR`, `OP_CONCAT_STR`, `OP_*_TO_*`, `OP_NEG_*`, `OP_ADD_*`, `OP_SUB_*`, `OP_MUL_*`, `OP_DIV_*`, `OP_IDIV_*`, `OP_MOD_*`, `OP_POW_*`, `OP_CHAR_*`, `OP_REPEAT_STR`, `OP_DEF_GLOBAL_*`, `OP_GET_GLOBAL_*`, `OP_PRINT_*`, `OP_HALT`), `program` |
 | `sigma_ir` | `Lower` | [`lower.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/ir/lower.mli) | `lower_program : Typed_ast.program -> Ir.program` |
 | `sigma_interp` | `Vm` | [`vm.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/interp/vm.mli) | `value` (`VInt`, `VFloat`, `VDouble`, `VDecimal`, `VBool`, `VChar`, `VString`), `state`, `create_state`, `step`, `run : Ir.program -> (string, string) result` |
 | `sigma_codegen` | `Codegen_c` | [`codegen_c.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/codegen/codegen_c.mli) | `emit_c`, `compile_executable : output_path:string -> Typed_ast.program -> (unit, string) result` |
@@ -33,11 +33,12 @@
 | `sigma_driver` | `Driver` | [`driver.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/driver/driver.mli) | `compile_frontend`, `run_source`, `build_source`, `lint_source`, `debug_source` |
 
 ## 3. Catálogo de Códigos de Diagnóstico Ativos
-- `E0001`: Caractere ilegal, literal inteiro com `_` malformado (`1_000_` / `1__000`) ou overflow de literal inteiro no Lexer.
-- `E0002`: Erro de sintaxe em expressão ou declaração `var` (ex: `var x = 10;` sem tipo).
+- `E0001`: Caractere ilegal, literal malformado (`_`, sufixos, overflow) ou comentário de bloco `/*` não fechado no Lexer.
+- `E0002`: Erro de sintaxe em expressão ou declaração `var` (ex: `var x = 10;` sem tipo ou parênteses não fechados).
 - `E0003`: Instrução sem ponto-e-vírgula `;` final.
-- `E0101`: Tipo desconhecido ou ainda não suportado em M0 (ex: `float`).
+- `E0101`: Tipo desconhecido ou ainda não suportado (ex: `matrix`).
 - `E0102`: Uso de variável não declarada.
 - `E0103`: Redeclaração de variável já existente no mesmo escopo.
-- `E0104`: Incompatibilidade de tipos (*Type mismatch*: sem coerção implícita entre `int` e `bool`).
+- `E0104`: Incompatibilidade de tipos em declaração ou operação unária/binária (ex: misturar `float`/`double` com `decimal`).
+- `E0105`: Divisão ou módulo por zero detectado em tempo de compilação.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_`).
