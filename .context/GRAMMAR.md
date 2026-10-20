@@ -7,6 +7,9 @@
 | Categoria | Token OCaml | Representação Textual |
 | :--- | :--- | :--- |
 | Palavra-chave | `KW_VAR` | `var` |
+| Palavra-chave | `KW_AND` | `and` |
+| Palavra-chave | `KW_OR` | `or` |
+| Palavra-chave | `KW_NOT` | `not` |
 | Literal | `BOOL of bool` | `true` \| `false` |
 | Identificador | `IDENT of string` | `[a-zA-Z_][a-zA-Z0-9_]*` |
 | Literal | `INT of int64` | `[0-9](_?[0-9])*` |
@@ -45,7 +48,11 @@ var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
 
 expr_stmt     ::= expr ;
 
-expr          ::= additive ;
+expr          ::= logical_or ;
+logical_or    ::= logical_and ( "or" logical_and )* ;
+logical_and   ::= logical_not ( "and" logical_not )* ;
+logical_not   ::= "not" logical_not
+                | additive ;
 additive      ::= mult ( ( "+" | "-" ) mult )* ;
 mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" ) unary
@@ -87,6 +94,7 @@ DIGIT         ::= [0-9] ;
 type unop =
   | UnPos
   | UnNeg
+  | UnNot
 
 type binop =
   | BinAdd
@@ -96,6 +104,8 @@ type binop =
   | BinIntDiv
   | BinPow
   | BinMod
+  | BinAnd
+  | BinOr
 
 type expr_desc =
   | ExprInt of int64
@@ -163,6 +173,7 @@ type opcode =
   | OP_POW_I64 | OP_POW_F32 | OP_POW_F64 | OP_POW_DEC
   | OP_CHAR_ADD_I64 | OP_CHAR_SUB_I64 | OP_CHAR_DIFF
   | OP_REPEAT_STR
+  | OP_NOT_BOOL | OP_AND_BOOL | OP_OR_BOOL
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
