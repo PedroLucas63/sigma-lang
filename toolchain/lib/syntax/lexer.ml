@@ -82,12 +82,55 @@ let skip_whitespace_and_comments st =
   in
   loop ()
 
-let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
-  let st = { src; len = String.length src.content; offset = 0; line = 1; col = 1 } in
+let utf8_char_byte_len (c : char) : int =
+  let b = Char.code c in
+  if b < 0x80 then 1
+  else if b >= 0xC0 && b <= 0xDF then 2
+  else if b >= 0xE0 && b <= 0xEF then 3
+  else if b >= 0xF0 && b <= 0xF7 then 4
+  else 1
+
+let read_escape st : (string, Diagnostic.t) result =
+  let esc_start = cur_pos st in
+  if is_eof st then
+    let span = Span.make ~file:st.src.filename ~start_pos:esc_start ~end_pos:esc_start in
+    Error (Diagnostic.error ~code:"E0001" ~span "incomplete escape sequence at end of file")
+  else
+    let ch = peek st in
+    advance st;
+    match ch with
+    | 'n' -> Ok "\n"
+    | 'r' -> Ok "\r"
+    | 't' -> Ok "\t"
+    | '\\' -> Ok "\\"
+    | '\'' -> Ok "'"
+    | '"' -> Ok "\""
+    | '0' -> Ok "\000"
+    | '$' -> Ok "$"
+    | _ ->
+      let span = Span.make ~file:st.src.filename ~start_pos:esc_start ~end_pos:(cur_pos st) in
+      Error
+        (Diagnostic.error
+           ~hint:"supported escape sequences: \\n, \\r, \\t, \\\\, \\', \\\", \\0, \\$"
+           ~code:"E0001"
+           ~span
+           (Printf.sprintf "unknown escape sequence '\\%c'" ch))
+
+let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int)
+    : (Token.t list, Diagnostic.t list) result =
+  let st =
+    {
+      src;
+      len = end_offset;
+      offset = start_pos.offset;
+      line = start_pos.line;
+      col = start_pos.col;
+    }
+  in
   let tokens = ref [] in
   let errors = ref [] in
-  let emit kind start_pos end_pos =
-    let span = Span.make ~file:src.filename ~start_pos ~end_pos in
+  let emit kind s_pos e_pos =
+    let span = Span.make ~file:src.filename ~start_pos:s_pos ~end_pos:e_pos in
     tokens := { Token.kind; span } :: !tokens
   in
   while not (is_eof st) do
@@ -132,7 +175,6 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
              set_err "invalid trailing underscore '_' in numeric literal"
          | Digits_consecutive_underscore ->
            set_err "consecutive underscores '__' are not allowed in numeric literal");
-        (* Optional fractional part: '.' followed by optional DIGITS *)
         if not (is_eof st) && peek st = '.' then begin
           has_dot := true;
           Buffer.add_char raw_buf '.';
@@ -154,7 +196,6 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
           end else
             Buffer.add_char clean_buf '0'
         end;
-        (* Optional exponent part: ('e' | 'E') ('+' | '-')? DIGITS *)
         if not (is_eof st) && (peek st = 'e' || peek st = 'E') then begin
           has_exp := true;
           let e_ch = peek st in
@@ -185,7 +226,6 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
           end else
             set_err "expected digits in exponent of floating-point literal"
         end;
-        (* Check for stray second dot like 1.2.3 *)
         if not (is_eof st) && peek st = '.' then begin
           set_err "unexpected second '.' in numeric literal";
           while not (is_eof st) && (is_alnum (peek st) || peek st = '.') do
@@ -193,7 +233,6 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
             advance st
           done
         end;
-        (* Optional type suffix: 'f', 'd', 'm' *)
         let suffix_buf = Buffer.create 4 in
         while not (is_eof st) && is_alnum (peek st) do
           let ch = peek st in
@@ -282,6 +321,135 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
                     "invalid suffix '%s' on numeric literal '%s'"
                     bad_suffix raw)
                :: !errors)
+      end else if c = '\'' then begin
+        advance st;
+        let char_buf = Buffer.create 4 in
+        let cp_count = ref 0 in
+        let esc_err = ref None in
+        while not (is_eof st) && peek st <> '\'' && peek st <> '\n' && peek st <> '\r' do
+          if peek st = '\\' then begin
+            advance st;
+            incr cp_count;
+            match read_escape st with
+            | Ok s -> Buffer.add_string char_buf s
+            | Error e -> esc_err := Some e
+          end else begin
+            let n_bytes = utf8_char_byte_len (peek st) in
+            incr cp_count;
+            for _ = 1 to n_bytes do
+              if not (is_eof st) && peek st <> '\'' && peek st <> '\n' && peek st <> '\r' then begin
+                Buffer.add_char char_buf (peek st);
+                advance st
+              end
+            done
+          end
+        done;
+        if is_eof st || peek st <> '\'' then begin
+          let span = Span.make ~file:src.filename ~start_pos ~end_pos:(cur_pos st) in
+          errors :=
+            Diagnostic.error
+              ~code:"E0001"
+              ~span
+              "unterminated character literal (missing closing \"'\")"
+            :: !errors
+        end else begin
+          advance st;
+          let end_pos = cur_pos st in
+          let span = Span.make ~file:src.filename ~start_pos ~end_pos in
+          match !esc_err with
+          | Some e -> errors := e :: !errors
+          | None ->
+            if !cp_count = 0 then
+              errors :=
+                Diagnostic.error
+                  ~code:"E0001"
+                  ~span
+                  "empty character literal ''"
+                :: !errors
+            else if !cp_count > 1 then
+              errors :=
+                Diagnostic.error
+                  ~hint:"use double quotes \"...\" for multi-character strings"
+                  ~code:"E0001"
+                  ~span
+                  "character literal may only contain a single Unicode character"
+                :: !errors
+            else
+              emit (Token.CHAR (Buffer.contents char_buf)) start_pos end_pos
+        end
+      end else if c = '"' then begin
+        advance st;
+        let lit_buf = Buffer.create 32 in
+        let segments = ref [] in
+        let has_interp = ref false in
+        let str_failed = ref false in
+        while not (is_eof st) && peek st <> '"' && peek st <> '\n' && peek st <> '\r' do
+          if peek st = '\\' then begin
+            advance st;
+            match read_escape st with
+            | Ok s -> Buffer.add_string lit_buf s
+            | Error e ->
+              str_failed := true;
+              errors := e :: !errors
+          end else if peek st = '$' && peek_next st = '{' then begin
+            has_interp := true;
+            if Buffer.length lit_buf > 0 then begin
+              segments := Token.SegLit (Buffer.contents lit_buf) :: !segments;
+              Buffer.clear lit_buf
+            end;
+            let interp_start_pos = cur_pos st in
+            advance st;
+            advance st;
+            let expr_start_pos = cur_pos st in
+            while not (is_eof st) && peek st <> '}' && peek st <> '"' && peek st <> '\n' && peek st <> '\r' do
+              advance st
+            done;
+            let expr_end_offset = st.offset in
+            if is_eof st || peek st <> '}' then begin
+              str_failed := true;
+              let span = Span.make ~file:src.filename ~start_pos:interp_start_pos ~end_pos:(cur_pos st) in
+              errors :=
+                Diagnostic.error
+                  ~code:"E0001"
+                  ~span
+                  "unterminated '${...}' interpolation in string literal"
+                :: !errors
+            end else begin
+              advance st;
+              let seg_span = Span.make ~file:src.filename ~start_pos:interp_start_pos ~end_pos:(cur_pos st) in
+              match tokenize_range src expr_start_pos expr_end_offset with
+              | Ok sub_toks ->
+                segments := Token.SegTokens (sub_toks, seg_span) :: !segments
+              | Error sub_errs ->
+                str_failed := true;
+                errors := List.rev_append sub_errs !errors
+            end
+          end else begin
+            Buffer.add_char lit_buf (peek st);
+            advance st
+          end
+        done;
+        if is_eof st || peek st <> '"' then begin
+          let span = Span.make ~file:src.filename ~start_pos ~end_pos:(cur_pos st) in
+          errors :=
+            Diagnostic.error
+              ~code:"E0001"
+              ~span
+              "unterminated string literal (missing closing '\"')"
+            :: !errors
+        end else begin
+          advance st;
+          let end_pos = cur_pos st in
+          if not !str_failed then begin
+            if not !has_interp then
+              emit (Token.STRING (Buffer.contents lit_buf)) start_pos end_pos
+            else begin
+              if Buffer.length lit_buf > 0 then
+                segments := Token.SegLit (Buffer.contents lit_buf) :: !segments;
+              emit (Token.INTERP_STRING (List.rev !segments)) start_pos end_pos
+            end
+          end
+        end
       end else begin
         match c with
         | ':' ->
@@ -318,3 +486,6 @@ let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
   match List.rev !errors with
   | [] -> Ok (List.rev !tokens)
   | errs -> Error errs
+
+let tokenize (src : Source.t) : (Token.t list, Diagnostic.t list) result =
+  tokenize_range src { offset = 0; line = 1; col = 1 } (String.length src.content)

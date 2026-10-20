@@ -57,6 +57,18 @@ var dec2 := -1_000.75m;
 var dec3 : decimal;
 var dec_high_prec : decimal = 0.1234567890123456789012345678m;
 var dec_finance : decimal = 999_999_999_999_999_999.123456789m;
+// 8. Primitive char (Unicode UTF-8) and string + interpolated strings (${...})
+var ch_ascii := 'A';
+var ch_accent : char = 'ç';
+var ch_greek := 'Σ';
+var ch_emoji : char = '🚀';
+var ch_tab : char = '\t';
+var ch_zero : char;
+
+var s_lang := "Sigma";
+var s_utf8 : string = "Olá, Σ! こんにちは 🚀\nLinha 2\t(ok)";
+var s_zero : string;
+var s_interp : string = "Hello ${s_lang}! a=${a}, f=${f1}, d=${d2}, dec=${dec1}, bool=${b1}, char=${ch_greek}";
 
 // Debug print expression statements
 a;
@@ -89,11 +101,21 @@ dec2;
 dec3;
 dec_high_prec;
 dec_finance;
+ch_ascii;
+ch_accent;
+ch_greek;
+ch_emoji;
+ch_tab;
+ch_zero;
+s_lang;
+s_utf8;
+s_zero;
+s_interp;
 |}
   in
   let src = Source.of_string ~filename:"valid.sgm" ~content:code in
   let expected_stdout =
-    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n0.1234567890123456789012345678\n999999999999999999.123456789\n"
+    "10\n15\n0\n-42\n10\n1000000\n1000000\n1000000\n10000000\n-1000000\ntrue\nfalse\nfalse\ntrue\n1\n10\n10\n10\n1.5e+13\n0.0015\n1000.5\n0\n10\n1000.25\n0\n10.9\n-1000.75\n0\n0.1234567890123456789012345678\n999999999999999999.123456789\nA\nç\nΣ\n🚀\n\t\n\nSigma\nOlá, Σ! こんにちは 🚀\nLinha 2\t(ok)\n\nHello Sigma! a=10, f=1, d=1000.25, dec=10.9, bool=true, char=Σ\n"
   in
 
   (* 1. Interpreter (VM) *)
@@ -242,7 +264,38 @@ let test_syntax_and_semantic_errors () =
       match Driver.run_source s with
       | Ok _ -> assert_true ~msg:(bad_lit ^ " must fail with E0001") false
       | Error errs -> assert_true ~msg:("E0001 expected for " ^ bad_lit) (has_code "E0001" errs))
-    [ "1_.0"; "1._0"; "1.0_"; "1.5e"; "1.5e-"; "1.5e_2"; "10F"; "10x" ]
+    [ "1_.0"; "1._0"; "1.0_"; "1.5e"; "1.5e-"; "1.5e_2"; "10F"; "10x" ];
+
+  (* E0104: strong typing for char and string *)
+  let s15 = Source.of_string ~filename:"err15.sgm" ~content:"var c : char = \"a\";" in
+  (match Driver.run_source s15 with
+   | Ok _ -> assert_true ~msg:"var c : char = \"a\"; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for char = string" (has_code "E0104" errs));
+
+  let s16 = Source.of_string ~filename:"err16.sgm" ~content:"var s : string = 'a';" in
+  (match Driver.run_source s16 with
+   | Ok _ -> assert_true ~msg:"var s : string = 'a'; must fail" false
+   | Error errs -> assert_true ~msg:"E0104 expected for string = char" (has_code "E0104" errs));
+
+  (* E0001: invalid char literals (empty or multi-codepoint) *)
+  List.iter
+    (fun bad_ch ->
+      let s = Source.of_string ~filename:"bad_char.sgm" ~content:("var c := " ^ bad_ch ^ ";") in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(bad_ch ^ " must fail with E0001") false
+      | Error errs -> assert_true ~msg:("E0001 expected for " ^ bad_ch) (has_code "E0001" errs))
+    [ "''"; "'ab'"; "'\\q'" ];
+
+  (* E0002 & E0102: string interpolation errors *)
+  let s17 = Source.of_string ~filename:"err17.sgm" ~content:"var s := \"Hello ${}\";" in
+  (match Driver.run_source s17 with
+   | Ok _ -> assert_true ~msg:"empty interpolation ${} must fail" false
+   | Error errs -> assert_true ~msg:"E0002 expected for ${}" (has_code "E0002" errs));
+
+  let s18 = Source.of_string ~filename:"err18.sgm" ~content:"var s := \"Hello ${nao_existe}\";" in
+  (match Driver.run_source s18 with
+   | Ok _ -> assert_true ~msg:"undeclared var in interpolation must fail" false
+   | Error errs -> assert_true ~msg:"E0102 expected for ${nao_existe}" (has_code "E0102" errs))
 
 let () =
   test_valid_declarations_and_parity ();

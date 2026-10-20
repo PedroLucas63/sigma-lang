@@ -10,6 +10,9 @@ type kind =
   | DOUBLE of float
   | DECIMAL of Decimal.t
   | BOOL of bool
+  | CHAR of string
+  | STRING of string
+  | INTERP_STRING of interp_segment list
   | COLON
   | EQUAL
   | COLON_EQUAL
@@ -17,7 +20,11 @@ type kind =
   | SEMI
   | EOF
 
-type t = {
+and interp_segment =
+  | SegLit of string
+  | SegTokens of t list * Span.t
+
+and t = {
   kind : kind;
   span : Span.t;
 }

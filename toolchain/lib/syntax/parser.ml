@@ -24,7 +24,7 @@ let sync_to_semi st =
   done;
   if (cur st).kind = Token.SEMI then bump st
 
-let parse_expr st : (Ast.expr, Diagnostic.t) result =
+let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.INT n ->
@@ -42,6 +42,45 @@ let parse_expr st : (Ast.expr, Diagnostic.t) result =
   | Token.BOOL b ->
     bump st;
     Ok { Ast.desc = Ast.ExprBool b; span = tok.span }
+  | Token.CHAR c ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprChar c; span = tok.span }
+  | Token.STRING s ->
+    bump st;
+    Ok { Ast.desc = Ast.ExprString s; span = tok.span }
+  | Token.INTERP_STRING segments ->
+    bump st;
+    let rec convert_segments acc = function
+      | [] -> Ok (List.rev acc)
+      | Token.SegLit s :: rest ->
+        convert_segments (Ast.InterpLit s :: acc) rest
+      | Token.SegTokens (sub_toks, seg_span) :: rest ->
+        let sub_arr = Array.of_list sub_toks in
+        let sub_st = { tokens = sub_arr; idx = 0 } in
+        if is_eof sub_st then
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:seg_span
+               "empty interpolation '${}' in string literal")
+        else
+          (match parse_expr sub_st with
+           | Error e -> Error e
+           | Ok ie ->
+             if not (is_eof sub_st) then
+               let extra = cur sub_st in
+               Error
+                 (Diagnostic.error
+                    ~code:"E0002"
+                    ~span:extra.span
+                    (Printf.sprintf "unexpected token %s inside string interpolation '${...}'"
+                       (Token.kind_to_string extra.kind)))
+             else
+               convert_segments (Ast.InterpExpr ie :: acc) rest)
+    in
+    (match convert_segments [] segments with
+     | Ok parts -> Ok { Ast.desc = Ast.ExprInterp parts; span = tok.span }
+     | Error e -> Error e)
   | Token.MINUS ->
     bump st;
     let next_tok = cur st in

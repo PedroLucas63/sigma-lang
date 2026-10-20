@@ -9,6 +9,8 @@ type value =
   | VDouble of float
   | VDecimal of Decimal.t
   | VBool of bool
+  | VChar of string
+  | VString of string
 
 val value_to_string : value -> string
 

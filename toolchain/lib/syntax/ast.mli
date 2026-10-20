@@ -8,7 +8,14 @@ type expr_desc =
   | ExprDouble of float
   | ExprDecimal of Decimal.t
   | ExprBool of bool
+  | ExprChar of string
+  | ExprString of string
+  | ExprInterp of interp_part list
   | ExprIdent of string
+
+and interp_part =
+  | InterpLit of string
+  | InterpExpr of expr
 
 and expr = {
   desc : expr_desc;

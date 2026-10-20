@@ -6,7 +6,14 @@ type expr_desc =
   | ExprDouble of float
   | ExprDecimal of Decimal.t
   | ExprBool of bool
+  | ExprChar of string
+  | ExprString of string
+  | ExprInterp of interp_part list
   | ExprIdent of string
+
+and interp_part =
+  | InterpLit of string
+  | InterpExpr of expr
 
 and expr = {
   desc : expr_desc;
@@ -31,13 +38,23 @@ and stmt = {
 
 type program = stmt list
 
-let pp_expr fmt (e : expr) =
+let rec pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
   | ExprFloat f -> Format.fprintf fmt "%.6g" f
   | ExprDouble d -> Format.fprintf fmt "%.15gd" d
   | ExprDecimal m -> Format.fprintf fmt "%sm" (Decimal.to_string m)
   | ExprBool b -> Format.fprintf fmt "%B" b
+  | ExprChar c -> Format.fprintf fmt "'%s'" c
+  | ExprString s -> Format.fprintf fmt "%S" s
+  | ExprInterp parts ->
+    Format.fprintf fmt "\"";
+    List.iter
+      (function
+        | InterpLit s -> Format.fprintf fmt "%s" s
+        | InterpExpr ie -> Format.fprintf fmt "${%a}" pp_expr ie)
+      parts;
+    Format.fprintf fmt "\""
   | ExprIdent id -> Format.fprintf fmt "%s" id
 
 let pp_stmt fmt (s : stmt) =

@@ -3,7 +3,25 @@ open Sigma_sema
 
 let mangle_ident name = "sgm_var_" ^ name
 
-let emit_expr (e : Typed_ast.expr) : string =
+let escape_c_string (s : string) : string =
+  let buf = Buffer.create (String.length s + 8) in
+  Buffer.add_char buf '"';
+  String.iter
+    (fun c ->
+      let code = Char.code c in
+      match c with
+      | '"' -> Buffer.add_string buf "\\\""
+      | '\\' -> Buffer.add_string buf "\\\\"
+      | '\n' -> Buffer.add_string buf "\\n"
+      | '\r' -> Buffer.add_string buf "\\r"
+      | '\t' -> Buffer.add_string buf "\\t"
+      | _ when code >= 32 && code <= 126 -> Buffer.add_char buf c
+      | _ -> Buffer.add_string buf (Printf.sprintf "\\%03o" code))
+    s;
+  Buffer.add_char buf '"';
+  Buffer.contents buf
+
+let rec emit_expr (e : Typed_ast.expr) : string =
   match e.desc with
   | Typed_ast.TExprInt n ->
     if n = Int64.min_int then "(-9223372036854775807LL - 1LL)"
@@ -18,6 +36,30 @@ let emit_expr (e : Typed_ast.expr) : string =
       (if m.neg then 1 else 0) m.scale m.hi m.lo
   | Typed_ast.TExprBool b ->
     if b then "true" else "false"
+  | Typed_ast.TExprChar c ->
+    escape_c_string c
+  | Typed_ast.TExprString s ->
+    escape_c_string s
+  | Typed_ast.TExprInterp parts ->
+    let c_parts =
+      List.map
+        (function
+          | Typed_ast.TInterpLit s -> escape_c_string s
+          | Typed_ast.TInterpExpr ie ->
+            let inner = emit_expr ie in
+            (match ie.ty with
+             | Ty.Int -> Printf.sprintf "sgm_fmt_i64(%s)" inner
+             | Ty.Float -> Printf.sprintf "sgm_fmt_f32(%s)" inner
+             | Ty.Double -> Printf.sprintf "sgm_fmt_f64(%s)" inner
+             | Ty.Decimal -> Printf.sprintf "sgm_fmt_dec(%s)" inner
+             | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" inner
+             | Ty.Char | Ty.String -> inner))
+        parts
+    in
+    Printf.sprintf
+      "sgm_concat(%d, (const char*[]){ %s })"
+      (List.length c_parts)
+      (String.concat ", " c_parts)
   | Typed_ast.TExprIdent name -> mangle_ident name
 
 let c_type_of_ty = function
@@ -26,19 +68,24 @@ let c_type_of_ty = function
   | Ty.Double -> "double"
   | Ty.Decimal -> "sgm_decimal_t"
   | Ty.Bool -> "bool"
+  | Ty.Char | Ty.String -> "const char*"
 
 let c_decimal_runtime =
-  {|__extension__ typedef unsigned __int128 sgm_u128;
+  {|#include <stdlib.h>
+#include <string.h>
+
+__extension__ typedef unsigned __int128 sgm_u128;
 typedef struct {
   int neg;
   int scale;
   sgm_u128 coeff;
 } sgm_decimal_t;
 
-__attribute__((unused)) static void sgm_print_decimal(sgm_decimal_t d) {
+__attribute__((unused)) static const char* sgm_fmt_dec(sgm_decimal_t d) {
+  char *out = (char*)malloc(80);
   if (d.coeff == 0) {
-    puts("0");
-    return;
+    strcpy(out, "0");
+    return out;
   }
   char digits[64];
   int len = 0;
@@ -47,20 +94,54 @@ __attribute__((unused)) static void sgm_print_decimal(sgm_decimal_t d) {
     digits[len++] = (char)('0' + (int)(tmp % 10));
     tmp /= 10;
   }
-  if (d.neg) putchar('-');
+  int pos = 0;
+  if (d.neg) out[pos++] = '-';
   if (d.scale <= 0) {
-    for (int i = len - 1; i >= 0; i--) putchar(digits[i]);
+    for (int i = len - 1; i >= 0; i--) out[pos++] = digits[i];
   } else if (len <= d.scale) {
-    putchar('0');
-    putchar('.');
-    for (int i = 0; i < d.scale - len; i++) putchar('0');
-    for (int i = len - 1; i >= 0; i--) putchar(digits[i]);
+    out[pos++] = '0';
+    out[pos++] = '.';
+    for (int i = 0; i < d.scale - len; i++) out[pos++] = '0';
+    for (int i = len - 1; i >= 0; i--) out[pos++] = digits[i];
   } else {
-    for (int i = len - 1; i >= d.scale; i--) putchar(digits[i]);
-    putchar('.');
-    for (int i = d.scale - 1; i >= 0; i--) putchar(digits[i]);
+    for (int i = len - 1; i >= d.scale; i--) out[pos++] = digits[i];
+    out[pos++] = '.';
+    for (int i = d.scale - 1; i >= 0; i--) out[pos++] = digits[i];
   }
-  putchar('\n');
+  out[pos] = '\0';
+  return out;
+}
+
+__attribute__((unused)) static void sgm_print_decimal(sgm_decimal_t d) {
+  const char *s = sgm_fmt_dec(d);
+  puts(s);
+}
+
+__attribute__((unused)) static const char* sgm_fmt_i64(int64_t v) {
+  char *out = (char*)malloc(32);
+  snprintf(out, 32, "%" PRId64, v);
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_fmt_f32(float v) {
+  char *out = (char*)malloc(32);
+  snprintf(out, 32, "%.6g", (double)v);
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_fmt_f64(double v) {
+  char *out = (char*)malloc(48);
+  snprintf(out, 48, "%.15g", v);
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_concat(int n, const char **parts) {
+  size_t total = 0;
+  for (int i = 0; i < n; i++) total += strlen(parts[i]);
+  char *out = (char*)malloc(total + 1);
+  out[0] = '\0';
+  for (int i = 0; i < n; i++) strcat(out, parts[i]);
+  return out;
 }
 |}
 
@@ -109,6 +190,11 @@ let emit_c (prog : Typed_ast.program) : string =
            Buffer.add_string
              buf
              (Printf.sprintf "  printf(\"%%s\\n\", (%s) ? \"true\" : \"false\");\n"
+                (emit_expr e))
+         | Ty.Char | Ty.String ->
+           Buffer.add_string
+             buf
+             (Printf.sprintf "  printf(\"%%s\\n\", %s);\n"
                 (emit_expr e))))
     prog;
   Buffer.add_string buf "  return 0;\n}\n";

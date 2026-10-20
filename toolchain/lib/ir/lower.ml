@@ -1,7 +1,7 @@
 open Sigma_common
 open Sigma_sema
 
-let lower_expr acc (e : Typed_ast.expr) =
+let rec lower_expr acc (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt n ->
     { Ir.op = Ir.OP_CONST_I64 n; span = e.span } :: acc
@@ -13,6 +13,24 @@ let lower_expr acc (e : Typed_ast.expr) =
     { Ir.op = Ir.OP_CONST_DEC m; span = e.span } :: acc
   | Typed_ast.TExprBool b ->
     { Ir.op = Ir.OP_CONST_BOOL b; span = e.span } :: acc
+  | Typed_ast.TExprChar c ->
+    { Ir.op = Ir.OP_CONST_CHAR c; span = e.span } :: acc
+  | Typed_ast.TExprString s ->
+    { Ir.op = Ir.OP_CONST_STR s; span = e.span } :: acc
+  | Typed_ast.TExprInterp parts ->
+    let acc =
+      List.fold_left
+        (fun acc part ->
+          match part with
+          | Typed_ast.TInterpLit s ->
+            { Ir.op = Ir.OP_CONST_STR s; span = e.span } :: acc
+          | Typed_ast.TInterpExpr ie ->
+            let acc = lower_expr acc ie in
+            { Ir.op = Ir.OP_TO_STR; span = ie.span } :: acc)
+        acc
+        parts
+    in
+    { Ir.op = Ir.OP_CONCAT_STR (List.length parts); span = e.span } :: acc
   | Typed_ast.TExprIdent name ->
     let op =
       match e.ty with
@@ -21,6 +39,8 @@ let lower_expr acc (e : Typed_ast.expr) =
       | Ty.Double -> Ir.OP_GET_GLOBAL_F64 name
       | Ty.Decimal -> Ir.OP_GET_GLOBAL_DEC name
       | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
+      | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
+      | Ty.String -> Ir.OP_GET_GLOBAL_STR name
     in
     { Ir.op; span = e.span } :: acc
 
@@ -35,6 +55,8 @@ let lower_stmt acc (s : Typed_ast.stmt) =
       | Ty.Double -> Ir.OP_DEF_GLOBAL_F64 v.name
       | Ty.Decimal -> Ir.OP_DEF_GLOBAL_DEC v.name
       | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL v.name
+      | Ty.Char -> Ir.OP_DEF_GLOBAL_CHAR v.name
+      | Ty.String -> Ir.OP_DEF_GLOBAL_STR v.name
     in
     { Ir.op; span = s.span } :: acc
   | Typed_ast.TStmtExpr e ->
@@ -46,6 +68,8 @@ let lower_stmt acc (s : Typed_ast.stmt) =
       | Ty.Double -> Ir.OP_PRINT_F64
       | Ty.Decimal -> Ir.OP_PRINT_DEC
       | Ty.Bool -> Ir.OP_PRINT_BOOL
+      | Ty.Char -> Ir.OP_PRINT_CHAR
+      | Ty.String -> Ir.OP_PRINT_STR
     in
     { Ir.op; span = s.span } :: acc
 

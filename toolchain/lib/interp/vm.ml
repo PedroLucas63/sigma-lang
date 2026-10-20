@@ -7,6 +7,8 @@ type value =
   | VDouble of float
   | VDecimal of Decimal.t
   | VBool of bool
+  | VChar of string
+  | VString of string
 
 let value_to_string = function
   | VInt n -> Int64.to_string n
@@ -14,6 +16,8 @@ let value_to_string = function
   | VDouble d -> Printf.sprintf "%.15g" d
   | VDecimal m -> Decimal.to_string m
   | VBool b -> if b then "true" else "false"
+  | VChar c -> c
+  | VString s -> s
 
 type state = {
   mutable ip : int;
@@ -48,11 +52,38 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_CONST_BOOL b ->
       st.stack <- VBool b :: st.stack;
       Ok ()
+    | Ir.OP_CONST_CHAR c ->
+      st.stack <- VChar c :: st.stack;
+      Ok ()
+    | Ir.OP_CONST_STR s ->
+      st.stack <- VString s :: st.stack;
+      Ok ()
+    | Ir.OP_TO_STR ->
+      (match st.stack with
+       | v :: rest ->
+         st.stack <- VString (value_to_string v) :: rest;
+         Ok ()
+       | [] -> Error "VM stack underflow on OP_TO_STR")
+    | Ir.OP_CONCAT_STR count ->
+      let rec pop_n n acc stack =
+        if n <= 0 then Some (acc, stack)
+        else
+          match stack with
+          | VString s :: rest -> pop_n (n - 1) (s :: acc) rest
+          | _ -> None
+      in
+      (match pop_n count [] st.stack with
+       | Some (parts, rest) ->
+         st.stack <- VString (String.concat "" parts) :: rest;
+         Ok ()
+       | None -> Error "VM stack underflow or type error on OP_CONCAT_STR")
     | Ir.OP_DEF_GLOBAL_I64 name
     | Ir.OP_DEF_GLOBAL_F32 name
     | Ir.OP_DEF_GLOBAL_F64 name
     | Ir.OP_DEF_GLOBAL_DEC name
-    | Ir.OP_DEF_GLOBAL_BOOL name ->
+    | Ir.OP_DEF_GLOBAL_BOOL name
+    | Ir.OP_DEF_GLOBAL_CHAR name
+    | Ir.OP_DEF_GLOBAL_STR name ->
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
@@ -63,7 +94,9 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_GET_GLOBAL_F32 name
     | Ir.OP_GET_GLOBAL_F64 name
     | Ir.OP_GET_GLOBAL_DEC name
-    | Ir.OP_GET_GLOBAL_BOOL name ->
+    | Ir.OP_GET_GLOBAL_BOOL name
+    | Ir.OP_GET_GLOBAL_CHAR name
+    | Ir.OP_GET_GLOBAL_STR name ->
       (match Hashtbl.find_opt st.globals name with
        | Some v ->
          st.stack <- v :: st.stack;
@@ -109,6 +142,22 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_BOOL"
        | [] -> Error "VM stack underflow on OP_PRINT_BOOL")
+    | Ir.OP_PRINT_CHAR ->
+      (match st.stack with
+       | VChar c :: rest ->
+         st.stack <- rest;
+         Buffer.add_string out_buf (c ^ "\n");
+         Ok ()
+       | _ :: _ -> Error "VM type error on OP_PRINT_CHAR"
+       | [] -> Error "VM stack underflow on OP_PRINT_CHAR")
+    | Ir.OP_PRINT_STR ->
+      (match st.stack with
+       | VString s :: rest ->
+         st.stack <- rest;
+         Buffer.add_string out_buf (s ^ "\n");
+         Ok ()
+       | _ :: _ -> Error "VM type error on OP_PRINT_STR"
+       | [] -> Error "VM stack underflow on OP_PRINT_STR")
     | Ir.OP_HALT ->
       st.halted <- true;
       Ok ()

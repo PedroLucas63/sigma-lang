@@ -8,13 +8,21 @@ type var_usage = {
   mutable used : bool;
 }
 
-let mark_expr_usage tbl (e : Typed_ast.expr) =
+let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt _
   | Typed_ast.TExprFloat _
   | Typed_ast.TExprDouble _
   | Typed_ast.TExprDecimal _
-  | Typed_ast.TExprBool _ -> ()
+  | Typed_ast.TExprBool _
+  | Typed_ast.TExprChar _
+  | Typed_ast.TExprString _ -> ()
+  | Typed_ast.TExprInterp parts ->
+    List.iter
+      (function
+        | Typed_ast.TInterpLit _ -> ()
+        | Typed_ast.TInterpExpr ie -> mark_expr_usage tbl ie)
+      parts
   | Typed_ast.TExprIdent name ->
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true

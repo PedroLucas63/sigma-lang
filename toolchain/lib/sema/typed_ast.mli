@@ -8,9 +8,16 @@ type expr_desc =
   | TExprDouble of float
   | TExprDecimal of Decimal.t
   | TExprBool of bool
+  | TExprChar of string
+  | TExprString of string
+  | TExprInterp of interp_part list
   | TExprIdent of string
 
-type expr = {
+and interp_part =
+  | TInterpLit of string
+  | TInterpExpr of expr
+
+and expr = {
   desc : expr_desc;
   ty : Ty.t;
   span : Span.t;

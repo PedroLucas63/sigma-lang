@@ -9,7 +9,7 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
-let check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
+let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match e.desc with
   | Ast.ExprInt n ->
     Ok { Typed_ast.desc = Typed_ast.TExprInt n; ty = Ty.Int; span = e.span }
@@ -21,6 +21,24 @@ let check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) resul
     Ok { Typed_ast.desc = Typed_ast.TExprDecimal m; ty = Ty.Decimal; span = e.span }
   | Ast.ExprBool b ->
     Ok { Typed_ast.desc = Typed_ast.TExprBool b; ty = Ty.Bool; span = e.span }
+  | Ast.ExprChar c ->
+    Ok { Typed_ast.desc = Typed_ast.TExprChar c; ty = Ty.Char; span = e.span }
+  | Ast.ExprString s ->
+    Ok { Typed_ast.desc = Typed_ast.TExprString s; ty = Ty.String; span = e.span }
+  | Ast.ExprInterp parts ->
+    let rec check_parts acc = function
+      | [] -> Ok (List.rev acc)
+      | Ast.InterpLit s :: rest ->
+        check_parts (Typed_ast.TInterpLit s :: acc) rest
+      | Ast.InterpExpr ie :: rest ->
+        (match check_expr env ie with
+         | Error err -> Error err
+         | Ok tie -> check_parts (Typed_ast.TInterpExpr tie :: acc) rest)
+    in
+    (match check_parts [] parts with
+     | Ok tparts ->
+       Ok { Typed_ast.desc = Typed_ast.TExprInterp tparts; ty = Ty.String; span = e.span }
+     | Error err -> Error err)
   | Ast.ExprIdent name ->
     (match Hashtbl.find_opt env name with
      | Some info ->
@@ -39,7 +57,7 @@ let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   | None ->
     Error
       (Diagnostic.error
-         ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool'"
+         ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string'"
          ~code:"E0101"
          ~span:ty_span
          (Printf.sprintf "unknown or unsupported type '%s'" ty_name))
@@ -56,6 +74,10 @@ let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
     { Typed_ast.desc = Typed_ast.TExprDecimal Ty.default_decimal_value; ty = Ty.Decimal; span }
   | Ty.Bool ->
     { Typed_ast.desc = Typed_ast.TExprBool Ty.default_bool_value; ty = Ty.Bool; span }
+  | Ty.Char ->
+    { Typed_ast.desc = Typed_ast.TExprChar Ty.default_char_value; ty = Ty.Char; span }
+  | Ty.String ->
+    { Typed_ast.desc = Typed_ast.TExprString Ty.default_string_value; ty = Ty.String; span }
 
 let check_stmt (env : env) (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) result =
   match s.desc with
