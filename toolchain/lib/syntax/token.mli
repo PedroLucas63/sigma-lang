@@ -4,6 +4,9 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_AND
+  | KW_OR
+  | KW_NOT
   | IDENT of string
   | INT of int64
   | FLOAT of float

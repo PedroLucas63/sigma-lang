@@ -2,6 +2,9 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_AND
+  | KW_OR
+  | KW_NOT
   | IDENT of string
   | INT of int64
   | FLOAT of float
@@ -37,6 +40,9 @@ and t = {
 
 let kind_to_string = function
   | KW_VAR -> "'var'"
+  | KW_AND -> "'and'"
+  | KW_OR -> "'or'"
+  | KW_NOT -> "'not'"
   | IDENT s -> Printf.sprintf "identifier '%s'" s
   | INT n -> Printf.sprintf "integer '%Ld'" n
   | FLOAT f -> Printf.sprintf "float '%.6g'" f

@@ -51,6 +51,9 @@ type opcode =
   | OP_CHAR_SUB_I64
   | OP_CHAR_DIFF
   | OP_REPEAT_STR
+  | OP_NOT_BOOL
+  | OP_AND_BOOL
+  | OP_OR_BOOL
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string

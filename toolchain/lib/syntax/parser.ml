@@ -25,7 +25,55 @@ let sync_to_semi st =
   if (cur st).kind = Token.SEMI then bump st
 
 let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
-  parse_additive st
+  parse_logical_or st
+
+and parse_logical_or st : (Ast.expr, Diagnostic.t) result =
+  match parse_logical_and st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      match tok.kind with
+      | Token.KW_OR ->
+        bump st;
+        (match parse_logical_and st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (Ast.BinOr, acc, rhs); span })
+      | _ -> Ok acc
+    in
+    loop lhs
+
+and parse_logical_and st : (Ast.expr, Diagnostic.t) result =
+  match parse_logical_not st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      match tok.kind with
+      | Token.KW_AND ->
+        bump st;
+        (match parse_logical_not st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (Ast.BinAnd, acc, rhs); span })
+      | _ -> Ok acc
+    in
+    loop lhs
+
+and parse_logical_not st : (Ast.expr, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.KW_NOT ->
+    bump st;
+    (match parse_logical_not st with
+     | Error e -> Error e
+     | Ok sub ->
+       let span = Span.merge tok.span sub.span in
+       Ok { Ast.desc = Ast.ExprUnary (Ast.UnNot, sub); span })
+  | _ -> parse_additive st
 
 and parse_additive st : (Ast.expr, Diagnostic.t) result =
   match parse_mult st with

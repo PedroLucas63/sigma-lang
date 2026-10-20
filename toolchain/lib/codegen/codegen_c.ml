@@ -76,6 +76,7 @@ let rec emit_expr (e : Typed_ast.expr) : string =
     let c_sub = emit_expr sub in
     (match unop, e.ty with
      | Ast.UnPos, _ -> c_sub
+     | Ast.UnNot, _ -> Printf.sprintf "(!(%s))" c_sub
      | Ast.UnNeg, Ty.Int -> Printf.sprintf "(-(%s))" c_sub
      | Ast.UnNeg, Ty.Float -> Printf.sprintf "((float)(-(%s)))" c_sub
      | Ast.UnNeg, Ty.Double -> Printf.sprintf "(-(%s))" c_sub
@@ -83,6 +84,10 @@ let rec emit_expr (e : Typed_ast.expr) : string =
      | Ast.UnNeg, _ -> Printf.sprintf "(-(%s))" c_sub)
   | Typed_ast.TExprBinary (binop, lhs, rhs) ->
     (match lhs.ty, rhs.ty, binop with
+     | Ty.Bool, Ty.Bool, Ast.BinAnd ->
+       Printf.sprintf "((%s) && (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Bool, Ty.Bool, Ast.BinOr ->
+       Printf.sprintf "((%s) || (%s))" (emit_expr lhs) (emit_expr rhs)
      | (Ty.Char | Ty.String), (Ty.Char | Ty.String), Ast.BinAdd ->
        Printf.sprintf "sgm_concat(2, (const char*[]){ %s, %s })"
          (emit_expr lhs) (emit_expr rhs)

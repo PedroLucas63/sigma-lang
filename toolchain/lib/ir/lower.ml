@@ -59,6 +59,7 @@ let rec lower_expr acc (e : Typed_ast.expr) =
     let acc = lower_expr acc sub in
     (match unop with
      | Ast.UnPos -> acc
+     | Ast.UnNot -> { Ir.op = Ir.OP_NOT_BOOL; span = e.span } :: acc
      | Ast.UnNeg ->
        let op =
          match e.ty with
@@ -71,6 +72,14 @@ let rec lower_expr acc (e : Typed_ast.expr) =
        { Ir.op; span = e.span } :: acc)
   | Typed_ast.TExprBinary (binop, lhs, rhs) ->
     (match lhs.ty, rhs.ty, binop with
+     | Ty.Bool, Ty.Bool, Ast.BinAnd ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_AND_BOOL; span = e.span } :: acc
+     | Ty.Bool, Ty.Bool, Ast.BinOr ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_OR_BOOL; span = e.span } :: acc
      | (Ty.Char | Ty.String), (Ty.Char | Ty.String), Ast.BinAdd ->
        let acc = lower_expr acc lhs in
        let acc = emit_promote acc lhs.ty Ty.String lhs.span in

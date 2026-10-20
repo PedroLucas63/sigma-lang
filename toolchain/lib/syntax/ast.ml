@@ -3,6 +3,7 @@ open Sigma_common
 type unop =
   | UnPos
   | UnNeg
+  | UnNot
 
 type binop =
   | BinAdd
@@ -12,6 +13,8 @@ type binop =
   | BinIntDiv
   | BinPow
   | BinMod
+  | BinAnd
+  | BinOr
 
 type expr_desc =
   | ExprInt of int64
@@ -56,6 +59,7 @@ type program = stmt list
 let unop_to_string = function
   | UnPos -> "+"
   | UnNeg -> "-"
+  | UnNot -> "not"
 
 let binop_to_string = function
   | BinAdd -> "+"
@@ -65,6 +69,8 @@ let binop_to_string = function
   | BinIntDiv -> "//"
   | BinPow -> "^"
   | BinMod -> "%"
+  | BinAnd -> "and"
+  | BinOr -> "or"
 
 let rec pp_expr fmt (e : expr) =
   match e.desc with

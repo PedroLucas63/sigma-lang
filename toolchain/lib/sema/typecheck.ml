@@ -9,13 +9,16 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
-let check_unary_type (_op : Ast.unop) (ty : Ty.t) : Ty.t option =
-  match ty with
-  | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal -> Some ty
-  | Ty.Bool | Ty.Char | Ty.String -> None
+let check_unary_type (op : Ast.unop) (ty : Ty.t) : Ty.t option =
+  match op, ty with
+  | (Ast.UnPos | Ast.UnNeg), (Ty.Int | Ty.Float | Ty.Double | Ty.Decimal) -> Some ty
+  | Ast.UnNot, Ty.Bool -> Some Ty.Bool
+  | _ -> None
 
 let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   match lty, rty, op with
+  (* logical operations *)
+  | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr) -> Some Ty.Bool
   (* char & string operations *)
   | Ty.Char, Ty.Char, Ast.BinAdd -> Some Ty.String
   | Ty.Char, Ty.Char, Ast.BinSub -> Some Ty.Int
@@ -35,21 +38,23 @@ let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   | Ty.Decimal, Ty.Int, Ast.BinIntDiv
   | Ty.Int, Ty.Decimal, Ast.BinIntDiv ->
     Some Ty.Int
-  (* IEEE-754 binary hierarchy: int < float < double *)
-  | (Ty.Int | Ty.Float | Ty.Double), (Ty.Int | Ty.Float | Ty.Double), _ ->
-    let wider =
-      if lty = Ty.Double || rty = Ty.Double then Ty.Double
-      else if lty = Ty.Float || rty = Ty.Float then Ty.Float
-      else Ty.Int
-    in
-    (match op with
-     | Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinPow | Ast.BinMod ->
-       Some wider
-     | Ast.BinDiv ->
-       Some (if wider = Ty.Int then Ty.Float else wider)
-     | Ast.BinIntDiv ->
-       Some Ty.Int)
-  | _ -> None
+    (* IEEE-754 binary hierarchy: int < float < double *)
+    | (Ty.Int | Ty.Float | Ty.Double), (Ty.Int | Ty.Float | Ty.Double), _ ->
+      let wider =
+        if lty = Ty.Double || rty = Ty.Double then Ty.Double
+        else if lty = Ty.Float || rty = Ty.Float then Ty.Float
+        else Ty.Int
+      in
+      (match op with
+       | Ast.BinAdd | Ast.BinSub | Ast.BinMul | Ast.BinPow | Ast.BinMod ->
+         Some wider
+       | Ast.BinDiv ->
+         Some (if wider = Ty.Int then Ty.Float else wider)
+       | Ast.BinIntDiv ->
+         Some Ty.Int
+       | Ast.BinAnd | Ast.BinOr ->
+         None)
+    | _ -> None
 
 let rec is_zero_literal (e : Typed_ast.expr) : bool =
   match e.desc with

@@ -441,6 +441,24 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
            Ok ()
          end
        | _ -> Error "VM type error on OP_REPEAT_STR")
+    | Ir.OP_NOT_BOOL ->
+      (match st.stack with
+       | VBool b :: rest ->
+         st.stack <- VBool (not b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_NOT_BOOL")
+    | Ir.OP_AND_BOOL ->
+      (match st.stack with
+       | VBool b :: VBool a :: rest ->
+         st.stack <- VBool (a && b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_AND_BOOL")
+    | Ir.OP_OR_BOOL ->
+      (match st.stack with
+       | VBool b :: VBool a :: rest ->
+         st.stack <- VBool (a || b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_OR_BOOL")
     | Ir.OP_DEF_GLOBAL_I64 name
     | Ir.OP_DEF_GLOBAL_F32 name
     | Ir.OP_DEF_GLOBAL_F64 name

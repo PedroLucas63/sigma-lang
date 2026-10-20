@@ -5,6 +5,7 @@ open Sigma_common
 type unop =
   | UnPos
   | UnNeg
+  | UnNot
 
 type binop =
   | BinAdd
@@ -14,6 +15,8 @@ type binop =
   | BinIntDiv
   | BinPow
   | BinMod
+  | BinAnd
+  | BinOr
 
 type expr_desc =
   | ExprInt of int64

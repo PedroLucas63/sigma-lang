@@ -97,3 +97,6 @@ decimal,int,^,decimal
 decimal,decimal,^,decimal
 decimal,int,%,decimal
 decimal,decimal,%,decimal
+
+bool,bool,and,bool
+bool,bool,or,bool
