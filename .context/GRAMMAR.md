@@ -9,6 +9,7 @@
 | Palavra-chave | `KW_VAR` | `var` |
 | Palavra-chave | `KW_AND` | `and` |
 | Palavra-chave | `KW_OR` | `or` |
+| Palavra-chave | `KW_XOR` | `xor` |
 | Palavra-chave | `KW_NOT` | `not` |
 | Literal | `BOOL of bool` | `true` \| `false` |
 | Identificador | `IDENT of string` | `[a-zA-Z_][a-zA-Z0-9_]*` |
@@ -29,6 +30,8 @@
 | Operador | `SLASH_SLASH` | `//` |
 | Operador | `CARET` | `^` |
 | Operador | `PERCENT` | `%` |
+| Operador | `LSHIFT` | `<<` |
+| Operador | `RSHIFT` | `>>` |
 | Delimitador | `LPAREN` | `(` |
 | Delimitador | `RPAREN` | `)` |
 | Delimitador | `SEMI` | `;` |
@@ -49,10 +52,12 @@ var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
 expr_stmt     ::= expr ;
 
 expr          ::= logical_or ;
-logical_or    ::= logical_and ( "or" logical_and )* ;
+logical_or    ::= logical_xor ( "or" logical_xor )* ;
+logical_xor   ::= logical_and ( "xor" logical_and )* ;
 logical_and   ::= logical_not ( "and" logical_not )* ;
 logical_not   ::= "not" logical_not
-                | additive ;
+                | shift ;
+shift         ::= additive ( ( "<<" | ">>" ) additive )* ;
 additive      ::= mult ( ( "+" | "-" ) mult )* ;
 mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" ) unary
@@ -104,7 +109,10 @@ type binop =
   | BinIntDiv
   | BinPow
   | BinMod
+  | BinShl
+  | BinShr
   | BinAnd
+  | BinXor
   | BinOr
 
 type expr_desc =
@@ -173,7 +181,8 @@ type opcode =
   | OP_POW_I64 | OP_POW_F32 | OP_POW_F64 | OP_POW_DEC
   | OP_CHAR_ADD_I64 | OP_CHAR_SUB_I64 | OP_CHAR_DIFF
   | OP_REPEAT_STR
-  | OP_NOT_BOOL | OP_AND_BOOL | OP_OR_BOOL
+  | OP_NOT_BOOL | OP_AND_BOOL | OP_OR_BOOL | OP_XOR_BOOL
+  | OP_NOT_I64 | OP_AND_I64 | OP_OR_I64 | OP_XOR_I64 | OP_SHL_I64 | OP_SHR_I64
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
