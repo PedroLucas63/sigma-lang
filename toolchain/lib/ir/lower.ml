@@ -59,7 +59,9 @@ let rec lower_expr acc (e : Typed_ast.expr) =
     let acc = lower_expr acc sub in
     (match unop with
      | Ast.UnPos -> acc
-     | Ast.UnNot -> { Ir.op = Ir.OP_NOT_BOOL; span = e.span } :: acc
+     | Ast.UnNot ->
+       let op = if e.ty = Ty.Int then Ir.OP_NOT_I64 else Ir.OP_NOT_BOOL in
+       { Ir.op; span = e.span } :: acc
      | Ast.UnNeg ->
        let op =
          match e.ty with
@@ -80,6 +82,30 @@ let rec lower_expr acc (e : Typed_ast.expr) =
        let acc = lower_expr acc lhs in
        let acc = lower_expr acc rhs in
        { Ir.op = Ir.OP_OR_BOOL; span = e.span } :: acc
+     | Ty.Bool, Ty.Bool, Ast.BinXor ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_XOR_BOOL; span = e.span } :: acc
+     | Ty.Int, Ty.Int, Ast.BinAnd ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_AND_I64; span = e.span } :: acc
+     | Ty.Int, Ty.Int, Ast.BinOr ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_OR_I64; span = e.span } :: acc
+     | Ty.Int, Ty.Int, Ast.BinXor ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_XOR_I64; span = e.span } :: acc
+     | Ty.Int, Ty.Int, Ast.BinShl ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_SHL_I64; span = e.span } :: acc
+     | Ty.Int, Ty.Int, Ast.BinShr ->
+       let acc = lower_expr acc lhs in
+       let acc = lower_expr acc rhs in
+       { Ir.op = Ir.OP_SHR_I64; span = e.span } :: acc
      | (Ty.Char | Ty.String), (Ty.Char | Ty.String), Ast.BinAdd ->
        let acc = lower_expr acc lhs in
        let acc = emit_promote acc lhs.ty Ty.String lhs.span in

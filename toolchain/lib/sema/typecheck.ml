@@ -12,13 +12,15 @@ type env = (string, symbol_info) Hashtbl.t
 let check_unary_type (op : Ast.unop) (ty : Ty.t) : Ty.t option =
   match op, ty with
   | (Ast.UnPos | Ast.UnNeg), (Ty.Int | Ty.Float | Ty.Double | Ty.Decimal) -> Some ty
-  | Ast.UnNot, Ty.Bool -> Some Ty.Bool
+  | Ast.UnNot, (Ty.Bool | Ty.Int) -> Some ty
   | _ -> None
 
 let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   match lty, rty, op with
-  (* logical operations *)
-  | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr) -> Some Ty.Bool
+  (* logical operations on bool *)
+  | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr | Ast.BinXor) -> Some Ty.Bool
+  (* bitwise operations on int *)
+  | Ty.Int, Ty.Int, (Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinShl | Ast.BinShr) -> Some Ty.Int
   (* char & string operations *)
   | Ty.Char, Ty.Char, Ast.BinAdd -> Some Ty.String
   | Ty.Char, Ty.Char, Ast.BinSub -> Some Ty.Int
@@ -52,7 +54,7 @@ let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
          Some (if wider = Ty.Int then Ty.Float else wider)
        | Ast.BinIntDiv ->
          Some Ty.Int
-       | Ast.BinAnd | Ast.BinOr ->
+       | Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinShl | Ast.BinShr ->
          None)
     | _ -> None
 

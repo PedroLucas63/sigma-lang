@@ -28,7 +28,7 @@ let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
   parse_logical_or st
 
 and parse_logical_or st : (Ast.expr, Diagnostic.t) result =
-  match parse_logical_and st with
+  match parse_logical_xor st with
   | Error e -> Error e
   | Ok lhs ->
     let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
@@ -36,11 +36,29 @@ and parse_logical_or st : (Ast.expr, Diagnostic.t) result =
       match tok.kind with
       | Token.KW_OR ->
         bump st;
-        (match parse_logical_and st with
+        (match parse_logical_xor st with
          | Error e -> Error e
          | Ok rhs ->
            let span = Span.merge acc.span rhs.span in
            loop { Ast.desc = Ast.ExprBinary (Ast.BinOr, acc, rhs); span })
+      | _ -> Ok acc
+    in
+    loop lhs
+
+and parse_logical_xor st : (Ast.expr, Diagnostic.t) result =
+  match parse_logical_and st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      match tok.kind with
+      | Token.KW_XOR ->
+        bump st;
+        (match parse_logical_and st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (Ast.BinXor, acc, rhs); span })
       | _ -> Ok acc
     in
     loop lhs
@@ -73,7 +91,31 @@ and parse_logical_not st : (Ast.expr, Diagnostic.t) result =
      | Ok sub ->
        let span = Span.merge tok.span sub.span in
        Ok { Ast.desc = Ast.ExprUnary (Ast.UnNot, sub); span })
-  | _ -> parse_additive st
+  | _ -> parse_shift st
+
+and parse_shift st : (Ast.expr, Diagnostic.t) result =
+  match parse_additive st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      let op_opt =
+        match tok.kind with
+        | Token.LSHIFT -> Some Ast.BinShl
+        | Token.RSHIFT -> Some Ast.BinShr
+        | _ -> None
+      in
+      match op_opt with
+      | None -> Ok acc
+      | Some op ->
+        bump st;
+        (match parse_additive st with
+         | Error e -> Error e
+         | Ok rhs ->
+           let span = Span.merge acc.span rhs.span in
+           loop { Ast.desc = Ast.ExprBinary (op, acc, rhs); span })
+    in
+    loop lhs
 
 and parse_additive st : (Ast.expr, Diagnostic.t) result =
   match parse_mult st with

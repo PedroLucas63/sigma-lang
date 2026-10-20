@@ -4,6 +4,7 @@ type kind =
   | KW_VAR
   | KW_AND
   | KW_OR
+  | KW_XOR
   | KW_NOT
   | IDENT of string
   | INT of int64
@@ -24,6 +25,8 @@ type kind =
   | SLASH_SLASH
   | CARET
   | PERCENT
+  | LSHIFT
+  | RSHIFT
   | LPAREN
   | RPAREN
   | SEMI
@@ -42,6 +45,7 @@ let kind_to_string = function
   | KW_VAR -> "'var'"
   | KW_AND -> "'and'"
   | KW_OR -> "'or'"
+  | KW_XOR -> "'xor'"
   | KW_NOT -> "'not'"
   | IDENT s -> Printf.sprintf "identifier '%s'" s
   | INT n -> Printf.sprintf "integer '%Ld'" n
@@ -62,6 +66,8 @@ let kind_to_string = function
   | SLASH_SLASH -> "'//'"
   | CARET -> "'^'"
   | PERCENT -> "'%'"
+  | LSHIFT -> "'<<'"
+  | RSHIFT -> "'>>'"
   | LPAREN -> "'('"
   | RPAREN -> "')'"
   | SEMI -> "';'"

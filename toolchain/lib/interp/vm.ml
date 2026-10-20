@@ -459,6 +459,57 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          st.stack <- VBool (a || b) :: rest;
          Ok ()
        | _ -> Error "VM type error on OP_OR_BOOL")
+    | Ir.OP_XOR_BOOL ->
+      (match st.stack with
+       | VBool b :: VBool a :: rest ->
+         st.stack <- VBool (a <> b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_XOR_BOOL")
+    | Ir.OP_NOT_I64 ->
+      (match st.stack with
+       | VInt a :: rest ->
+         st.stack <- VInt (Int64.lognot a) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_NOT_I64")
+    | Ir.OP_AND_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest ->
+         st.stack <- VInt (Int64.logand a b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_AND_I64")
+    | Ir.OP_OR_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest ->
+         st.stack <- VInt (Int64.logor a b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_OR_I64")
+    | Ir.OP_XOR_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest ->
+         st.stack <- VInt (Int64.logxor a b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_XOR_I64")
+    | Ir.OP_SHL_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest ->
+         let res =
+           if b < 0L || b >= 64L then 0L
+           else Int64.shift_left a (Int64.to_int b)
+         in
+         st.stack <- VInt res :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_SHL_I64")
+    | Ir.OP_SHR_I64 ->
+      (match st.stack with
+       | VInt b :: VInt a :: rest ->
+         let res =
+           if b < 0L then 0L
+           else if b >= 64L then if a < 0L then -1L else 0L
+           else Int64.shift_right a (Int64.to_int b)
+         in
+         st.stack <- VInt res :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_SHR_I64")
     | Ir.OP_DEF_GLOBAL_I64 name
     | Ir.OP_DEF_GLOBAL_F32 name
     | Ir.OP_DEF_GLOBAL_F64 name

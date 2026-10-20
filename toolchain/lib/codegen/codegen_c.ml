@@ -76,6 +76,7 @@ let rec emit_expr (e : Typed_ast.expr) : string =
     let c_sub = emit_expr sub in
     (match unop, e.ty with
      | Ast.UnPos, _ -> c_sub
+     | Ast.UnNot, Ty.Int -> Printf.sprintf "(~(%s))" c_sub
      | Ast.UnNot, _ -> Printf.sprintf "(!(%s))" c_sub
      | Ast.UnNeg, Ty.Int -> Printf.sprintf "(-(%s))" c_sub
      | Ast.UnNeg, Ty.Float -> Printf.sprintf "((float)(-(%s)))" c_sub
@@ -88,6 +89,18 @@ let rec emit_expr (e : Typed_ast.expr) : string =
        Printf.sprintf "((%s) && (%s))" (emit_expr lhs) (emit_expr rhs)
      | Ty.Bool, Ty.Bool, Ast.BinOr ->
        Printf.sprintf "((%s) || (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Bool, Ty.Bool, Ast.BinXor ->
+       Printf.sprintf "((%s) != (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Int, Ast.BinAnd ->
+       Printf.sprintf "((%s) & (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Int, Ast.BinOr ->
+       Printf.sprintf "((%s) | (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Int, Ast.BinXor ->
+       Printf.sprintf "((%s) ^ (%s))" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Int, Ast.BinShl ->
+       Printf.sprintf "sgm_shl_i64(%s, %s)" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Int, Ast.BinShr ->
+       Printf.sprintf "sgm_shr_i64(%s, %s)" (emit_expr lhs) (emit_expr rhs)
      | (Ty.Char | Ty.String), (Ty.Char | Ty.String), Ast.BinAdd ->
        Printf.sprintf "sgm_concat(2, (const char*[]){ %s, %s })"
          (emit_expr lhs) (emit_expr rhs)
@@ -399,6 +412,17 @@ __attribute__((unused)) static int64_t sgm_pow_i64(int64_t base, int64_t exp) {
     e >>= 1;
   }
   return (int64_t)acc;
+}
+
+__attribute__((unused)) static int64_t sgm_shl_i64(int64_t a, int64_t b) {
+  if (b < 0 || b >= 64) return 0;
+  return (int64_t)((uint64_t)a << (int)b);
+}
+
+__attribute__((unused)) static int64_t sgm_shr_i64(int64_t a, int64_t b) {
+  if (b < 0) return 0;
+  if (b >= 64) return (a < 0) ? -1 : 0;
+  return a >> (int)b;
 }
 
 __attribute__((unused)) static int sgm_decode_utf8(const char *s) {

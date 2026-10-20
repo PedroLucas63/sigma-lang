@@ -6,6 +6,7 @@ type kind =
   | KW_VAR
   | KW_AND
   | KW_OR
+  | KW_XOR
   | KW_NOT
   | IDENT of string
   | INT of int64
@@ -26,6 +27,8 @@ type kind =
   | SLASH_SLASH
   | CARET
   | PERCENT
+  | LSHIFT
+  | RSHIFT
   | LPAREN
   | RPAREN
   | SEMI

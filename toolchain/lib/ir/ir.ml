@@ -52,6 +52,13 @@ type opcode =
   | OP_NOT_BOOL
   | OP_AND_BOOL
   | OP_OR_BOOL
+  | OP_XOR_BOOL
+  | OP_NOT_I64
+  | OP_AND_I64
+  | OP_OR_I64
+  | OP_XOR_I64
+  | OP_SHL_I64
+  | OP_SHR_I64
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
@@ -134,6 +141,13 @@ let pp_opcode fmt = function
   | OP_NOT_BOOL -> Format.fprintf fmt "OP_NOT_BOOL"
   | OP_AND_BOOL -> Format.fprintf fmt "OP_AND_BOOL"
   | OP_OR_BOOL -> Format.fprintf fmt "OP_OR_BOOL"
+  | OP_XOR_BOOL -> Format.fprintf fmt "OP_XOR_BOOL"
+  | OP_NOT_I64 -> Format.fprintf fmt "OP_NOT_I64"
+  | OP_AND_I64 -> Format.fprintf fmt "OP_AND_I64"
+  | OP_OR_I64 -> Format.fprintf fmt "OP_OR_I64"
+  | OP_XOR_I64 -> Format.fprintf fmt "OP_XOR_I64"
+  | OP_SHL_I64 -> Format.fprintf fmt "OP_SHL_I64"
+  | OP_SHR_I64 -> Format.fprintf fmt "OP_SHR_I64"
   | OP_DEF_GLOBAL_I64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_I64 %s" name
   | OP_DEF_GLOBAL_F32 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F32 %s" name
   | OP_DEF_GLOBAL_F64 name -> Format.fprintf fmt "OP_DEF_GLOBAL_F64 %s" name

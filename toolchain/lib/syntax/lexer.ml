@@ -174,6 +174,7 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "var" -> Token.KW_VAR
           | "and" -> Token.KW_AND
           | "or" -> Token.KW_OR
+          | "xor" -> Token.KW_XOR
           | "not" -> Token.KW_NOT
           | "true" -> Token.BOOL true
           | "false" -> Token.BOOL false
@@ -510,6 +511,14 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         | '%' ->
           advance st;
           emit Token.PERCENT start_pos (cur_pos st)
+        | '<' when peek_next st = '<' ->
+          advance st;
+          advance st;
+          emit Token.LSHIFT start_pos (cur_pos st)
+        | '>' when peek_next st = '>' ->
+          advance st;
+          advance st;
+          emit Token.RSHIFT start_pos (cur_pos st)
         | '(' ->
           advance st;
           emit Token.LPAREN start_pos (cur_pos st)

@@ -38,6 +38,12 @@ int,int,%,int
 int,float,%,float
 int,double,%,double
 int,decimal,%,decimal
+int,int,and,int
+int,int,or,int
+int,int,xor,int
+int,int,<<,int
+int,int,>>,int
+
 
 float,int,+,float
 float,float,+,float
@@ -100,3 +106,4 @@ decimal,decimal,%,decimal
 
 bool,bool,and,bool
 bool,bool,or,bool
+bool,bool,xor,bool

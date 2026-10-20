@@ -13,7 +13,10 @@ type binop =
   | BinIntDiv
   | BinPow
   | BinMod
+  | BinShl
+  | BinShr
   | BinAnd
+  | BinXor
   | BinOr
 
 type expr_desc =
@@ -69,7 +72,10 @@ let binop_to_string = function
   | BinIntDiv -> "//"
   | BinPow -> "^"
   | BinMod -> "%"
+  | BinShl -> "<<"
+  | BinShr -> ">>"
   | BinAnd -> "and"
+  | BinXor -> "xor"
   | BinOr -> "or"
 
 let rec pp_expr fmt (e : expr) =

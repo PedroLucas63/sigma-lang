@@ -201,7 +201,7 @@ var s_mul_i : string = "ha" * 3;          # "hahaha"
 var s_mul_0 : string = "ha" * 0;          # ""
 var interp_expr : string = "calc=${(10 + 5) * 2}, exact=${0.1m + 0.2m}";
 
-# 6. Logical operations (not, and, or) and precedence (not > and > or)
+# 6. Logical operations (not, and, xor, or) and precedence (not > and > xor > or)
 var l1 : bool = not true;                 # false
 var l2 : bool = not not true;             # true
 var l3 : bool = true and false;           # false
@@ -210,17 +210,31 @@ var l5 : bool = not false and true or false; # ((not false) and true) or false -
 var l6 : bool = false and false or true;  # (false and false) or true -> true
 var l7 : bool = false and (false or true); # false
 var l8 : string = "logic=${not false and (true or false)}";
+var l9 : bool = true xor false;           # true
+var l10 : bool = true xor true;           # false
+var l11 : bool = true or true xor true;   # true or (true xor true) -> true
+
+# 7. Bitwise operations on int (not, and, xor, or, <<, >>)
+var bw_not : int = not 0;                 # -1
+var bw_and : int = 6 and 3;               # 2
+var bw_xor : int = 6 xor 3;               # 5
+var bw_or  : int = 6 or 3;                # 7
+var bw_shl : int = 1 << 10;               # 1024
+var bw_shr : int = 1024 >> 3;             # 128
+var bw_shr_neg : int = -16 >> 2;          # -4 (arithmetic shift preserves sign)
+var bw_prec : int = 1 << 4 - 1 and not 2; # (1 << (4 - 1)) and (not 2) = 8 and -3 = 8
 
 u1; u2; p1; p2; p3; p4; p5;
 i_add; i_sub; i_mul; i_div; i_idiv1; i_idiv2; i_idiv3; i_mod1; i_mod2; i_mod3; i_mod4;
 f_mix; d_mix; f_idiv; d_idiv; f_mod; d_mod; d_pow;
 m_add; m_sub; m_mul; m_div; m_idiv1; m_idiv2; m_mod; m_pow;
 c_add_c; c_sub_c; c_add_s; s_add_c; s_add_s; c_add_i; c_sub_i; c_mul_i; s_mul_i; s_mul_0; interp_expr;
-l1; l2; l3; l4; l5; l6; l7; l8;
+l1; l2; l3; l4; l5; l6; l7; l8; l9; l10; l11;
+bw_not; bw_and; bw_xor; bw_or; bw_shl; bw_shr; bw_shr_neg; bw_prec;
 |}
   in
   let expected_stdout =
-    "42\n42\n-4\n4\n512\n14\n20\n42\n-12\n42\n3.5\n3\n-3\n-3\n1\n1\n1\n1\n15\n12.75\n-3\n-3\n0.5\n0.5\n8\n0.3\n6.75\n5\n2.5\n-3\n3\n0.5\n2.25\nAB\n25\nSigma\nSigma\nSigma\nd\na\nxxxx\nhahaha\n\ncalc=30, exact=0.3\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\nlogic=true\n"
+    "42\n42\n-4\n4\n512\n14\n20\n42\n-12\n42\n3.5\n3\n-3\n-3\n1\n1\n1\n1\n15\n12.75\n-3\n-3\n0.5\n0.5\n8\n0.3\n6.75\n5\n2.5\n-3\n3\n0.5\n2.25\nAB\n25\nSigma\nSigma\nSigma\nd\na\nxxxx\nhahaha\n\ncalc=30, exact=0.3\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\nlogic=true\ntrue\nfalse\ntrue\n-1\n2\n5\n7\n1024\n128\n-4\n8\n"
   in
   run_and_check_parity ~name:"arithmetic" ~code ~expected_stdout
 
@@ -261,6 +275,11 @@ let test_all_operations_csv_matrix () =
       ("int", "double", "^", "double");
       ("int", "decimal", "^", "decimal");
       ("int", "int", "%", "int");
+      ("int", "int", "and", "int");
+      ("int", "int", "or", "int");
+      ("int", "int", "xor", "int");
+      ("int", "int", "<<", "int");
+      ("int", "int", ">>", "int");
       ("int", "float", "%", "float");
       ("int", "double", "%", "double");
       ("int", "decimal", "%", "decimal");
@@ -322,6 +341,7 @@ let test_all_operations_csv_matrix () =
       ("decimal", "decimal", "%", "decimal");
       ("bool", "bool", "and", "bool");
       ("bool", "bool", "or", "bool");
+      ("bool", "bool", "xor", "bool");
     ]
   in
   let sample_of = function
@@ -527,7 +547,7 @@ let test_syntax_and_semantic_errors () =
       match Driver.run_source s with
       | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0104") false
       | Error errs -> assert_true ~msg:("E0104 expected for " ^ expr_str) (has_code "E0104" errs))
-    [ "+\"hello\""; "-'a'"; "-true"; "3 * \"ha\""; "3 * 'a'"; "1 + 'a'"; "not 1"; "not 0.0"; "not \"true\""; "true and 1"; "0 or false"; "1 and 2" ];
+    [ "+\"hello\""; "-'a'"; "-true"; "3 * \"ha\""; "3 * 'a'"; "1 + 'a'"; "not 0.0"; "not \"true\""; "true and 1"; "0 or false"; "true xor 1"; "1.0f << 2"; "2 >> 1.0f"; "true << 1" ];
 
   (* E0105: static division or modulo by zero *)
   List.iter

@@ -54,6 +54,13 @@ type opcode =
   | OP_NOT_BOOL
   | OP_AND_BOOL
   | OP_OR_BOOL
+  | OP_XOR_BOOL
+  | OP_NOT_I64
+  | OP_AND_I64
+  | OP_OR_I64
+  | OP_XOR_I64
+  | OP_SHL_I64
+  | OP_SHR_I64
   | OP_DEF_GLOBAL_I64 of string
   | OP_DEF_GLOBAL_F32 of string
   | OP_DEF_GLOBAL_F64 of string
