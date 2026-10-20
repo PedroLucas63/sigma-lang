@@ -11,6 +11,7 @@
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
 - [x] Declaração de variáveis `int` (`int64`): `var a := 10;`, `var b : int = 15;`, `var c : int;` (zero-init = `0`), inteiros negativos (`-42`), separador de dígitos estrito `_` (`1_000_000`, `10_00_00_00`) e cópia entre variáveis (`var e := a;`).
 - [x] Suporte completo ao tipo `bool` (`true` / `false`, zero-init `var d : bool;` = `false`) com tipagem forte (`E0104` rejeita `var a : int = true;` e `var b : bool = 1;`).
+- [x] Suporte completo aos tipos de ponto flutuante `float` (padrão sem sufixo ou `f`), `double` (sufixo `d`) e `decimal` (sufixo `m`), notação científica (`1e1`, `1.e1`, `1.5e-3`), separador `_` e tipagem forte (`E0104` rejeita `var c : double = 10.0;`).
 - [x] Debug print inicial via instrução de expressão: `a; b; c;`.
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`):
   - `sigma run <file.sgm>` (Interpretador VM)
@@ -21,9 +22,8 @@
   - `sigma pkg init <name>` (Gerador de manifesto `sigma.toml`)
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Adicionar tipo `float` (`f64` / `double` nativo) para habilitar `var c : float;` e literais decimais.
-- [ ] Adicionar operadores aritméticos (`+`, `-`, `*`, `/`, `^` ou `**`) e atribuição (`a = 20;`).
-- [x] Propagar a gramática inicial (`int`, `_`, `bool`) para `editors/vscode/`, `docs/` e `web/` via skill `ecosystem-sync`.
+- [ ] Adicionar operadores aritméticos (`+`, `-`, `*`, `/`, `^` ou `**`), relacionais/lógicos e atribuição (`a = 20;`).
+- [ ] Sincronizar `docs/`, `editors/vscode/` e `web/` com os novos tipos `float`, `double` e `decimal` via `ecosystem-sync`.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, regras `AGENTS.md`, `.context/`, skills e Git Flow (`84f1f70`).
@@ -32,3 +32,4 @@
 - **2026-10-19:** Suporte a separador de dígitos estrito (`_`) em literais inteiros (`feature/numeric-underscores`, `ADR-010`).
 - **2026-10-19:** Implementação completa do tipo `bool` (`true`/`false`, zero-init `false`) e verificação de tipagem forte `E0104` (`feature/bool-type`, `ADR-011`).
 - **2026-10-19:** Sincronização do ecossistema (`docs/`, `editors/vscode/` e `web/`) via skill `ecosystem-sync` (`feature/ecosystem-sync-m0`).
+- **2026-10-19:** Suporte completo aos tipos `float`, `double` e `decimal`, notação científica e sufixos `f`/`d`/`m` (`feature/floating-point-types`, `ADR-012`).
