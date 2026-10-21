@@ -15,9 +15,10 @@ Para economizar tokens, **não leia o código-fonte OCaml do compilador** ao atu
 1. **Leia [`.context/GRAMMAR.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/GRAMMAR.md):**
    - Verifique os novos tokens, palavras-chave, operadores e regras de sintaxe.
 2. **Extensão VSCode (`editors/vscode/`):**
-   - Atualize a gramática TextMate (`syntaxes/*.tmLanguage.json`) com os novos tokens/keywords.
+   - Atualize a gramática TextMate (`syntaxes/*.tmLanguage.json`) e `language-configuration.json` com os novos tokens, comentários e keywords.
    - Se houver novos comandos da CLI ou flags do LSP/Debugger, atualize `package.json` e o cliente de extensão.
 3. **Documentação (`docs/`):**
-   - Atualize a especificação em `docs/spec/` e adicione exemplos práticos em `docs/guide/`.
-4. **Site / Playground (`web/`):**
-   - Adicione um exemplo demonstrando a nova feature nos exemplos rápidos do Playground.
+   - Atualize a especificação em `docs/spec/` e adicione/atualize guias práticos em `docs/guide/` e `docs/README.md`.
+4. **Site, Playground & Documentação Web (`web/`):**
+   - Adicione/atualize exemplos interativos nos seletores do Playground (`web/index.html`).
+   - **Obrigatório:** Atualize a seção de **Documentação da Linguagem** dentro de `web/index.html` descrevendo cada funcionalidade implementada (sintaxe, tipos, operadores, exemplos) e mantenha links diretos para os arquivos Markdown em `docs/`.

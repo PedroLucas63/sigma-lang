@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M1 — Operações Aritméticas, Relacionais, Lógicas e Bitwise Concluídas`
-- **Git Flow:** Branch base `develop` (`feature/relational-operators` finalizada e mesclada).
+- **Milestone:** `M1 — Operações Aritméticas, Relacionais, Lógicas, Bitwise e Ecossistema Sincronizado`
+- **Git Flow:** Branch base `develop` (`feature/ecosystem-sync-m1` finalizada e mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -19,9 +19,10 @@
 - [x] Operadores relacionais (`==`, `!=`, `<`, `>`, `<=`, `>=`) com suporte a comparações encadeadas de até 3 operandos (`a < x <= b`) e avaliação em curto-circuito (*short-circuit*).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `check`, `lint`, `debug`, `pkg init`.
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Sincronizar `editors/vscode/`, `docs/` e `web/` com os novos comentários (`#`, `/* */`) e operadores aritméticos (via skill `ecosystem-sync`), ou implementar operadores relacionais/lógicos e reatribuição de variáveis (`a = 20;`).
+- [ ] Implementar reatribuição de variáveis (`a = 20;`), constantes/imutabilidade, entrada/saída (`print`/`input`) ou estruturas de controle (`if`/`else`, `while`, `for`).
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2 e identidade **Sigma (`.sgm`)**.
@@ -29,3 +30,4 @@
 - **2026-10-20:** Implementação completa das operações aritméticas unárias (`+`, `-`) e binárias (`+`, `-`, `*`, `/`, `//`, `^`, `%`), comentários `#` e `/* */`, aritmética 128-bit `Decimal`, operações de `char`/`string`, diagnóstico `E0105` e testes de paridade para as 92 combinações de `operations.csv` (`feature/arithmetic-operations`, `ADR-015`).
 - **2026-10-20:** Implementação dos operadores lógicos e bitwise `not`, `and`, `xor`, `or` (para `bool` e `int`) e deslocamento de bits `<<` e `>>` (aritmético para `int`) (`feature/logical-operators`, `feature/bitwise-and-xor`, `ADR-016`).
 - **2026-10-20:** Implementação dos operadores relacionais (`==`, `!=`, `<`, `>`, `<=`, `>=`), comparações encadeadas de 3 operandos (`a < x <= b`) e avaliação em curto-circuito para `and`, `or` e cadeias relacionais (`feature/relational-operators`, `ADR-017`).
+- **2026-10-20:** Atualização da skill `ecosystem-sync` para exigir documentação integrada em `web/index.html` com links para `docs/`, e sincronização completa de `editors/vscode/`, `docs/` e `web/` com todas as funcionalidades do Milestone M1 (`feature/ecosystem-sync-m1`).

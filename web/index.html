@@ -3,51 +3,85 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sigma (.sgm) — Linguagem Científica de Alta Performance</title>
+  <title>Sigma (.sgm) — Linguagem Científica, Playground & Documentação</title>
   <style>
     :root {
       --bg: #0f172a;
       --panel: #1e293b;
+      --panel-alt: #020617;
+      --border: #334155;
       --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.12);
       --text: #f8fafc;
       --muted: #94a3b8;
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      line-height: 1.65;
     }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
     header {
-      padding: 2.5rem 2rem;
-      border-bottom: 1px solid #334155;
+      padding: 2.2rem 1.5rem 1.8rem;
+      border-bottom: 1px solid var(--border);
       text-align: center;
+      background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
     }
     header h1 { margin: 0; font-size: 2.4rem; color: var(--accent); }
-    header p { color: var(--muted); max-width: 680px; margin: 0.5rem auto 0; }
-    main {
-      max-width: 1080px;
+    header p { color: var(--muted); max-width: 720px; margin: 0.5rem auto 1.2rem; }
+    nav.topnav {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    nav.topnav a {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    nav.topnav a:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      text-decoration: none;
+    }
+    .container {
+      max-width: 1120px;
       margin: 2rem auto;
       padding: 0 1.5rem;
+    }
+    .playground-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    @media (max-width: 820px) {
+      .playground-grid, .docs-grid { grid-template-columns: 1fr !important; }
     }
     .card {
       background: var(--panel);
-      border: 1px solid #334155;
+      border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 1.25rem;
+      padding: 1.35rem;
     }
     .toolbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 0.75rem;
       margin-bottom: 0.75rem;
     }
     select, button {
-      background: #0f172a;
+      background: var(--bg);
       color: var(--text);
       border: 1px solid #475569;
       padding: 0.45rem 0.85rem;
@@ -62,65 +96,368 @@
     }
     textarea, pre {
       width: 100%;
-      box-sizing: border-box;
-      min-height: 320px;
-      background: #020617;
+      background: var(--panel-alt);
       color: #e2e8f0;
-      border: 1px solid #334155;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 0.85rem;
+      padding: 0.9rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+    }
+    textarea { min-height: 350px; }
+    #output { min-height: 350px; margin: 0; }
+    h2.section-title {
+      font-size: 1.75rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-top: 2.5rem;
+    }
+    .docs-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin: 1rem 0 1.75rem;
+    }
+    .docs-links a {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      padding: 0.45rem 0.95rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .docs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .card h3 {
+      margin-top: 0;
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+    code {
+      background: var(--panel-alt);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.88em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
       font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: var(--panel-alt);
+      color: var(--accent);
+    }
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 3rem;
     }
   </style>
 </head>
 <body>
   <header>
     <h1>Σ Sigma Language (<code>.sgm</code>)</h1>
-    <p>Propósito geral, computação científica e estatística com tipagem forte e compilação nativa nível C/C++ (<code>-O3</code>).</p>
+    <p>Linguagem de propósito geral, computação científica e estatística com tipagem estática forte, decimal base-10 exato de 128 bits e compilação nativa C99 (<code>-O3</code>).</p>
+    <nav class="topnav">
+      <a href="#playground">Playground Interativo</a>
+      <a href="#docs">Documentação das Funcionalidades</a>
+      <a href="#precedence">Precedência & Matriz de Tipos</a>
+      <a href="#cli">CLI Unificada (<code>sigma</code>)</a>
+      <a href="../docs/README.md">Arquivos Markdown (<code>docs/</code>)</a>
+    </nav>
   </header>
-  <main>
-    <section class="card">
-      <div class="toolbar">
-        <select id="example-select">
-          <option value="strings">1. Strings Interpoladas, Char Unicode e Showcase</option>
-          <option value="floats">2. Float, Double e Decimal Exato de 128 bits</option>
-          <option value="numbers">3. Números Grandes com '_' e Inteiros</option>
-          <option value="booleans">4. Tipo Booleano (bool) e Zero-Init</option>
-          <option value="typeerror">5. Erro de Tipagem Forte (E0104)</option>
-        </select>
-        <button class="primary" id="run-btn">Simular Saída</button>
+
+  <div class="container">
+    <!-- PLAYGROUND -->
+    <section id="playground" class="playground-grid">
+      <div class="card">
+        <div class="toolbar">
+          <select id="example-select">
+            <option value="arithmetic">1. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">2. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">3. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">4. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">5. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="typeerror">6. Segurança de Tipos (E0104 / E0105)</option>
+          </select>
+          <button class="primary" id="run-btn">Simular Saída</button>
+        </div>
+        <textarea id="editor" spellcheck="false"></textarea>
       </div>
-      <textarea id="editor" spellcheck="false"></textarea>
-    </section>
-    <section class="card">
-      <div class="toolbar">
-        <strong>Saída (<code>sigma run</code> / <code>sigma build</code>)</strong>
+      <div class="card">
+        <div class="toolbar">
+          <strong>Saída (<code>sigma run</code> == <code>sigma build</code>)</strong>
+        </div>
+        <pre id="output"></pre>
       </div>
-      <pre id="output"></pre>
     </section>
-  </main>
+
+    <!-- DOCUMENTAÇÃO INTEGRADA -->
+    <h2 id="docs" class="section-title">📚 Documentação Oficial da Linguagem Sigma</h2>
+    <p>Abaixo está a referência completa de todas as funcionalidades implementadas na linguagem. Você também pode abrir diretamente os documentos Markdown do repositório:</p>
+    <div class="docs-links">
+      <a href="../docs/README.md">📄 Índice Geral (docs/README.md)</a>
+      <a href="../docs/spec/grammar-and-types.md">📐 Especificação Formal &amp; EBNF (docs/spec/)</a>
+      <a href="../docs/guide/01-variables-and-types.md">📘 Guia 01: Variáveis &amp; Tipos (docs/guide/)</a>
+      <a href="../docs/guide/02-operators-and-expressions.md">📙 Guia 02: Operadores &amp; Expressões (docs/guide/)</a>
+      <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
+      <a href="../operations.csv">📊 Matriz Completa (operations.csv)</a>
+    </div>
+
+    <div class="docs-grid">
+      <article class="card">
+        <h3>1. Comentários e Estrutura Básica</h3>
+        <p>Toda instrução em Sigma termina com ponto-e-vírgula (<code>;</code>). O operador <code>//</code> é reservado exclusivamente para <strong>divisão inteira</strong>:</p>
+        <ul>
+          <li><strong>Comentário de linha:</strong> <code># ...</code> até o fim da linha.</li>
+          <li><strong>Comentário multi-linha:</strong> <code>/* ... */</code> (rejeitado com <code>E0001</code> se não fechado).</li>
+          <li><strong>Debug Print:</strong> Uma expressão seguida de <code>;</code> (ex: <code>resultado;</code>) avalia e imprime seu valor no <code>stdout</code>.</li>
+        </ul>
+        <pre># Comentário de linha única
+/* Comentário de bloco
+   em múltiplas linhas */
+var q := 10 // 3;
+q; # imprime 3</pre>
+      </article>
+
+      <article class="card">
+        <h3>2. Declaração de Variáveis e Zero-Initialization</h3>
+        <p>Variáveis são declaradas com a palavra-chave <code>var</code> em três formatos (nunca é permitido <code>var x = 10;</code> sem tipo, erro <code>E0002</code>):</p>
+        <ul>
+          <li><code>var nome := expr;</code> — Inferência estática automática do tipo.</li>
+          <li><code>var nome : tipo = expr;</code> — Tipo explícito verificado estaticamente (<code>E0104</code> se divergir).</li>
+          <li><code>var nome : tipo;</code> — <em>Zero-Initialization</em> (estilo Go): <code>int = 0</code>, <code>float/double/decimal = 0</code>, <code>bool = false</code>, <code>char/string = ""</code>.</li>
+        </ul>
+        <pre>var a := 1_000_000;      # int inferido (separador '_' estrito)
+var b : double = 2.5d;   # double explícito
+var c : int;             # zero-init -> 0</pre>
+      </article>
+
+      <article class="card">
+        <h3>3. Tipos Numéricos e Decimal Exato de 128 bits</h3>
+        <p>A Sigma separa números binários IEEE 754 da aritmética base-10 exata para evitar erros silenciosos de arredondamento:</p>
+        <ul>
+          <li><code>int</code>: Inteiro de 64 bits com sinal (<code>int64_t</code>).</li>
+          <li><code>float</code>: 32 bits IEEE 754 (padrão para reais sem sufixo como <code>10.0</code>, <code>1e3</code> ou com sufixo <code>f</code>).</li>
+          <li><code>double</code>: 64 bits IEEE 754 (sufixo obrigatório <code>d</code>, ex: <code>3.1415926535d</code>).</li>
+          <li><code>decimal</code>: Base-10 Exata de 128 bits até <strong>38 dígitos significativos</strong> (sufixo <code>m</code>, ex: <code>0.1m + 0.2m == 0.3m</code>). <strong>Regra de segurança:</strong> <code>decimal</code> opera com <code>int</code> e <code>decimal</code>, mas nunca se mistura com <code>float</code>/<code>double</code> (<code>E0104</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>4. Operações Aritméticas Unárias e Binárias</h3>
+        <ul>
+          <li><strong>Unários (<code>+x</code>, <code>-x</code>):</strong> Preservam o tipo numérico do operando.</li>
+          <li><strong>Binários (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>//</code>, <code>^</code>, <code>%</code>):</strong>
+            <ul>
+              <li><code>/</code> (Divisão real): <code>int / int -> float</code>; demais promovem na hierarquia.</li>
+              <li><code>//</code> (Divisão inteira): retorna sempre <code>int</code> com <strong>truncamento em direção a zero</strong> (<code>-7 // 2 == -3</code>).</li>
+              <li><code>%</code> (Módulo Euclidiano): retorna resto <strong>sempre não-negativo</strong> (<code>-7 % 2 == 1</code>, <code>-7.5 % 2.0 == 0.5</code>), disponível para <code>int</code>, <code>float</code>, <code>double</code> e <code>decimal</code>.</li>
+              <li><code>^</code> (Potenciação): associativo à direita (<code>2 ^ 3 ^ 2 == 512</code>) e maior precedência que <code>-</code> unário (<code>-2 ^ 2 == -4</code>).</li>
+            </ul>
+          </li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>5. Caracteres Unicode (<code>char</code>) e Strings (<code>string</code>)</h3>
+        <ul>
+          <li><code>char</code> representa 1 code point Unicode UTF-8 completo (<code>'A'</code>, <code>'ç'</code>, <code>'Σ'</code>, <code>'🚀'</code>).</li>
+          <li><code>string</code> suporta interpolação nativa <code>"${expr}"</code> para qualquer expressão.</li>
+          <li><strong>Operações dedicadas:</strong>
+            <ul>
+              <li><code>char + char -> string</code>, <code>char + string -> string</code>, <code>string + char -> string</code>, <code>string + string -> string</code></li>
+              <li><code>char - char -> int</code> (distância Unicode: <code>'z' - 'a' == 25</code>)</li>
+              <li><code>char + int -> char</code> e <code>char - int -> char</code> (deslocamento Unicode: <code>'a' + 3 == 'd'</code>)</li>
+              <li><code>char * int -> string</code> e <code>string * int -> string</code> (repetição: <code>"ha" * 3 == "hahaha"</code>)</li>
+            </ul>
+          </li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>6. Operadores Lógicos (<code>bool</code>) e Bitwise (<code>int</code>)</h3>
+        <p>As palavras-chave <code>not</code>, <code>and</code>, <code>xor</code> e <code>or</code> operam com tipagem estrita (sem misturar <code>bool</code> e <code>int</code>):</p>
+        <ul>
+          <li><strong>Em <code>bool</code> (Lógicos):</strong> <code>not b</code>, <code>a and b</code> (curto-circuito), <code>a xor b</code>, <code>a or b</code> (curto-circuito).</li>
+          <li><strong>Em <code>int</code> (Bitwise 64 bits):</strong> <code>not x</code> (<code>~x</code>), <code>a and b</code> (<code>&amp;</code>), <code>a xor b</code> (<code>^</code>), <code>a or b</code> (<code>|</code>).</li>
+          <li><strong>Bit Shifts em <code>int</code>:</strong> <code>a &lt;&lt; b</code> (shift left) e <code>a &gt;&gt; b</code> (shift right aritmético com preservação do bit de sinal).</li>
+        </ul>
+      </article>
+
+      <article class="card" style="grid-column: 1 / -1;">
+        <h3>7. Operadores Relacionais, Encadeamento de 3 Operandos e Curto-Circuito</h3>
+        <p>Os operadores <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code> retornam <code>bool</code>:</p>
+        <ul>
+          <li><strong>Tipos suportados:</strong> Todos os 6 operadores para numéricos compatíveis (<code>int/float/double</code> ou <code>int/decimal</code>) e <code>(char, char)</code>. Para <code>(string, string)</code> e <code>(bool, bool)</code>, apenas <code>==</code> e <code>!=</code> são permitidos.</li>
+          <li><strong>Regras de 3 operandos (<code>a op1 x op2 b</code>):</strong> Permitem escrever intervalos matemáticos como <code>7 &lt; x &lt;= 30</code> ou <code>8 &lt; 10 != 11</code>. O termo central <code>x</code> é avaliado <strong>uma única vez</strong> (limite máximo de 3 operandos; 4+ operandos geram <code>E0002</code>).</li>
+          <li><strong>Curto-Circuito (<em>Short-Circuit Evaluation</em>):</strong> Em <code>a and b</code>, <code>a or b</code> e <code>e1 op1 e2 op2 e3</code>, a avaliação para assim que o resultado é determinado (ex: em <code>10 &lt; 8 and 15 &gt; 13</code> ou <code>10 &lt; 5 &lt; expr</code>, o segundo teste nunca é executado).</li>
+        </ul>
+      </article>
+    </div>
+
+    <!-- TABELA DE PRECEDÊNCIA -->
+    <h2 id="precedence" class="section-title">⚖️ Tabela de Precedência de Operadores</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Prioridade</th>
+            <th>Operadores</th>
+            <th>Descrição</th>
+            <th>Associatividade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1 (Maior)</td><td><code>( expr )</code>, literais, identificadores</td><td>Agrupamento e átomos</td><td>—</td></tr>
+          <tr><td>2</td><td><code>^</code></td><td>Potenciação</td><td>Direita (<code>2 ^ 3 ^ 2 == 512</code>)</td></tr>
+          <tr><td>3</td><td><code>+</code>, <code>-</code></td><td>Sinal unário positivo e negativo</td><td>Direita (<code>-2 ^ 2 == -4</code>)</td></tr>
+          <tr><td>4</td><td><code>*</code>, <code>/</code>, <code>//</code>, <code>%</code></td><td>Multiplicação, divisão real, divisão inteira e módulo euclidiano</td><td>Esquerda</td></tr>
+          <tr><td>5</td><td><code>+</code>, <code>-</code></td><td>Soma, subtração e concatenação</td><td>Esquerda</td></tr>
+          <tr><td>6</td><td><code>&lt;&lt;</code>, <code>&gt;&gt;</code></td><td>Deslocamento de bits (shift left / shift right aritmético)</td><td>Esquerda</td></tr>
+          <tr><td>7</td><td><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>Operadores relacionais (2 ou 3 operandos encadeados)</td><td>Encadeado (máx. 3 operandos)</td></tr>
+          <tr><td>8</td><td><code>not</code></td><td>Negação lógica (<code>bool</code>) / Complemento bitwise (<code>int</code>)</td><td>Direita</td></tr>
+          <tr><td>9</td><td><code>and</code></td><td>AND lógico com curto-circuito (<code>bool</code>) / AND bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>10</td><td><code>xor</code></td><td>XOR lógico (<code>bool</code>) / XOR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>11 (Menor)</td><td><code>or</code></td><td>OR lógico com curto-circuito (<code>bool</code>) / OR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- CLI UNIFICADA -->
+    <h2 id="cli" class="section-title">🛠️ Toolchain &amp; CLI Unificada (<code>sigma</code>)</h2>
+    <div class="card">
+      <p>O binário único <code>sigma</code> (escrito em OCaml com Dune) compartilha 100% do front-end (Lexer, Parser, Typechecker e IR) entre todas as ferramentas:</p>
+      <pre>dune exec sigma -- run arquivo.sgm             # Executa imediatamente na Máquina Virtual (Bytecode IR)
+dune exec sigma -- build arquivo.sgm -o app    # Compila para binário nativo via C99 otimizado (GCC -O3 -lm)
+dune exec sigma -- check arquivo.sgm           # Valida sintaxe e tipos sem executar
+dune exec sigma -- lint arquivo.sgm            # Executa o linter estático (ex: W0001 variáveis não usadas)
+dune exec sigma -- debug arquivo.sgm           # Executa passo-a-passo exibindo IP, opcode, pilha e variáveis globais
+dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.toml</pre>
+    </div>
+  </div>
+
+  <footer>
+    Sigma Language Monorepo — Toolchain em OCaml 5.5 + Backend C99 (<code>-O3</code>) • Documentação sincronizada via <code>ecosystem-sync</code>
+  </footer>
+
   <script>
     const examples = {
+      arithmetic: {
+        code: `# Aritmética, precedência (^ > unário -), divisão //, módulo % e Decimal 128-bit
+var pot1 := -2 ^ 2;               # -(2 ^ 2) = -4
+var pot2 := 2 ^ 3 ^ 2;            # 2 ^ (3 ^ 2) = 512
+var div_real := 7 / 2;            # 3.5 (float)
+var div_int  := -7 // 2;          # -3 (truncamento em direção a zero)
+var mod_pos  := -7 % 2;           # 1  (módulo euclidiano sempre >= 0)
+var mod_flt  := -7.5f % 2.0f;     # 0.5
+
+# Decimal de 128 bits (base-10 exata, sem erro binário!)
+var d_exato := (0.1m + 0.2m) * 10;
+
+pot1;
+pot2;
+div_real;
+div_int;
+mod_pos;
+mod_flt;
+d_exato;`,
+        out: `-4\n512\n3.5\n-3\n1\n0.5\n3`
+      },
+      relational: {
+        code: `# Operadores relacionais (2 e 3 operandos) e Curto-Circuito
+var x := 18;
+var dentro_faixa := 7 < x <= 30;
+var cadeia_mista := 8 < 10 != 11;
+
+# Prova de Curto-Circuito: (10 // zero) NÃO é avaliado!
+var zero := 0;
+var sc_and   := 10 < 8 and (10 // zero > 1);
+var sc_or    := 15 > 9 or (10 // zero > 1);
+var sc_chain := 10 < 5 < (10 // zero);
+
+dentro_faixa;
+cadeia_mista;
+sc_and;
+sc_or;
+sc_chain;`,
+        out: `true\ntrue\nfalse\ntrue\nfalse`
+      },
+      logical_bitwise: {
+        code: `# Lógicos em bool (not > and > xor > or)
+var b1 := not false and true xor false;
+var b2 := true or true xor true;
+
+# Bitwise de 64 bits em int (not, and, xor, or, <<, >>)
+var bw_not := not 0;
+var bw_and := 6 and 3;
+var bw_xor := 6 xor 3;
+var bw_or  := 6 or 3;
+var bw_shl := 1 << 10;
+var bw_shr := -16 >> 2;
+
+b1;
+b2;
+bw_not;
+bw_and;
+bw_xor;
+bw_or;
+bw_shl;
+bw_shr;`,
+        out: `true\ntrue\n-1\n2\n5\n7\n1024\n-4`
+      },
       strings: {
-        code: `// Char Unicode UTF-8 e Strings com Interpolação \${...}\nvar simbolo : char = 'Σ';\nvar foguete := '🚀';\nvar linguagem := "Sigma";\nvar iteracoes := 1_000_000;\nvar erro : double = 0.0001d;\nvar ok := true;\n\nvar resumo := "[\${simbolo}] \${linguagem} \${foguete}: iter=\${iteracoes}, erro=\${erro}, ok=\${ok}";\n\nsimbolo;\nfoguete;\nresumo;`,
-        out: `Σ\n🚀\n[Σ] Sigma 🚀: iter=1000000, erro=0.0001, ok=true`
+        code: `# Operações com char Unicode e string + interpolação \${...}
+var simbolo : char = 'Σ';
+var dist_alfabeto := 'z' - 'a';
+var deslocado := 'a' + 3;
+var separador := '-' * 6;
+var risada := "ha" * 3;
+var titulo := 'S' + "igma";
+
+var resumo := "[\${simbolo}] \${titulo} \${separador} dist=\${dist_alfabeto}, char=\${deslocado}, \${risada}";
+
+resumo;`,
+        out: `[Σ] Sigma ------ dist=25, char=d, hahaha`
       },
-      floats: {
-        code: `// float (32-bit), double (64-bit, 'd') e decimal (128-bit exato, 'm')\nvar f1 := 10.5;\nvar f2 : float = 1.5e2;\nvar d1 : double = 3.141592653589793d;\nvar m1 : decimal = 123_456.789_012_345_678_901_234_567_89m;\nvar m_zero : decimal;\n\nf1;\nf2;\nd1;\nm1;\nm_zero;`,
-        out: `10.5\n150.0\n3.141592653589793\n123456.78901234567890123456789\n0.0`
-      },
-      numbers: {
-        code: `// Separador estrito de dígitos (_) em literais int64\nvar m1 := 1000000;\nvar m2 := 1_000_000;\nvar m3 : int = 10_00_00_00;\nvar zero : int;\n\nm1;\nm2;\nm3;\nzero;`,
-        out: `1000000\n1000000\n10000000\n0`
-      },
-      booleans: {
-        code: `// Tipo booleano (bool) com inferência e zero-init = false\nvar convergiu := true;\nvar verbose : bool = false;\nvar padrao : bool;\nvar copia : bool = convergiu;\n\nconvergiu;\nverbose;\npadrao;\ncopia;`,
-        out: `true\nfalse\nfalse\ntrue`
+      primitives: {
+        code: `# Tipos primitivos, separador '_' e Zero-Initialization
+var populacao : int = 1_000_000;
+var f32 := 1.5e2;
+var f64 : double = 3.141592653589793d;
+var dec : decimal = 999_999.123456789m;
+var z_int : int;
+var z_bool : bool;
+
+populacao;
+f32;
+f64;
+dec;
+z_int;
+z_bool;`,
+        out: `1000000\n150\n3.141592653589793\n999999.123456789\n0\nfalse`
       },
       typeerror: {
-        code: `// Tipagem forte: sem coerção implícita entre float e double\nvar a : double = 10.0;\nvar b : string = 'Σ';`,
-        out: `error[E0104]: type mismatch: expected 'double', found 'float'\n  --> playground.sgm:2:18\n  2 | var a : double = 10.0;\n    |                  ^^^^\n  = hint: Sigma is strongly typed: cannot assign value of type 'float' to variable 'a' of type 'double'`
+        code: `# Proibido misturar ponto flutuante binário (float/double) com decimal base-10 (E0104)
+var invalido := 0.1f + 0.2m;`,
+        out: `error[E0104]: invalid binary operation: '+' between 'float' and 'decimal'\n  --> playground.sgm:2:17\n  2 | var invalido := 0.1f + 0.2m;\n    |                 ^^^^^^^^^^^\n  = hint: mixing binary floating-point ('float'/'double') with exact base-10 'decimal' is forbidden to prevent precision loss`
       }
     };
     const select = document.getElementById('example-select');
@@ -134,7 +471,7 @@
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('strings');
+    loadExample('arithmetic');
   </script>
 </body>
 </html>

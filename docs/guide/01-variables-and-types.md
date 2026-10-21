@@ -9,17 +9,17 @@ Neste guia prático você aprenderá a declarar variáveis em **Sigma (`.sgm`)**
 A Sigma oferece três formas de declarar variáveis e suporta `_` estritamente entre dois dígitos para facilitar a leitura de grandes constantes:
 
 ```sigma
-// 1. Inferência automática de tipo com ':='
+# 1. Inferência automática de tipo com ':='
 var amostragens := 10;
 
-// 2. Tipo explícito com inicialização ': int =' e separador '_'
+# 2. Tipo explícito com inicialização ': int =' e separador '_'
 var populacao : int = 1_000_000;
 var orcamento : int = 10_00_00_00;
 
-// 3. Tipo explícito sem valor inicial (Zero-Initialization = 0)
+# 3. Tipo explícito sem valor inicial (Zero-Initialization = 0)
 var acumulador : int;
 
-// 4. Números negativos
+# 4. Números negativos
 var offset : int = -42;
 
 amostragens;
