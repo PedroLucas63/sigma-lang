@@ -190,12 +190,13 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="arithmetic">1. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">2. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">3. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">4. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">5. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="typeerror">6. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="assign_incdec">1. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">2. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">3. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">4. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">5. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">6. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="typeerror">7. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -223,18 +224,19 @@
 
     <div class="docs-grid">
       <article class="card">
-        <h3>1. Comentários e Estrutura Básica</h3>
+        <h3>1. Comentários, Estrutura Básica e Saída (<code>print</code> / <code>println</code>)</h3>
         <p>Toda instrução em Sigma termina com ponto-e-vírgula (<code>;</code>). O operador <code>//</code> é reservado exclusivamente para <strong>divisão inteira</strong>:</p>
         <ul>
           <li><strong>Comentário de linha:</strong> <code># ...</code> até o fim da linha.</li>
           <li><strong>Comentário multi-linha:</strong> <code>/* ... */</code> (rejeitado com <code>E0001</code> se não fechado).</li>
-          <li><strong>Debug Print:</strong> Uma expressão seguida de <code>;</code> (ex: <code>resultado;</code>) avalia e imprime seu valor no <code>stdout</code>.</li>
+          <li><strong>Saída Padrão:</strong> <code>print(e1, e2, ...)</code> escreve argumentos separados por espaço <strong>sem</strong> quebra de linha; <code>println(e1, e2, ...)</code> adiciona <code>\n</code> ao final.</li>
+          <li><strong>Instruções de Expressão (<code>expr;</code>):</strong> Avaliam efeitos colaterais (como <code>a += 1;</code> ou <code>i++;</code>) silenciosamente sem poluir o <code>stdout</code>.</li>
         </ul>
         <pre># Comentário de linha única
-/* Comentário de bloco
-   em múltiplas linhas */
+/* Comentário de bloco */
 var q := 10 // 3;
-q; # imprime 3</pre>
+print("Quociente: ");
+println(q); # imprime "Quociente: 3"</pre>
       </article>
 
       <article class="card">
@@ -302,13 +304,24 @@ var c : int;             # zero-init -> 0</pre>
         </ul>
       </article>
 
-      <article class="card" style="grid-column: 1 / -1;">
+      <article class="card">
         <h3>7. Operadores Relacionais, Encadeamento de 3 Operandos e Curto-Circuito</h3>
         <p>Os operadores <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code> e <code>&gt;=</code> retornam <code>bool</code>:</p>
         <ul>
           <li><strong>Tipos suportados:</strong> Todos os 6 operadores para numéricos compatíveis (<code>int/float/double</code> ou <code>int/decimal</code>) e <code>(char, char)</code>. Para <code>(string, string)</code> e <code>(bool, bool)</code>, apenas <code>==</code> e <code>!=</code> são permitidos.</li>
           <li><strong>Regras de 3 operandos (<code>a op1 x op2 b</code>):</strong> Permitem escrever intervalos matemáticos como <code>7 &lt; x &lt;= 30</code> ou <code>8 &lt; 10 != 11</code>. O termo central <code>x</code> é avaliado <strong>uma única vez</strong> (limite máximo de 3 operandos; 4+ operandos geram <code>E0002</code>).</li>
-          <li><strong>Curto-Circuito (<em>Short-Circuit Evaluation</em>):</strong> Em <code>a and b</code>, <code>a or b</code> e <code>e1 op1 e2 op2 e3</code>, a avaliação para assim que o resultado é determinado (ex: em <code>10 &lt; 8 and 15 &gt; 13</code> ou <code>10 &lt; 5 &lt; expr</code>, o segundo teste nunca é executado).</li>
+          <li><strong>Curto-Circuito (<em>Short-Circuit Evaluation</em>):</strong> Em <code>a and b</code>, <code>a or b</code> e <code>e1 op1 e2 op2 e3</code>, a avaliação para assim que o resultado é determinado.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>8. Atribuições (<code>=</code>, <code>&lt;op&gt;=</code>) e Incremento/Decremento (<code>++</code>, <code>--</code>)</h3>
+        <p>Atribuições e incremento/decremento são <strong>expressões</strong> (estilo C/JS), retornando o valor atribuído e permitindo encadeamento (<code>a = b = 10;</code>):</p>
+        <ul>
+          <li><strong>Atribuição Simples (<code>x = y</code>):</strong> Exige igualdade estrita de tipos <code>typeof(x) == typeof(y)</code> (<code>E0104</code>).</li>
+          <li><strong>Atribuição Composta Aritmética e de Texto:</strong> <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code>, <code>//=</code>, <code>%=</code>, <code>^=</code> — exige que <code>typeof(x &lt;op&gt; y) == typeof(x)</code> (permite promoções seguras como <code>float += int</code>, <code>decimal += int</code>, <code>char += int</code>, <code>string += char</code>, <code>string *= int</code>; bloqueia <code>int /= int</code> sugerindo <code>//=</code>).</li>
+          <li><strong>Atribuição Composta Lógica e Bitwise:</strong> <code>and=</code>, <code>or=</code>, <code>xor=</code> (para <code>bool</code> e <code>int</code>, com curto-circuito em <code>bool</code> para <code>and=</code>/<code>or=</code>) e <code>&lt;&lt;=</code>, <code>&gt;&gt;=</code> (para <code>int</code>).</li>
+          <li><strong>Pré e Pós Incremento/Decremento (<code>++x</code>, <code>--x</code>, <code>x++</code>, <code>x--</code>):</strong> Suportados em <code>int</code>, <code>float</code>, <code>double</code>, <code>decimal</code> e <code>char</code>. Pré-fixados retornam o novo valor; pós-fixados retornam o valor antigo.</li>
         </ul>
       </article>
     </div>
@@ -327,16 +340,18 @@ var c : int;             # zero-init -> 0</pre>
         </thead>
         <tbody>
           <tr><td>1 (Maior)</td><td><code>( expr )</code>, literais, identificadores</td><td>Agrupamento e átomos</td><td>—</td></tr>
-          <tr><td>2</td><td><code>^</code></td><td>Potenciação</td><td>Direita (<code>2 ^ 3 ^ 2 == 512</code>)</td></tr>
-          <tr><td>3</td><td><code>+</code>, <code>-</code></td><td>Sinal unário positivo e negativo</td><td>Direita (<code>-2 ^ 2 == -4</code>)</td></tr>
-          <tr><td>4</td><td><code>*</code>, <code>/</code>, <code>//</code>, <code>%</code></td><td>Multiplicação, divisão real, divisão inteira e módulo euclidiano</td><td>Esquerda</td></tr>
-          <tr><td>5</td><td><code>+</code>, <code>-</code></td><td>Soma, subtração e concatenação</td><td>Esquerda</td></tr>
-          <tr><td>6</td><td><code>&lt;&lt;</code>, <code>&gt;&gt;</code></td><td>Deslocamento de bits (shift left / shift right aritmético)</td><td>Esquerda</td></tr>
-          <tr><td>7</td><td><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>Operadores relacionais (2 ou 3 operandos encadeados)</td><td>Encadeado (máx. 3 operandos)</td></tr>
-          <tr><td>8</td><td><code>not</code></td><td>Negação lógica (<code>bool</code>) / Complemento bitwise (<code>int</code>)</td><td>Direita</td></tr>
-          <tr><td>9</td><td><code>and</code></td><td>AND lógico com curto-circuito (<code>bool</code>) / AND bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
-          <tr><td>10</td><td><code>xor</code></td><td>XOR lógico (<code>bool</code>) / XOR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
-          <tr><td>11 (Menor)</td><td><code>or</code></td><td>OR lógico com curto-circuito (<code>bool</code>) / OR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>2</td><td><code>x++</code>, <code>x--</code></td><td>Pós-incremento e pós-decremento (retornam valor antigo)</td><td>Esquerda</td></tr>
+          <tr><td>3</td><td><code>^</code></td><td>Potenciação</td><td>Direita (<code>2 ^ 3 ^ 2 == 512</code>)</td></tr>
+          <tr><td>4</td><td><code>+</code>, <code>-</code>, <code>++x</code>, <code>--x</code></td><td>Sinal unário e pré-incremento/decremento (retornam novo valor)</td><td>Direita (<code>-2 ^ 2 == -4</code>)</td></tr>
+          <tr><td>5</td><td><code>*</code>, <code>/</code>, <code>//</code>, <code>%</code></td><td>Multiplicação, divisão real, divisão inteira e módulo euclidiano</td><td>Esquerda</td></tr>
+          <tr><td>6</td><td><code>+</code>, <code>-</code></td><td>Soma, subtração e concatenação</td><td>Esquerda</td></tr>
+          <tr><td>7</td><td><code>&lt;&lt;</code>, <code>&gt;&gt;</code></td><td>Deslocamento de bits (shift left / shift right aritmético)</td><td>Esquerda</td></tr>
+          <tr><td>8</td><td><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>Operadores relacionais (2 ou 3 operandos encadeados)</td><td>Encadeado (máx. 3 operandos)</td></tr>
+          <tr><td>9</td><td><code>not</code></td><td>Negação lógica (<code>bool</code>) / Complemento bitwise (<code>int</code>)</td><td>Direita</td></tr>
+          <tr><td>10</td><td><code>and</code></td><td>AND lógico com curto-circuito (<code>bool</code>) / AND bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>11</td><td><code>xor</code></td><td>XOR lógico (<code>bool</code>) / XOR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>12</td><td><code>or</code></td><td>OR lógico com curto-circuito (<code>bool</code>) / OR bitwise (<code>int</code>)</td><td>Esquerda</td></tr>
+          <tr><td>13 (Menor)</td><td><code>=</code>, <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code>, <code>//=</code>, <code>%=</code>, <code>^=</code>, <code>and=</code>, <code>or=</code>, <code>xor=</code>, <code>&lt;&lt;=</code>, <code>&gt;&gt;=</code></td><td>Atribuição simples e composta (expressão)</td><td>Direita (<code>a = b = 10</code>)</td></tr>
         </tbody>
       </table>
     </div>
@@ -360,6 +375,29 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      assign_incdec: {
+        code: `# Atribuições simples/compostas, ++ / -- e print / println
+var a : int;
+var b : int;
+a = b = 10;          # atribuição encadeada silenciosa
+a += 5;              # 15
+a //= 4;             # 3
+
+var f := 10.0;
+f += 2;              # promoção int -> float: 12.0
+f /= 3.0;            # 4.0
+
+var mask := 6;
+mask and= 3;         # 2
+mask or= 8;          # 10
+mask <<= 1;          # 20
+
+var c := 'a';
+println("Pré/Pós char:", ++c, c++, c);
+print("Valores finais -> ");
+println("a =", a, "| f =", f, "| mask =", mask);`,
+        out: `Pré/Pós char: b b c\nValores finais -> a = 3 | f = 4 | mask = 20`
+      },
       arithmetic: {
         code: `# Aritmética, precedência (^ > unário -), divisão //, módulo % e Decimal 128-bit
 var pot1 := -2 ^ 2;               # -(2 ^ 2) = -4
@@ -372,14 +410,10 @@ var mod_flt  := -7.5f % 2.0f;     # 0.5
 # Decimal de 128 bits (base-10 exata, sem erro binário!)
 var d_exato := (0.1m + 0.2m) * 10;
 
-pot1;
-pot2;
-div_real;
-div_int;
-mod_pos;
-mod_flt;
-d_exato;`,
-        out: `-4\n512\n3.5\n-3\n1\n0.5\n3`
+println(pot1, pot2);
+println(div_real, div_int, mod_pos, mod_flt);
+println("Decimal exato:", d_exato);`,
+        out: `-4 512\n3.5 -3 1 0.5\nDecimal exato: 3`
       },
       relational: {
         code: `# Operadores relacionais (2 e 3 operandos) e Curto-Circuito
@@ -393,12 +427,9 @@ var sc_and   := 10 < 8 and (10 // zero > 1);
 var sc_or    := 15 > 9 or (10 // zero > 1);
 var sc_chain := 10 < 5 < (10 // zero);
 
-dentro_faixa;
-cadeia_mista;
-sc_and;
-sc_or;
-sc_chain;`,
-        out: `true\ntrue\nfalse\ntrue\nfalse`
+println(dentro_faixa, cadeia_mista);
+println(sc_and, sc_or, sc_chain);`,
+        out: `true true\nfalse true false`
       },
       logical_bitwise: {
         code: `# Lógicos em bool (not > and > xor > or)
@@ -413,15 +444,9 @@ var bw_or  := 6 or 3;
 var bw_shl := 1 << 10;
 var bw_shr := -16 >> 2;
 
-b1;
-b2;
-bw_not;
-bw_and;
-bw_xor;
-bw_or;
-bw_shl;
-bw_shr;`,
-        out: `true\ntrue\n-1\n2\n5\n7\n1024\n-4`
+println(b1, b2);
+println(bw_not, bw_and, bw_xor, bw_or, bw_shl, bw_shr);`,
+        out: `true true\n-1 2 5 7 1024 -4`
       },
       strings: {
         code: `# Operações com char Unicode e string + interpolação \${...}
@@ -434,7 +459,7 @@ var titulo := 'S' + "igma";
 
 var resumo := "[\${simbolo}] \${titulo} \${separador} dist=\${dist_alfabeto}, char=\${deslocado}, \${risada}";
 
-resumo;`,
+println(resumo);`,
         out: `[Σ] Sigma ------ dist=25, char=d, hahaha`
       },
       primitives: {
@@ -446,13 +471,9 @@ var dec : decimal = 999_999.123456789m;
 var z_int : int;
 var z_bool : bool;
 
-populacao;
-f32;
-f64;
-dec;
-z_int;
-z_bool;`,
-        out: `1000000\n150\n3.141592653589793\n999999.123456789\n0\nfalse`
+println(populacao, f32, f64);
+println(dec, z_int, z_bool);`,
+        out: `1000000 150 3.141592653589793\n999999.123456789 0 false`
       },
       typeerror: {
         code: `# Proibido misturar ponto flutuante binário (float/double) com decimal base-10 (E0104)
@@ -471,7 +492,7 @@ var invalido := 0.1f + 0.2m;`,
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('arithmetic');
+    loadExample('assign_incdec');
   </script>
 </body>
 </html>

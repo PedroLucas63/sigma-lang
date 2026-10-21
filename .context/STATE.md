@@ -5,7 +5,7 @@
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
 - **Milestone:** `M1 — Operações Aritméticas, Relacionais, Lógicas, Bitwise e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (`feature/print-builtin` finalizada e mesclada).
+- **Git Flow:** Branch base `develop` (`feature/ecosystem-sync-assign-print` finalizada e mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -21,10 +21,10 @@
 - [x] Saída padrão explícita com `print(e1, e2, ...)` (sem `\n`) e `println(e1, e2, ...)` (com `\n`), aceitando 0 ou mais argumentos separados por vírgula; `<expr>;` avalia efeitos colaterais silenciosamente (`OP_POP`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `check`, `lint`, `debug`, `pkg init`.
-- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Sincronizar `editors/vscode/`, `docs/` e `web/` com os novos operadores de atribuição, `++`/`--`, `print` e `println`, ou implementar entrada (`input`), constantes/imutabilidade ou estruturas de controle (`if`/`else`, `while`, `for`).
+- [ ] Implementar leitura de entrada (`input`), constantes/imutabilidade ou estruturas de controle (`if`/`else`, `while`, `for`).
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2 e identidade **Sigma (`.sgm`)**.

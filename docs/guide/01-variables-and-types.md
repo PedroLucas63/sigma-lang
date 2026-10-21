@@ -1,12 +1,12 @@
-# 01. Variáveis, Tipos Primitivos, Ponto Flutuante e Strings Interpoladas
+# 01. Variáveis, Tipos Primitivos, Ponto Flutuante, Strings Interpoladas e `print`/`println`
 
-Neste guia prático você aprenderá a declarar variáveis em **Sigma (`.sgm`)** usando todos os tipos primitivos da linguagem: inteiros (`int`), ponto flutuante (`float`, `double`, `decimal`), booleanos (`bool`), caracteres Unicode (`char`) e textos com interpolação (`string`).
+Neste guia prático você aprenderá a declarar variáveis em **Sigma (`.sgm`)** usando todos os tipos primitivos da linguagem — inteiros (`int`), ponto flutuante (`float`, `double`, `decimal`), booleanos (`bool`), caracteres Unicode (`char`) e textos com interpolação (`string`) — e a exibir resultados na tela com `print(...)` e `println(...)`.
 
 ---
 
-## 1. Declarando Variáveis Inteiras (`int`) e Separador `_`
+## 1. Declarando Variáveis Inteiras (`int`), Separador `_` e `print`/`println`
 
-A Sigma oferece três formas de declarar variáveis e suporta `_` estritamente entre dois dígitos para facilitar a leitura de grandes constantes:
+A Sigma oferece três formas de declarar variáveis, suporta `_` estritamente entre dois dígitos para facilitar a leitura de grandes constantes e disponibiliza `print(e1, e2, ...)` (sem quebra de linha) e `println(e1, e2, ...)` (com quebra de linha `\n`):
 
 ```sigma
 # 1. Inferência automática de tipo com ':='
@@ -22,11 +22,9 @@ var acumulador : int;
 # 4. Números negativos
 var offset : int = -42;
 
-amostragens;
-populacao;
-orcamento;
-acumulador;
-offset;
+print("Amostragens: ");
+println(amostragens);
+println(populacao, orcamento, acumulador, offset);
 ```
 
 > **Regra de Legibilidade (`E0001`):** O `_` deve aparecer sempre **entre dois dígitos**. Números como `1_000_` (no final) ou `1__000` (duplo) são rejeitados pelo compilador com erro `E0001`.
@@ -56,14 +54,9 @@ var preco := 10.90m;
 var alta_precisao : decimal = 123_456_789.012_345_678_901_234_567_89m;
 var m_zero : decimal;
 
-taxa;
-escala;
-f_zero;
-pi;
-d_zero;
-preco;
-alta_precisao;
-m_zero;
+println(taxa, escala, f_zero);
+println(pi, d_zero);
+println(preco, alta_precisao, m_zero);
 ```
 
 ---
@@ -75,11 +68,9 @@ O tipo `bool` aceita os valores `true` e `false` (com zero-init `false`):
 ```sigma
 var convergiu := true;
 var mostrar_log : bool = false;
-var inicializado : bool; // false por padrão
+var inicializado : bool; # false por padrão
 
-convergiu;
-mostrar_log;
-inicializado;
+println(convergiu, mostrar_log, inicializado);
 ```
 
 ---
@@ -98,12 +89,12 @@ var iteracoes := 1_000;
 var erro := 0.0001d;
 var ok := true;
 
-// Interpolação direta de qualquer variável ou literal com ${...}
+# Interpolação direta de qualquer variável ou expressão com ${...}
 var relatorio := "[${letra}] ${linguagem} ${emoji}: iter=${iteracoes}, erro=${erro}, ok=${ok}";
 
-letra;
-emoji;
-relatorio;
+println(letra);
+println(emoji);
+println(relatorio);
 ```
 
 ---

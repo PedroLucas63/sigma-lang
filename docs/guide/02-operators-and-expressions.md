@@ -1,6 +1,6 @@
-# 02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais e Curto-Circuito
+# 02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais, Atribuições e Incremento/Decremento
 
-Neste guia você aprenderá todas as operações suportadas pela **Sigma (`.sgm`)**, incluindo aritmética de precisão mista e base-10 exata (`decimal`), manipulação de `char`/`string`, operadores lógicos e bitwise, comparações encadeadas de 3 operandos e avaliação em curto-circuito.
+Neste guia você aprenderá todas as operações suportadas pela **Sigma (`.sgm`)**, incluindo aritmética de precisão mista e base-10 exata (`decimal`), manipulação de `char`/`string`, operadores lógicos e bitwise, comparações encadeadas de 3 operandos, atribuições simples/compostas e incremento/decremento (`++`/`--`).
 
 ---
 
@@ -38,7 +38,7 @@ var resto_f := -7.5 % 2.0; # 0.5 (float % float -> float)
 var exato := 0.1m + 0.2m;  # 0.3 (exato em base 10!)
 var parcela := 100m / 8;   # 12.5
 
-p1; p2; p3; d_real; d_int; resto; resto_f; exato; parcela;
+println(p1, p2, p3, d_real, d_int, resto, resto_f, exato, parcela);
 ```
 
 ---
@@ -54,7 +54,7 @@ var ant  := 'd' - 3;          # 'a' (char - int -> char)
 var linha := '-' * 10;        # "----------" (char * int -> string)
 var riso  := "ha" * 3;        # "hahaha" (string * int -> string)
 
-ab; titulo; dist; prox; ant; linha; riso;
+println(ab, titulo, dist, prox, ant, linha, riso);
 ```
 
 ---
@@ -76,7 +76,7 @@ var b_or  := 6 or 3;               # 7
 var b_shl := 1 << 10;              # 1024
 var b_shr := -16 >> 2;             # -4 (aritmético: preserva o sinal)
 
-ok1; ok2; b_not; b_and; b_xor; b_or; b_shl; b_shr;
+println(ok1, ok2, b_not, b_and, b_xor, b_or, b_shl, b_shr);
 ```
 
 ---
@@ -97,5 +97,41 @@ var sc1 := 10 < 8 and (10 // zero > 1); # false (para em 10 < 8)
 var sc2 := 15 > 9 or (10 // zero > 1);  # true  (para em 15 > 9)
 var sc3 := 10 < 5 < (10 // zero);       # false (para em 10 < 5)
 
-conforto; intervalo; sc1; sc2; sc3;
+println(conforto, intervalo, sc1, sc2, sc3);
+```
+
+---
+
+## 6. Atribuições (`=`, `<op>=`) e Incremento/Decremento (`++`, `--`)
+
+Atribuições e incremento/decremento são **expressões** em Sigma. Quando escritas como instruções isoladas (`x += 5;`, `x++;`), executam a mutação **silenciosamente** (sem imprimir na tela):
+
+- **Atribuição simples e encadeada (associativa à direita):** `a = b = 10;`
+- **Atribuição composta aritmética e de texto:** `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`
+- **Atribuição composta lógica e bitwise:** `and=`, `or=`, `xor=`, `<<=`, `>>=` (com curto-circuito para `and=` e `or=` em `bool`)
+- **Incremento e decremento (`int`, `float`, `double`, `decimal`, `char`):**
+  - Pré-fixados (`++x`, `--x`): atualizam `x` e avaliam para o **novo** valor.
+  - Pós-fixados (`x++`, `x--`): atualizam `x` e avaliam para o **valor antigo**.
+
+```sigma
+var a : int;
+var b : int;
+a = b = 10;          # a = 10, b = 10 (silencioso)
+a += 5;              # a = 15
+a //= 4;             # a = 3
+
+var f := 10.0;
+f += 2;              # promoção int -> float: 12.0
+f /= 3.0;            # 4.0
+
+var mask := 6;
+mask and= 3;         # 2
+mask or= 8;          # 10
+mask <<= 1;          # 20
+
+var c := 'a';
+c++;                 # 'b'
+++c;                 # 'c'
+
+println("a =", a, "f =", f, "mask =", mask, "c =", c);
 ```

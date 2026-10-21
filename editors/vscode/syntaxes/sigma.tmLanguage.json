@@ -34,6 +34,14 @@
           "match": "\\b(var)\\b"
         },
         {
+          "name": "support.function.builtin.io.sigma",
+          "match": "\\b(println|print)\\b"
+        },
+        {
+          "name": "keyword.operator.assignment.logical.sigma",
+          "match": "\\b(and=|or=|xor=)"
+        },
+        {
           "name": "keyword.operator.logical.sigma",
           "match": "\\b(and|or|xor|not)\\b"
         }
@@ -138,6 +146,14 @@
     "operators": {
       "patterns": [
         {
+          "name": "keyword.operator.increment-decrement.sigma",
+          "match": "\\+\\+|\\-\\-"
+        },
+        {
+          "name": "keyword.operator.assignment.compound.sigma",
+          "match": "//=|<<=|>>=|\\+=|\\-=|\\*=|/=|%=|\\^="
+        },
+        {
           "name": "keyword.operator.comparison.sigma",
           "match": "==|!=|<=|>="
         },
@@ -160,6 +176,10 @@
         {
           "name": "punctuation.separator.colon.sigma",
           "match": ":"
+        },
+        {
+          "name": "punctuation.separator.comma.sigma",
+          "match": ","
         },
         {
           "name": "punctuation.parens.sigma",
