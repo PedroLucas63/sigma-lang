@@ -388,6 +388,23 @@ let check_stmt (env : env) (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) 
     (match check_expr env e with
      | Ok te -> Ok { Typed_ast.desc = Typed_ast.TStmtExpr te; span = s.span }
      | Error err -> Error [ err ])
+  | Ast.StmtPrint { newline; args } ->
+    let targs = ref [] in
+    let errs = ref [] in
+    List.iter
+      (fun arg ->
+        match check_expr env arg with
+        | Ok targ -> targs := targ :: !targs
+        | Error err -> errs := err :: !errs)
+      args;
+    (match List.rev !errs with
+     | [] ->
+       Ok
+         {
+           Typed_ast.desc = Typed_ast.TStmtPrint { newline; args = List.rev !targs };
+           span = s.span;
+         }
+     | errors -> Error errors)
   | Ast.StmtVarDecl v ->
     let errs = ref [] in
     (match Hashtbl.find_opt env v.name with

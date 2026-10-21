@@ -39,6 +39,10 @@ type var_decl = {
 
 type stmt_desc =
   | TStmtVarDecl of var_decl
+  | TStmtPrint of {
+      newline : bool;
+      args : expr list;
+    }
   | TStmtExpr of expr
 
 type stmt = {

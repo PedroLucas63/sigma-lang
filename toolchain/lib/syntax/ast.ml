@@ -80,6 +80,10 @@ type var_decl = {
 
 type stmt_desc =
   | StmtVarDecl of var_decl
+  | StmtPrint of {
+      newline : bool;
+      args : expr list;
+    }
   | StmtExpr of expr
 
 and stmt = {
@@ -186,6 +190,11 @@ let pp_stmt fmt (s : stmt) =
        Format.fprintf fmt "var %s%s = %a;" v.name ty_s pp_expr init
      | None, _ ->
        Format.fprintf fmt "var %s%s;" v.name ty_s)
+  | StmtPrint { newline; args } ->
+    let fn_name = if newline then "println" else "print" in
+    Format.fprintf fmt "%s(%a);" fn_name
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr)
+      args
   | StmtExpr e ->
     Format.fprintf fmt "%a;" pp_expr e
 

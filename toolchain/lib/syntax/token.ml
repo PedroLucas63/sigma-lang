@@ -2,6 +2,8 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_PRINT
+  | KW_PRINTLN
   | KW_AND
   | KW_OR
   | KW_XOR
@@ -49,6 +51,7 @@ type kind =
   | GT_EQ
   | LPAREN
   | RPAREN
+  | COMMA
   | SEMI
   | EOF
 
@@ -63,6 +66,8 @@ and t = {
 
 let kind_to_string = function
   | KW_VAR -> "'var'"
+  | KW_PRINT -> "'print'"
+  | KW_PRINTLN -> "'println'"
   | KW_AND -> "'and'"
   | KW_OR -> "'or'"
   | KW_XOR -> "'xor'"
@@ -110,6 +115,7 @@ let kind_to_string = function
   | GT_EQ -> "'>='"
   | LPAREN -> "'('"
   | RPAREN -> "')'"
+  | COMMA -> "','"
   | SEMI -> "';'"
   | EOF -> "end of file"
 

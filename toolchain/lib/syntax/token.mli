@@ -4,6 +4,8 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_PRINT
+  | KW_PRINTLN
   | KW_AND
   | KW_OR
   | KW_XOR
@@ -51,6 +53,7 @@ type kind =
   | GT_EQ
   | LPAREN
   | RPAREN
+  | COMMA
   | SEMI
   | EOF
 

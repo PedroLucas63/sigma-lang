@@ -61,6 +61,8 @@ let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
           Hashtbl.replace tbl v.name u;
           decl_order := u :: !decl_order
         end
+      | Typed_ast.TStmtPrint { args; _ } ->
+        List.iter (mark_expr_usage tbl) args
       | Typed_ast.TStmtExpr e ->
         mark_expr_usage tbl e)
     prog;
@@ -69,7 +71,7 @@ let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
        if not u.used then
          Some
            (Diagnostic.warning
-              ~hint:(Printf.sprintf "prefix with underscore '_%s' if intentional, or use '%s;'" u.name u.name)
+              ~hint:(Printf.sprintf "prefix with underscore '_%s' if intentional, or use 'println(%s);'" u.name u.name)
               ~code:"W0001"
               ~span:u.span
               (Printf.sprintf "unused variable '%s'" u.name))

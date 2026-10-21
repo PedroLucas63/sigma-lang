@@ -414,6 +414,15 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
                ~span:close_tok.span
                (Printf.sprintf "expected ')' to close parenthesized expression, found %s"
                   (Token.kind_to_string close_tok.kind)))))
+  | Token.KW_PRINT | Token.KW_PRINTLN ->
+    let fn_name = if tok.kind = Token.KW_PRINTLN then "println" else "print" in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "use '%s(...);' as a standalone statement" fn_name)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "'%s' is a void output statement and cannot be used inside an expression"
+            fn_name))
   | _ ->
     Error
       (Diagnostic.error
@@ -522,12 +531,69 @@ let parse_var_decl st var_tok : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected variable name after 'var', found %s"
             (Token.kind_to_string name_tok.kind)))
 
+let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
+  let fn_name = if newline then "println" else "print" in
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    let rec parse_args acc =
+      match parse_expr st with
+      | Error e -> Error e
+      | Ok arg ->
+        let acc = arg :: acc in
+        let next_tok = cur st in
+        (match next_tok.kind with
+         | Token.COMMA ->
+           bump st;
+           parse_args acc
+         | Token.RPAREN ->
+           bump st;
+           Ok (List.rev acc)
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:(Printf.sprintf "use '%s(a, b);' and close with ')'" fn_name)
+                ~code:"E0002"
+                ~span:next_tok.span
+                (Printf.sprintf "expected ')' or ',' after argument in '%s', found %s"
+                   fn_name (Token.kind_to_string next_tok.kind))))
+    in
+    let args_res =
+      if (cur st).kind = Token.RPAREN then begin
+        bump st;
+        Ok []
+      end else
+        parse_args []
+    in
+    (match args_res with
+     | Error e -> Error e
+     | Ok args ->
+       (match expect_semi st fn_tok.Token.span with
+        | Error e -> Error e
+        | Ok full_span ->
+          Ok { Ast.desc = Ast.StmtPrint { newline; args }; span = full_span }))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "call '%s' with parentheses, e.g. '%s(expr);'" fn_name fn_name)
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after '%s', found %s"
+            fn_name (Token.kind_to_string open_tok.kind)))
+
 let parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.KW_VAR ->
     bump st;
     parse_var_decl st tok
+  | Token.KW_PRINT ->
+    bump st;
+    parse_print_stmt st tok ~newline:false
+  | Token.KW_PRINTLN ->
+    bump st;
+    parse_print_stmt st tok ~newline:true
   | _ ->
     (match parse_expr st with
      | Error e -> Error e

@@ -171,6 +171,8 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         let kind =
           match word with
           | "var" -> Token.KW_VAR
+          | "print" -> Token.KW_PRINT
+          | "println" -> Token.KW_PRINTLN
           | "and" ->
             if peek st = '=' && peek_next st <> '=' then begin
               advance st;
@@ -600,6 +602,9 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         | ')' ->
           advance st;
           emit Token.RPAREN start_pos (cur_pos st)
+        | ',' ->
+          advance st;
+          emit Token.COMMA start_pos (cur_pos st)
         | ';' ->
           advance st;
           emit Token.SEMI start_pos (cur_pos st)
