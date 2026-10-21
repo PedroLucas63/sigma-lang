@@ -7,6 +7,8 @@
 | Categoria | Token OCaml | Representação Textual |
 | :--- | :--- | :--- |
 | Palavra-chave | `KW_VAR` | `var` |
+| Palavra-chave | `KW_PRINT` | `print` |
+| Palavra-chave | `KW_PRINTLN` | `println` |
 | Palavra-chave | `KW_AND` | `and` |
 | Palavra-chave | `KW_OR` | `or` |
 | Palavra-chave | `KW_XOR` | `xor` |
@@ -54,6 +56,7 @@
 | Operador | `GT_EQ` | `>=` |
 | Delimitador | `LPAREN` | `(` |
 | Delimitador | `RPAREN` | `)` |
+| Delimitador | `COMMA` | `,` |
 | Delimitador | `SEMI` | `;` |
 | Controle | `EOF` | Fim de arquivo |
 
@@ -65,9 +68,13 @@
 program       ::= stmt* EOF ;
 
 stmt          ::= var_decl ";"
+                | print_stmt ";"
                 | expr_stmt ";" ;
 
 var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
+
+print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
+arg_list      ::= expr ( "," expr )* ;
 
 expr_stmt     ::= expr ;
 
@@ -264,6 +271,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_POP
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
@@ -271,5 +279,7 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_SPACE
+  | OP_PRINT_NEWLINE
   | OP_HALT
 ```
