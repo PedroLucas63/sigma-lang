@@ -112,6 +112,13 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_I64 of string
+  | OP_SET_GLOBAL_F32 of string
+  | OP_SET_GLOBAL_F64 of string
+  | OP_SET_GLOBAL_DEC of string
+  | OP_SET_GLOBAL_BOOL of string
+  | OP_SET_GLOBAL_CHAR of string
+  | OP_SET_GLOBAL_STR of string
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
@@ -240,6 +247,13 @@ let pp_opcode fmt = function
   | OP_GET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_GET_GLOBAL_BOOL %s" name
   | OP_GET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_GET_GLOBAL_CHAR %s" name
   | OP_GET_GLOBAL_STR name -> Format.fprintf fmt "OP_GET_GLOBAL_STR %s" name
+  | OP_SET_GLOBAL_I64 name -> Format.fprintf fmt "OP_SET_GLOBAL_I64 %s" name
+  | OP_SET_GLOBAL_F32 name -> Format.fprintf fmt "OP_SET_GLOBAL_F32 %s" name
+  | OP_SET_GLOBAL_F64 name -> Format.fprintf fmt "OP_SET_GLOBAL_F64 %s" name
+  | OP_SET_GLOBAL_DEC name -> Format.fprintf fmt "OP_SET_GLOBAL_DEC %s" name
+  | OP_SET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_SET_GLOBAL_BOOL %s" name
+  | OP_SET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_SET_GLOBAL_CHAR %s" name
+  | OP_SET_GLOBAL_STR name -> Format.fprintf fmt "OP_SET_GLOBAL_STR %s" name
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
   | OP_PRINT_F32 -> Format.fprintf fmt "OP_PRINT_F32"
   | OP_PRINT_F64 -> Format.fprintf fmt "OP_PRINT_F64"

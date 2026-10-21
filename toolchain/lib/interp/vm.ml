@@ -682,13 +682,20 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_DEF_GLOBAL_DEC name
     | Ir.OP_DEF_GLOBAL_BOOL name
     | Ir.OP_DEF_GLOBAL_CHAR name
-    | Ir.OP_DEF_GLOBAL_STR name ->
+    | Ir.OP_DEF_GLOBAL_STR name
+    | Ir.OP_SET_GLOBAL_I64 name
+    | Ir.OP_SET_GLOBAL_F32 name
+    | Ir.OP_SET_GLOBAL_F64 name
+    | Ir.OP_SET_GLOBAL_DEC name
+    | Ir.OP_SET_GLOBAL_BOOL name
+    | Ir.OP_SET_GLOBAL_CHAR name
+    | Ir.OP_SET_GLOBAL_STR name ->
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
          Hashtbl.replace st.globals name v;
          Ok ()
-       | [] -> Error "VM stack underflow on OP_DEF_GLOBAL")
+       | [] -> Error "VM stack underflow on OP_DEF/SET_GLOBAL")
     | Ir.OP_GET_GLOBAL_I64 name
     | Ir.OP_GET_GLOBAL_F32 name
     | Ir.OP_GET_GLOBAL_F64 name

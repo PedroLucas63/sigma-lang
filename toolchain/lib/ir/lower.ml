@@ -96,6 +96,41 @@ let is_rel_op = function
   | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
   | _ -> false
 
+let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
+  match ty with
+  | Ty.Int -> Ir.OP_GET_GLOBAL_I64 name
+  | Ty.Float -> Ir.OP_GET_GLOBAL_F32 name
+  | Ty.Double -> Ir.OP_GET_GLOBAL_F64 name
+  | Ty.Decimal -> Ir.OP_GET_GLOBAL_DEC name
+  | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
+  | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
+  | Ty.String -> Ir.OP_GET_GLOBAL_STR name
+
+let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
+  match ty with
+  | Ty.Int -> Ir.OP_SET_GLOBAL_I64 name
+  | Ty.Float -> Ir.OP_SET_GLOBAL_F32 name
+  | Ty.Double -> Ir.OP_SET_GLOBAL_F64 name
+  | Ty.Decimal -> Ir.OP_SET_GLOBAL_DEC name
+  | Ty.Bool -> Ir.OP_SET_GLOBAL_BOOL name
+  | Ty.Char -> Ir.OP_SET_GLOBAL_CHAR name
+  | Ty.String -> Ir.OP_SET_GLOBAL_STR name
+
+let binop_of_assign_op = function
+  | Ast.AssignEq -> None
+  | Ast.AssignAdd -> Some Ast.BinAdd
+  | Ast.AssignSub -> Some Ast.BinSub
+  | Ast.AssignMul -> Some Ast.BinMul
+  | Ast.AssignDiv -> Some Ast.BinDiv
+  | Ast.AssignIntDiv -> Some Ast.BinIntDiv
+  | Ast.AssignMod -> Some Ast.BinMod
+  | Ast.AssignPow -> Some Ast.BinPow
+  | Ast.AssignAnd -> Some Ast.BinAnd
+  | Ast.AssignOr -> Some Ast.BinOr
+  | Ast.AssignXor -> Some Ast.BinXor
+  | Ast.AssignShl -> Some Ast.BinShl
+  | Ast.AssignShr -> Some Ast.BinShr
+
 let rec lower_expr b (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt n ->
@@ -290,6 +325,78 @@ let rec lower_expr b (e : Typed_ast.expr) =
     patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
     ignore (emit b (Ir.OP_CONST_BOOL false) e.span);
     patch b j_end (Ir.OP_JUMP (cur_ip b))
+  | Typed_ast.TExprAssign (name, op, rhs) ->
+    (match op, e.ty with
+     | Ast.AssignEq, _ ->
+       lower_expr b rhs;
+       ignore (emit b (set_global_opcode e.ty name) e.span);
+       ignore (emit b (get_global_opcode e.ty name) e.span)
+     | Ast.AssignAnd, Ty.Bool ->
+       (* Short-circuit boolean and= *)
+       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
+       let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) e.span in
+       lower_expr b rhs;
+       ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
+       patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
+       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
+     | Ast.AssignOr, Ty.Bool ->
+       (* Short-circuit boolean or= *)
+       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
+       let j_true = emit b (Ir.OP_JUMP_IF_TRUE 0) e.span in
+       lower_expr b rhs;
+       ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
+       patch b j_true (Ir.OP_JUMP_IF_TRUE (cur_ip b));
+       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
+     | _, _ ->
+       (match binop_of_assign_op op with
+        | None -> ()
+        | Some binop ->
+          let lhs_ident =
+            { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
+          in
+          let bin_expr =
+            {
+              Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+              ty = e.ty;
+              span = e.span;
+            }
+          in
+          lower_expr b bin_expr;
+          ignore (emit b (set_global_opcode e.ty name) e.span);
+          ignore (emit b (get_global_opcode e.ty name) e.span)))
+  | Typed_ast.TExprIncDec (inc_op, name) ->
+    let emit_step is_inc =
+      match e.ty with
+      | Ty.Int ->
+        ignore (emit b (Ir.OP_CONST_I64 1L) e.span);
+        ignore (emit b (if is_inc then Ir.OP_ADD_I64 else Ir.OP_SUB_I64) e.span)
+      | Ty.Float ->
+        ignore (emit b (Ir.OP_CONST_F32 1.0) e.span);
+        ignore (emit b (if is_inc then Ir.OP_ADD_F32 else Ir.OP_SUB_F32) e.span)
+      | Ty.Double ->
+        ignore (emit b (Ir.OP_CONST_F64 1.0) e.span);
+        ignore (emit b (if is_inc then Ir.OP_ADD_F64 else Ir.OP_SUB_F64) e.span)
+      | Ty.Decimal ->
+        ignore (emit b (Ir.OP_CONST_DEC (Decimal.of_int64 1L)) e.span);
+        ignore (emit b (if is_inc then Ir.OP_ADD_DEC else Ir.OP_SUB_DEC) e.span)
+      | Ty.Char ->
+        ignore (emit b (Ir.OP_CONST_I64 1L) e.span);
+        ignore (emit b (if is_inc then Ir.OP_CHAR_ADD_I64 else Ir.OP_CHAR_SUB_I64) e.span)
+      | _ -> ()
+    in
+    (match inc_op with
+     | Ast.PreInc | Ast.PreDec ->
+       let is_inc = inc_op = Ast.PreInc in
+       ignore (emit b (get_global_opcode e.ty name) e.span);
+       emit_step is_inc;
+       ignore (emit b (set_global_opcode e.ty name) e.span);
+       ignore (emit b (get_global_opcode e.ty name) e.span)
+     | Ast.PostInc | Ast.PostDec ->
+       let is_inc = inc_op = Ast.PostInc in
+       ignore (emit b (get_global_opcode e.ty name) e.span);
+       ignore (emit b (get_global_opcode e.ty name) e.span);
+       emit_step is_inc;
+       ignore (emit b (set_global_opcode e.ty name) e.span))
 
 let lower_stmt b (s : Typed_ast.stmt) =
   match s.desc with

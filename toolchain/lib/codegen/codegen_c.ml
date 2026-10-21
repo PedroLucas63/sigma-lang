@@ -44,6 +44,21 @@ let is_rel_op = function
   | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
   | _ -> false
 
+let binop_of_assign_op = function
+  | Ast.AssignEq -> None
+  | Ast.AssignAdd -> Some Ast.BinAdd
+  | Ast.AssignSub -> Some Ast.BinSub
+  | Ast.AssignMul -> Some Ast.BinMul
+  | Ast.AssignDiv -> Some Ast.BinDiv
+  | Ast.AssignIntDiv -> Some Ast.BinIntDiv
+  | Ast.AssignMod -> Some Ast.BinMod
+  | Ast.AssignPow -> Some Ast.BinPow
+  | Ast.AssignAnd -> Some Ast.BinAnd
+  | Ast.AssignOr -> Some Ast.BinOr
+  | Ast.AssignXor -> Some Ast.BinXor
+  | Ast.AssignShl -> Some Ast.BinShl
+  | Ast.AssignShr -> Some Ast.BinShr
+
 let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (cr_raw : string) : string =
   let common_ty =
     if lty = Ty.Decimal || rty = Ty.Decimal then Ty.Decimal
@@ -207,6 +222,74 @@ let rec emit_expr (e : Typed_ast.expr) : string =
       (c_type_of_ty e1.ty) t1_name (emit_expr e1)
       (c_type_of_ty e2.ty) t2_name (emit_expr e2)
       cmp1 cmp2
+  | Typed_ast.TExprAssign (name, op, rhs) ->
+    let vname = mangle_ident name in
+    (match op, e.ty with
+     | Ast.AssignEq, _ ->
+       Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
+     | Ast.AssignAnd, Ty.Bool ->
+       Printf.sprintf "(%s = (%s && (%s)))" vname vname (emit_expr rhs)
+     | Ast.AssignOr, Ty.Bool ->
+       Printf.sprintf "(%s = (%s || (%s)))" vname vname (emit_expr rhs)
+     | _, _ ->
+       (match binop_of_assign_op op with
+        | None -> Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
+        | Some binop ->
+          let lhs_ident =
+            { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
+          in
+          let bin_expr =
+            {
+              Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+              ty = e.ty;
+              span = e.span;
+            }
+          in
+          Printf.sprintf "(%s = %s)" vname (emit_expr bin_expr)))
+  | Typed_ast.TExprIncDec (inc_op, name) ->
+    let vname = mangle_ident name in
+    (match e.ty, inc_op with
+     | (Ty.Int | Ty.Float | Ty.Double), Ast.PreInc ->
+       Printf.sprintf "(++%s)" vname
+     | (Ty.Int | Ty.Float | Ty.Double), Ast.PreDec ->
+       Printf.sprintf "(--%s)" vname
+     | (Ty.Int | Ty.Float | Ty.Double), Ast.PostInc ->
+       Printf.sprintf "(%s++)" vname
+     | (Ty.Int | Ty.Float | Ty.Double), Ast.PostDec ->
+       Printf.sprintf "(%s--)" vname
+     | Ty.Decimal, Ast.PreInc ->
+       Printf.sprintf "(%s = sgm_dec_add(%s, sgm_dec_of_i64(1)))" vname vname
+     | Ty.Decimal, Ast.PreDec ->
+       Printf.sprintf "(%s = sgm_dec_sub(%s, sgm_dec_of_i64(1)))" vname vname
+     | Ty.Decimal, Ast.PostInc ->
+       incr chain_counter;
+       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+       Printf.sprintf
+         "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_add(%s, sgm_dec_of_i64(1)); %s; })"
+         tmp vname vname vname tmp
+     | Ty.Decimal, Ast.PostDec ->
+       incr chain_counter;
+       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+       Printf.sprintf
+         "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_sub(%s, sgm_dec_of_i64(1)); %s; })"
+         tmp vname vname vname tmp
+     | Ty.Char, Ast.PreInc ->
+       Printf.sprintf "(%s = sgm_char_add(%s, 1))" vname vname
+     | Ty.Char, Ast.PreDec ->
+       Printf.sprintf "(%s = sgm_char_sub(%s, 1))" vname vname
+     | Ty.Char, Ast.PostInc ->
+       incr chain_counter;
+       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+       Printf.sprintf
+         "__extension__ ({ const char* %s = %s; %s = sgm_char_add(%s, 1); %s; })"
+         tmp vname vname vname tmp
+     | Ty.Char, Ast.PostDec ->
+       incr chain_counter;
+       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+       Printf.sprintf
+         "__extension__ ({ const char* %s = %s; %s = sgm_char_sub(%s, 1); %s; })"
+         tmp vname vname vname tmp
+     | _, _ -> vname)
 
 let c_decimal_runtime =
   {|#include <stdlib.h>

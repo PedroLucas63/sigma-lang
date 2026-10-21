@@ -609,12 +609,204 @@ let test_syntax_and_semantic_errors () =
       match Driver.run_source s with
       | Ok _ -> assert_true ~msg:(expr_str ^ " must fail with E0105") false
       | Error errs -> assert_true ~msg:("E0105 expected for " ^ expr_str) (has_code "E0105" errs))
-    [ "10 / 0"; "10 // 0"; "10 % 0"; "10.0 / -0.0"; "10m / 0m" ]
+    [ "10 / 0"; "10 // 0"; "10 % 0"; "10.0 / -0.0"; "10m / 0m" ];
+
+  (* E0002, E0102, E0104, E0105: assignment and inc/dec errors *)
+  List.iter
+    (fun (code, expected_err) ->
+      let s = Source.of_string ~filename:"bad_assign.sgm" ~content:code in
+      match Driver.run_source s with
+      | Ok _ -> assert_true ~msg:(code ^ " must fail with " ^ expected_err) false
+      | Error errs ->
+        assert_true ~msg:(expected_err ^ " expected for " ^ code) (has_code expected_err errs))
+    [
+      ("(1 + 2) = 10;", "E0002");
+      ("++10;", "E0002");
+      ("var x := 1; x++++;", "E0002");
+      ("nao_declarada = 10;", "E0102");
+      ("nao_declarada += 5;", "E0102");
+      ("++nao_declarada;", "E0102");
+      ("var n := 10; n = 2.5;", "E0104");
+      ("var n := 10; n += 2.5;", "E0104");
+      ("var n := 10; n /= 2;", "E0104");
+      ("var b := true; b++;", "E0104");
+      ("var s := \"oi\"; --s;", "E0104");
+      ("var b := true; b <<= 1;", "E0104");
+      ("var n := 10; n //= 0;", "E0105");
+      ("var f := 10.0; f /= 0.0;", "E0105");
+      ("var n := 10; n %= 0;", "E0105");
+    ]
+
+let test_assignment_and_incdec_parity () =
+  let code =
+    {|# 1. Simple and right-associative chained assignment
+var a : int;
+var b : int;
+a = b = 10;
+a;
+b;
+
+# 2. Compound arithmetic assignments on int
+a += 5;
+a -= 3;
+a *= 2;
+a //= 5;
+a %= 3;
+a ^= 4;
+var neg_mod := -7;
+neg_mod %= 3;
+
+# 3. Float, Double, Decimal compound assignments & promotions
+var f := 10.0;
+f += 2;
+f -= 1.5;
+f *= 2;
+f /= 3.0;
+f %= 2.0;
+f ^= 2;
+
+var d := 20.0d;
+d += 5;
+d += 2.5f;
+d /= 2d;
+
+var m := 100.50m;
+m += 20;
+m -= 0.25m;
+m *= 2;
+m /= 2m;
+m %= 7m;
+m ^= 2;
+
+# 4. Char & String compound assignments
+var c := 'a';
+c += 3;
+c -= 1;
+
+var s := "Ha";
+s += '!';
+s += "Ho";
+s *= 2;
+
+# 5. Logical compound assignments on bool (with short-circuit!)
+var zero := 0;
+var ok := false;
+ok and= (10 // zero == 1);
+ok or= true;
+ok or= (10 // zero == 1);
+ok and= (5 > 2);
+ok xor= true;
+ok xor= true;
+
+# 6. Bitwise & shift compound assignments on int
+var bits := 6;
+bits and= 3;
+bits or= 8;
+bits xor= 15;
+bits <<= 2;
+bits >>= 1;
+
+# 7. Prefix and postfix ++ and -- (int, float, double, decimal, char)
+var i := 10;
+++i;
+i;
+i++;
+i;
+--i;
+i;
+i--;
+i;
+
+var pf := 1.5;
+++pf;
+pf++;
+pf;
+
+var pd := 2.5d;
+--pd;
+pd--;
+pd;
+
+var pm := 10.25m;
+++pm;
+pm++;
+pm;
+--pm;
+pm--;
+pm;
+
+var pc := 'b';
+++pc;
+pc++;
+pc;
+--pc;
+pc--;
+pc;
+|}
+  in
+  let src = Source.of_string ~filename:"assign_incdec.sgm" ~content:code in
+  let interp_out =
+    match Driver.run_source src with
+    | Ok out -> out
+    | Error errs ->
+      List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+      failwith "assign_incdec.sgm failed in interpreter"
+  in
+  let expected =
+    String.concat "\n"
+      [
+        (* 1. Simple and chained assignment *)
+        "10"; "10"; "10";
+        (* 2. Compound int *)
+        "15"; "12"; "24"; "4"; "1"; "1"; "2";
+        (* 3. Float, Double, Decimal *)
+        "12"; "10.5"; "21"; "7"; "1"; "1";
+        "25"; "27.5"; "13.75";
+        "120.5"; "120.25"; "240.5"; "120.25"; "1.25"; "1.5625";
+        (* 4. Char & String *)
+        "d"; "c";
+        "Ha!"; "Ha!Ho"; "Ha!HoHa!Ho";
+        (* 5. Logical bool *)
+        "false"; "true"; "true"; "true"; "false"; "true";
+        (* 6. Bitwise int *)
+        "2"; "10"; "5"; "20"; "10";
+        (* 7. Prefix & Postfix ++ / -- *)
+        "11"; "11"; "11"; "12"; "11"; "11"; "11"; "10";
+        "2.5"; "2.5"; "3.5";
+        "1.5"; "1.5"; "0.5";
+        "11.25"; "11.25"; "12.25"; "11.25"; "11.25"; "10.25";
+        "c"; "c"; "d"; "c"; "c"; "b";
+        "";
+      ]
+  in
+  assert_true
+    ~msg:(Printf.sprintf "assign_incdec interpreter output mismatch:\nGot:\n%s\nExpected:\n%s" interp_out expected)
+    (interp_out = expected);
+  let bin_path = Filename.temp_file "sigma_assign_test_" ".bin" in
+  (match Driver.build_source ~output_path:bin_path src with
+   | Error errs ->
+     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+     failwith "assign_incdec.sgm failed to compile"
+   | Ok () ->
+     let ic = Unix.open_process_in (Filename.quote bin_path) in
+     let buf = Buffer.create 128 in
+     (try
+        while true do
+          Buffer.add_channel buf ic 1
+        done
+      with End_of_file -> ());
+     ignore (Unix.close_process_in ic);
+     (try Sys.remove bin_path with _ -> ());
+     let comp_out = Buffer.contents buf in
+     assert_true
+       ~msg:(Printf.sprintf "assign_incdec compiler parity mismatch:\nGot:\n%s\nExpected:\n%s" comp_out interp_out)
+       (comp_out = interp_out))
 
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
   test_all_operations_csv_matrix ();
+  test_assignment_and_incdec_parity ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();

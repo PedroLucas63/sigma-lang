@@ -114,6 +114,13 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_I64 of string
+  | OP_SET_GLOBAL_F32 of string
+  | OP_SET_GLOBAL_F64 of string
+  | OP_SET_GLOBAL_DEC of string
+  | OP_SET_GLOBAL_BOOL of string
+  | OP_SET_GLOBAL_CHAR of string
+  | OP_SET_GLOBAL_STR of string
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
