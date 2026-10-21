@@ -708,6 +708,9 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          st.stack <- v :: st.stack;
          Ok ()
        | None -> Error (Printf.sprintf "VM undefined global '%s'" name))
+    | Ir.OP_UNDEF_GLOBAL name ->
+      Hashtbl.remove st.globals name;
+      Ok ()
     | Ir.OP_POP ->
       (match st.stack with
        | _ :: rest ->

@@ -121,6 +121,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_UNDEF_GLOBAL of string
   | OP_POP
   | OP_PRINT_I64
   | OP_PRINT_F32

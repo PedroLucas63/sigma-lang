@@ -640,6 +640,12 @@ let test_syntax_and_semantic_errors () =
       ("println(10, );", "E0002");
       ("var x := println(10);", "E0002");
       ("println(nao_declarada);", "E0102");
+      ("if true x = 10;", "E0002");
+      ("if (true) var y := 10;", "E0002");
+      ("{ var y := 10;", "E0002");
+      ("var x := 10; if (x) println(x);", "E0104");
+      ("var x := 10; { var x := 20; }", "E0103");
+      ("{ var y := 10; } println(y);", "E0102");
     ]
 
 let test_assignment_and_incdec_parity () =
@@ -830,12 +836,89 @@ println("After:", x += 4, ++x);
   in
   run_and_check_parity ~name:"print_builtin" ~code ~expected_stdout
 
+let test_if_else_and_blocks_parity () =
+  let code =
+    {|var x := 10;
+var y := 0;
+
+# 1. Single-statement if/else without braces
+if (true) x = 10; else x = 11;
+println(x);
+
+if (false) x = 99; else x = 12;
+println(x);
+
+# 2. if / else if / else with and without braces
+if (x == 12) {
+  x = 10;
+  y = 11;
+} else if (x == 20)
+  x = 5;
+else {
+  x = 8;
+  y = 9;
+}
+println(x, y);
+
+x = 20;
+if (x == 12) {
+  x = 10;
+  y = 11;
+} else if (x == 20)
+  x = 5;
+else {
+  x = 8;
+  y = 9;
+}
+println(x, y);
+
+if (x == 12) {
+  x = 10;
+  y = 11;
+} else if (x == 20)
+  x = 5;
+else {
+  x = 8;
+  y = 9;
+}
+println(x, y);
+
+# 3. Dangling else attaches to innermost if
+var d := 0;
+if (true)
+  if (false)
+    d = 1;
+  else
+    d = 2;
+println(d);
+
+# 4. Standalone lexical blocks { ... } and sibling scopes reusing variable name
+{
+  var local_v := 42;
+  {
+    var inner_v := local_v + 8;
+    println("inner:", inner_v);
+  }
+  println("outer block:", local_v);
+}
+{
+  var local_v := "reutilizada em outro escopo";
+  println(local_v);
+}
+|}
+  in
+  let expected_stdout =
+    "10\n12\n10 11\n5 11\n8 9\n2\ninner: 50\nouter block: 42\nreutilizada em outro escopo\n"
+  in
+  run_and_check_parity ~name:"if_else_blocks" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
   test_all_operations_csv_matrix ();
   test_assignment_and_incdec_parity ();
   test_print_and_println_parity ();
+  test_if_else_and_blocks_parity ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();

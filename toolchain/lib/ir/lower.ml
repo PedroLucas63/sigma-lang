@@ -398,7 +398,7 @@ let rec lower_expr b (e : Typed_ast.expr) =
        emit_step is_inc;
        ignore (emit b (set_global_opcode e.ty name) e.span))
 
-let lower_stmt b (s : Typed_ast.stmt) =
+let rec lower_stmt b (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     lower_expr b v.init;
@@ -413,6 +413,27 @@ let lower_stmt b (s : Typed_ast.stmt) =
       | Ty.String -> Ir.OP_DEF_GLOBAL_STR v.name
     in
     ignore (emit b op s.span)
+  | Typed_ast.TStmtBlock stmts ->
+    List.iter (lower_stmt b) stmts;
+    List.iter
+      (fun (sub : Typed_ast.stmt) ->
+        match sub.desc with
+        | Typed_ast.TStmtVarDecl v ->
+          ignore (emit b (Ir.OP_UNDEF_GLOBAL v.name) s.span)
+        | _ -> ())
+      stmts
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    lower_expr b cond;
+    let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) cond.span in
+    lower_stmt b then_branch;
+    (match else_branch with
+     | None ->
+       patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b))
+     | Some eb ->
+       let j_end = emit b (Ir.OP_JUMP 0) s.span in
+       patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
+       lower_stmt b eb;
+       patch b j_end (Ir.OP_JUMP (cur_ip b)))
   | Typed_ast.TStmtPrint { newline; args } ->
     List.iteri
       (fun i (arg : Typed_ast.expr) ->

@@ -119,6 +119,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_UNDEF_GLOBAL of string
   | OP_POP
   | OP_PRINT_I64
   | OP_PRINT_F32
@@ -257,6 +258,7 @@ let pp_opcode fmt = function
   | OP_SET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_SET_GLOBAL_BOOL %s" name
   | OP_SET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_SET_GLOBAL_CHAR %s" name
   | OP_SET_GLOBAL_STR name -> Format.fprintf fmt "OP_SET_GLOBAL_STR %s" name
+  | OP_UNDEF_GLOBAL name -> Format.fprintf fmt "OP_UNDEF_GLOBAL %s" name
   | OP_POP -> Format.fprintf fmt "OP_POP"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
   | OP_PRINT_F32 -> Format.fprintf fmt "OP_PRINT_F32"
