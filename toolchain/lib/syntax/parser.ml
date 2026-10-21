@@ -582,12 +582,30 @@ let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after '%s', found %s"
             fn_name (Token.kind_to_string open_tok.kind)))
 
-let parse_stmt st : (Ast.stmt, Diagnostic.t) result =
+let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.KW_VAR ->
     bump st;
     parse_var_decl st tok
+  | _ -> parse_non_decl_stmt st
+
+and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.KW_VAR ->
+    Error
+      (Diagnostic.error
+         ~hint:"wrap the variable declaration in braces, e.g. 'if (cond) { var x := ...; }'"
+         ~code:"E0002"
+         ~span:tok.span
+         "variable declaration 'var' is not allowed directly inside an unbraced branch")
+  | Token.KW_IF ->
+    bump st;
+    parse_if_stmt st tok
+  | Token.LBRACE ->
+    bump st;
+    parse_block_stmt st tok
   | Token.KW_PRINT ->
     bump st;
     parse_print_stmt st tok ~newline:false
@@ -602,6 +620,80 @@ let parse_stmt st : (Ast.stmt, Diagnostic.t) result =
         | Error e -> Error e
         | Ok full_span ->
           Ok { Ast.desc = Ast.StmtExpr expr; span = full_span }))
+
+and parse_if_stmt st if_tok : (Ast.stmt, Diagnostic.t) result =
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok cond ->
+       let close_tok = cur st in
+       (match close_tok.kind with
+        | Token.RPAREN ->
+          bump st;
+          (match parse_non_decl_stmt st with
+           | Error e -> Error e
+           | Ok then_branch ->
+             if (cur st).kind = Token.KW_ELSE then begin
+               bump st;
+               match parse_non_decl_stmt st with
+               | Error e -> Error e
+               | Ok else_stmt ->
+                 let full_span = Span.merge if_tok.Token.span else_stmt.span in
+                 Ok
+                   {
+                     Ast.desc =
+                       Ast.StmtIf { cond; then_branch; else_branch = Some else_stmt };
+                     span = full_span;
+                   }
+             end else
+               let full_span = Span.merge if_tok.Token.span then_branch.span in
+               Ok
+                 {
+                   Ast.desc = Ast.StmtIf { cond; then_branch; else_branch = None };
+                   span = full_span;
+                 })
+        | _ ->
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:close_tok.span
+               (Printf.sprintf "expected ')' after 'if' condition, found %s"
+                  (Token.kind_to_string close_tok.kind)))))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:"wrap the condition in parentheses, e.g. 'if (x == 10) ...'"
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after 'if', found %s"
+            (Token.kind_to_string open_tok.kind)))
+
+and parse_block_stmt st open_brace_tok : (Ast.stmt, Diagnostic.t) result =
+  let stmts = ref [] in
+  let first_err = ref None in
+  while not (is_eof st) && (cur st).kind <> Token.RBRACE && !first_err = None do
+    match parse_stmt st with
+    | Ok s -> stmts := s :: !stmts
+    | Error err -> first_err := Some err
+  done;
+  match !first_err with
+  | Some err -> Error err
+  | None ->
+    let close_tok = cur st in
+    (match close_tok.kind with
+     | Token.RBRACE ->
+       bump st;
+       let full_span = Span.merge open_brace_tok.Token.span close_tok.span in
+       Ok { Ast.desc = Ast.StmtBlock (List.rev !stmts); span = full_span }
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~code:"E0002"
+            ~span:open_brace_tok.span
+            "unclosed block '{' (missing closing '}')"))
 
 let parse (token_list : Token.t list) : (Ast.program, Diagnostic.t list) result =
   let tokens = Array.of_list token_list in

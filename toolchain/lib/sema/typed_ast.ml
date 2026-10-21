@@ -37,13 +37,19 @@ type var_decl = {
 
 type stmt_desc =
   | TStmtVarDecl of var_decl
+  | TStmtBlock of stmt list
+  | TStmtIf of {
+      cond : expr;
+      then_branch : stmt;
+      else_branch : stmt option;
+    }
   | TStmtPrint of {
       newline : bool;
       args : expr list;
     }
   | TStmtExpr of expr
 
-type stmt = {
+and stmt = {
   desc : stmt_desc;
   span : Span.t;
 }

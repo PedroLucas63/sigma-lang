@@ -171,6 +171,8 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         let kind =
           match word with
           | "var" -> Token.KW_VAR
+          | "if" -> Token.KW_IF
+          | "else" -> Token.KW_ELSE
           | "print" -> Token.KW_PRINT
           | "println" -> Token.KW_PRINTLN
           | "and" ->
@@ -602,6 +604,12 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         | ')' ->
           advance st;
           emit Token.RPAREN start_pos (cur_pos st)
+        | '{' ->
+          advance st;
+          emit Token.LBRACE start_pos (cur_pos st)
+        | '}' ->
+          advance st;
+          emit Token.RBRACE start_pos (cur_pos st)
         | ',' ->
           advance st;
           emit Token.COMMA start_pos (cur_pos st)

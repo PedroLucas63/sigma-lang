@@ -80,6 +80,12 @@ type var_decl = {
 
 type stmt_desc =
   | StmtVarDecl of var_decl
+  | StmtBlock of stmt list
+  | StmtIf of {
+      cond : expr;
+      then_branch : stmt;
+      else_branch : stmt option;
+    }
   | StmtPrint of {
       newline : bool;
       args : expr list;
@@ -175,7 +181,7 @@ let rec pp_expr fmt (e : expr) =
   | ExprIncDec (PostDec, name, _) ->
     Format.fprintf fmt "(%s--)" name
 
-let pp_stmt fmt (s : stmt) =
+let rec pp_stmt fmt (s : stmt) =
   match s.desc with
   | StmtVarDecl v ->
     let ty_s =
@@ -190,6 +196,14 @@ let pp_stmt fmt (s : stmt) =
        Format.fprintf fmt "var %s%s = %a;" v.name ty_s pp_expr init
      | None, _ ->
        Format.fprintf fmt "var %s%s;" v.name ty_s)
+  | StmtBlock stmts ->
+    Format.fprintf fmt "{ %a }"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
+      stmts
+  | StmtIf { cond; then_branch; else_branch = None } ->
+    Format.fprintf fmt "if (%a) %a" pp_expr cond pp_stmt then_branch
+  | StmtIf { cond; then_branch; else_branch = Some eb } ->
+    Format.fprintf fmt "if (%a) %a else %a" pp_expr cond pp_stmt then_branch pp_stmt eb
   | StmtPrint { newline; args } ->
     let fn_name = if newline then "println" else "print" in
     Format.fprintf fmt "%s(%a);" fn_name

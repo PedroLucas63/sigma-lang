@@ -48,24 +48,38 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
      | Some u -> u.used <- true
      | None -> ())
 
+let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
+  match s.desc with
+  | Typed_ast.TStmtVarDecl v ->
+    mark_expr_usage tbl v.init;
+    if not (String.starts_with ~prefix:"_" v.name) then begin
+      let u = { name = v.name; span = v.name_span; used = false } in
+      Hashtbl.replace tbl v.name u;
+      decl_order := u :: !decl_order
+    end
+  | Typed_ast.TStmtBlock stmts ->
+    let block_vars = ref [] in
+    List.iter
+      (fun (sub : Typed_ast.stmt) ->
+        match sub.desc with
+        | Typed_ast.TStmtVarDecl v -> block_vars := v.name :: !block_vars
+        | _ -> ())
+      stmts;
+    List.iter (lint_stmt tbl decl_order) stmts;
+    List.iter (Hashtbl.remove tbl) !block_vars
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    mark_expr_usage tbl cond;
+    lint_stmt tbl decl_order then_branch;
+    Option.iter (lint_stmt tbl decl_order) else_branch
+  | Typed_ast.TStmtPrint { args; _ } ->
+    List.iter (mark_expr_usage tbl) args
+  | Typed_ast.TStmtExpr e ->
+    mark_expr_usage tbl e
+
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in
   let decl_order = ref [] in
-  List.iter
-    (fun (s : Typed_ast.stmt) ->
-      match s.desc with
-      | Typed_ast.TStmtVarDecl v ->
-        mark_expr_usage tbl v.init;
-        if not (String.starts_with ~prefix:"_" v.name) then begin
-          let u = { name = v.name; span = v.name_span; used = false } in
-          Hashtbl.replace tbl v.name u;
-          decl_order := u :: !decl_order
-        end
-      | Typed_ast.TStmtPrint { args; _ } ->
-        List.iter (mark_expr_usage tbl) args
-      | Typed_ast.TStmtExpr e ->
-        mark_expr_usage tbl e)
-    prog;
+  List.iter (lint_stmt tbl decl_order) prog;
   List.rev !decl_order
   |> List.filter_map (fun u ->
        if not u.used then

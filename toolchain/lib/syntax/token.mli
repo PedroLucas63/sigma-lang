@@ -4,6 +4,8 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_IF
+  | KW_ELSE
   | KW_PRINT
   | KW_PRINTLN
   | KW_AND
@@ -53,6 +55,8 @@ type kind =
   | GT_EQ
   | LPAREN
   | RPAREN
+  | LBRACE
+  | RBRACE
   | COMMA
   | SEMI
   | EOF

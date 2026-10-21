@@ -82,6 +82,12 @@ type var_decl = {
 
 type stmt_desc =
   | StmtVarDecl of var_decl
+  | StmtBlock of stmt list
+  | StmtIf of {
+      cond : expr;
+      then_branch : stmt;
+      else_branch : stmt option;
+    }
   | StmtPrint of {
       newline : bool;
       args : expr list;

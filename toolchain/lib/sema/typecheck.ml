@@ -382,12 +382,74 @@ let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   | Ty.String ->
     { Typed_ast.desc = Typed_ast.TExprString Ty.default_string_value; ty = Ty.String; span }
 
-let check_stmt (env : env) (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) result =
+let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
+    : (Typed_ast.stmt, Diagnostic.t list) result =
   match s.desc with
   | Ast.StmtExpr e ->
     (match check_expr env e with
      | Ok te -> Ok { Typed_ast.desc = Typed_ast.TStmtExpr te; span = s.span }
      | Error err -> Error [ err ])
+  | Ast.StmtBlock stmts ->
+    let block_vars = ref [] in
+    let tstmts = ref [] in
+    let errs = ref [] in
+    List.iter
+      (fun sub ->
+        match check_stmt env block_vars sub with
+        | Ok ts -> tstmts := ts :: !tstmts
+        | Error sub_errs -> errs := List.rev_append sub_errs !errs)
+      stmts;
+    List.iter (Hashtbl.remove env) !block_vars;
+    (match List.rev !errs with
+     | [] -> Ok { Typed_ast.desc = Typed_ast.TStmtBlock (List.rev !tstmts); span = s.span }
+     | errors -> Error errors)
+  | Ast.StmtIf { cond; then_branch; else_branch } ->
+    let errs = ref [] in
+    let tcond_opt =
+      match check_expr env cond with
+      | Error err ->
+        errs := err :: !errs;
+        None
+      | Ok tc ->
+        if tc.ty <> Ty.Bool then begin
+          errs :=
+            Diagnostic.error
+              ~hint:"the condition of an 'if' statement must evaluate to 'bool' (e.g. 'if (x == 10)')"
+              ~code:"E0104"
+              ~span:tc.span
+              (Printf.sprintf "type mismatch in 'if' condition: expected 'bool', found '%s'"
+                 (Ty.to_string tc.ty))
+            :: !errs;
+          None
+        end else
+          Some tc
+    in
+    let tthen_opt =
+      match check_stmt env scope_vars then_branch with
+      | Ok ts -> Some ts
+      | Error sub_errs ->
+        errs := List.rev_append sub_errs !errs;
+        None
+    in
+    let telse_opt =
+      match else_branch with
+      | None -> Some None
+      | Some eb ->
+        (match check_stmt env scope_vars eb with
+         | Ok teb -> Some (Some teb)
+         | Error sub_errs ->
+           errs := List.rev_append sub_errs !errs;
+           None)
+    in
+    (match List.rev !errs, tcond_opt, tthen_opt, telse_opt with
+     | [], Some tc, Some tthen, Some telse ->
+       Ok
+         {
+           Typed_ast.desc =
+             Typed_ast.TStmtIf { cond = tc; then_branch = tthen; else_branch = telse };
+           span = s.span;
+         }
+     | errors, _, _, _ -> Error errors)
   | Ast.StmtPrint { newline; args } ->
     let targs = ref [] in
     let errs = ref [] in
@@ -470,6 +532,7 @@ let check_stmt (env : env) (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) 
               (Ty.Int, default_expr_for_type Ty.Int v.name_span, true)
           in
           Hashtbl.replace env v.name { ty = final_ty; decl_span = v.name_span };
+          scope_vars := v.name :: !scope_vars;
           let tdecl =
             {
               Typed_ast.name = v.name;
@@ -483,11 +546,12 @@ let check_stmt (env : env) (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) 
 
 let check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) result =
   let env : env = Hashtbl.create 16 in
+  let root_scope = ref [] in
   let tstmts = ref [] in
   let all_errors = ref [] in
   List.iter
     (fun stmt ->
-      match check_stmt env stmt with
+      match check_stmt env root_scope stmt with
       | Ok ts -> tstmts := ts :: !tstmts
       | Error errs -> all_errors := List.rev_append errs !all_errors)
     prog;
