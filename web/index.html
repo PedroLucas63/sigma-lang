@@ -190,13 +190,14 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="assign_incdec">1. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
-            <option value="arithmetic">2. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">3. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">4. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">5. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">6. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="typeerror">7. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="if_else_blocks">1. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
+            <option value="assign_incdec">2. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">3. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">4. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">5. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">6. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">7. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="typeerror">8. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -218,6 +219,7 @@
       <a href="../docs/spec/grammar-and-types.md">📐 Especificação Formal &amp; EBNF (docs/spec/)</a>
       <a href="../docs/guide/01-variables-and-types.md">📘 Guia 01: Variáveis &amp; Tipos (docs/guide/)</a>
       <a href="../docs/guide/02-operators-and-expressions.md">📙 Guia 02: Operadores &amp; Expressões (docs/guide/)</a>
+      <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais (if/else) &amp; Blocos (docs/guide/)</a>
       <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
       <a href="../operations.csv">📊 Matriz Completa (operations.csv)</a>
     </div>
@@ -324,6 +326,16 @@ var c : int;             # zero-init -> 0</pre>
           <li><strong>Pré e Pós Incremento/Decremento (<code>++x</code>, <code>--x</code>, <code>x++</code>, <code>x--</code>):</strong> Suportados em <code>int</code>, <code>float</code>, <code>double</code>, <code>decimal</code> e <code>char</code>. Pré-fixados retornam o novo valor; pós-fixados retornam o valor antigo.</li>
         </ul>
       </article>
+
+      <article class="card">
+        <h3>9. Condicionais (<code>if</code> / <code>else</code>) e Blocos de Escopo Léxico (<code>{ ... }</code>)</h3>
+        <p>Estruturas de decisão <code>if (&lt;expr-bool&gt;) &lt;stmt&gt; [else &lt;stmt&gt;]</code> e blocos de escopo léxico <code>{ &lt;stmt&gt;* }</code>:</p>
+        <ul>
+          <li><strong>Condição Booleana Estrita:</strong> A expressão dentro de <code>if (...)</code> exige parênteses obrigatórios (<code>E0002</code>) e tipo estritamente <code>bool</code> (<code>E0104</code>; sem truthiness implícito de inteiros ou strings).</li>
+          <li><strong>Com ou Sem Chaves:</strong> As chaves <code>{ ... }</code> são opcionais para comandos únicos (<code>if (true) x = 10; else x = 11;</code>) e cadeias <code>else if</code> funcionam naturalmente. Declarações <code>var</code> diretamente em ramos sem chaves são proibidas (<code>E0002</code>).</li>
+          <li><strong>Escopos Léxicos (<code>{ ... }</code>):</strong> Podem ser abertos em qualquer ponto do código. Variáveis declaradas dentro de <code>{ ... }</code> deixam de existir ao fechar <code>}</code> (<code>E0102</code> se acessadas fora) e seu nome pode ser reutilizado em blocos irmãos subsequentes. <em>Shadowing</em> de variáveis ativas de escopos externos é proibido (<code>E0103</code>).</li>
+        </ul>
+      </article>
     </div>
 
     <!-- TABELA DE PRECEDÊNCIA -->
@@ -375,6 +387,37 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      if_else_blocks: {
+        code: `# Condicionais (if / else / else if) e Blocos de Escopo Léxico ({ ... })
+var x := 12;
+var y := 0;
+
+if (true) x = 10; else x = 11;
+println("Após if sem chaves -> x =", x);
+
+x = 12;
+if (x == 12) {
+  x = 10;
+  y = 11;
+} else if (x == 20) x = 5;
+else {
+  x = 8;
+  y = 9;
+}
+println("Após cadeia if/else -> x =", x, "| y =", y);
+
+# Bloco autônomo com escopo léxico local
+{
+  var temp := x + y;
+  println("Dentro do bloco -> temp =", temp);
+}
+# Fora das chaves, 'temp' não existe mais e pode ser declarada novamente:
+{
+  var temp := "escopo irmão independente";
+  println("Segundo bloco ->", temp);
+}`,
+        out: `Após if sem chaves -> x = 10\nApós cadeia if/else -> x = 10 | y = 11\nDentro do bloco -> temp = 21\nSegundo bloco -> escopo irmão independente`
+      },
       assign_incdec: {
         code: `# Atribuições simples/compostas, ++ / -- e print / println
 var a : int;
@@ -492,7 +535,7 @@ var invalido := 0.1f + 0.2m;`,
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('assign_incdec');
+    loadExample('if_else_blocks');
   </script>
 </body>
 </html>

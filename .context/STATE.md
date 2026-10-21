@@ -5,7 +5,7 @@
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
 - **Milestone:** `M1 — Operações Aritméticas, Relacionais, Lógicas, Bitwise e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (`feature/if-else-and-blocks` finalizada e mesclada).
+- **Git Flow:** Branch base `develop` (`feature/if-else-and-blocks` e `feature/ecosystem-sync-if-blocks` finalizadas e mescladas).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -22,10 +22,10 @@
 - [x] Estruturas condicionais `if (<expr-bool>) <stmt> [else <stmt>]` (com ou sem chaves, incluindo `else if`) e blocos de escopo léxico `{ <stmt>* }` em qualquer ponto do código (sem *shadowing* `E0103` e com descarte de variáveis locais ao sair das chaves `E0102`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `check`, `lint`, `debug`, `pkg init`.
-- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `if`/`else`, blocos de escopo léxico `{ ... }`, atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Sincronizar `editors/vscode/`, `docs/` e `web/` com `if`/`else` e blocos `{ ... }`, ou implementar laços de repetição (`while`, `for`), leitura de entrada (`input`) ou constantes/imutabilidade.
+- [ ] Implementar laços de repetição (`while`, `for`), funções definidas pelo usuário, leitura de entrada (`input`) ou constantes/imutabilidade.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2 e identidade **Sigma (`.sgm`)**.
@@ -34,4 +34,4 @@
 - **2026-10-20:** Implementação dos operadores lógicos e bitwise `not`, `and`, `xor`, `or` (para `bool` e `int`) e deslocamento de bits `<<` e `>>` (aritmético para `int`) (`feature/logical-operators`, `feature/bitwise-and-xor`, `ADR-016`).
 - **2026-10-20:** Implementação dos operadores relacionais (`==`, `!=`, `<`, `>`, `<=`, `>=`), comparações encadeadas de 3 operandos (`a < x <= b`) e avaliação em curto-circuito para `and`, `or` e cadeias relacionais (`feature/relational-operators`, `ADR-017`).
 - **2026-10-20:** Atualização da skill `ecosystem-sync` para exigir documentação integrada em `web/index.html` com links para `docs/`, e sincronização completa de `editors/vscode/`, `docs/` e `web/` com todas as funcionalidades do Milestone M1 (`feature/ecosystem-sync-m1`).
-- **2026-10-21:** Implementação de atribuições (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos de escopo léxico `{ ... }` (`ADR-018` a `ADR-020`).
+- **2026-10-21:** Implementação de atribuições (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos de escopo léxico `{ ... }` (`ADR-018` a `ADR-020`), com sincronização completa do ecossistema (`feature/ecosystem-sync-if-blocks`).

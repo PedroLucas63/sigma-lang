@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `print`, `println`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `if`, `else`, `print`, `println`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -20,7 +20,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
   - `decimal` (128 bits Base-10 Exato até 38 dígitos): literais com sufixo `m` (`10m`, `10.9m`, `123_456.789_012_345_678_901_234_567_89m`).
 - **Literais de Caractere (`char`):** Aspas simples `'...'`, contendo **1 code point Unicode UTF-8** (`'A'`, `'ç'`, `'Σ'`, `'🚀'`) ou escape (`\n`, `\r`, `\t`, `\\`, `\'`, `\"`, `\0`, `\$`).
 - **Literais de Texto (`string` e Interpolação):** Aspas duplas `"..."`, suportando UTF-8, escapes e interpolação de expressões arbitrárias `${expr}`.
-- **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `,`, `;`
+- **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `{`, `}`, `,`, `;`
 
 ---
 
@@ -30,8 +30,16 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 program       ::= stmt* EOF ;
 
 stmt          ::= var_decl ";"
+                | non_decl_stmt ;
+
+non_decl_stmt ::= if_stmt
+                | block_stmt
                 | print_stmt ";"
                 | expr_stmt ";" ;
+
+if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
+
+block_stmt    ::= "{" stmt* "}" ;
 
 var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
 
@@ -113,6 +121,10 @@ primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP
    - `print(e1, e2, ...)` escreve 0 ou mais argumentos separados por `' '` sem quebra de linha ao final.
    - `println(e1, e2, ...)` escreve 0 ou mais argumentos separados por `' '` seguidos de `\n`.
    - Uma instrução `<expr>;` avalia a expressão (executando efeitos colaterais como `x += 1;` ou `x++;`) e descarta o valor resultante sem imprimir nada.
+7. **Condicionais (`if`/`else`) e Blocos de Escopo Léxico (`{ ... }`):**
+   - `if (<expr-bool>) <stmt> [else <stmt>]`: exige condição do tipo `bool` (`E0104`) entre parênteses `(...)` (`E0002`).
+   - Chaves `{ ... }` não são obrigatórias para comandos únicos (exceto declarações `var`, que exigem um bloco `{ var x := ...; }` com `E0002`).
+   - `{ <stmt>* }` pode ser usado em qualquer ponto do programa, abrindo um novo escopo léxico sem permitir *shadowing* de variáveis já ativas no escopo externo (`E0103`) e descartando todas as variáveis locais ao fechar `}` (`E0102` se acessadas fora do bloco).
 
 ---
 

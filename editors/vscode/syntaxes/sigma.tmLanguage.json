@@ -30,6 +30,10 @@
     "keywords": {
       "patterns": [
         {
+          "name": "keyword.control.conditional.sigma",
+          "match": "\\b(if|else)\\b"
+        },
+        {
           "name": "keyword.declaration.var.sigma",
           "match": "\\b(var)\\b"
         },
@@ -184,6 +188,10 @@
         {
           "name": "punctuation.parens.sigma",
           "match": "[()]"
+        },
+        {
+          "name": "punctuation.braces.sigma",
+          "match": "[{}]"
         },
         {
           "name": "punctuation.terminator.statement.sigma",

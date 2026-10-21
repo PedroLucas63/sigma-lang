@@ -47,5 +47,25 @@
       "print(${1:expr});"
     ],
     "description": "Print one or more values separated by spaces without a trailing newline"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if (${1:cond}) {",
+      "  $0",
+      "}"
+    ],
+    "description": "Conditional if block"
+  },
+  "If / Else Statement": {
+    "prefix": "ife",
+    "body": [
+      "if (${1:cond}) {",
+      "  $2",
+      "} else {",
+      "  $0",
+      "}"
+    ],
+    "description": "Conditional if / else block"
   }
 }
