@@ -36,6 +36,17 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     mark_expr_usage tbl e1;
     mark_expr_usage tbl e2;
     mark_expr_usage tbl e3
+  | Typed_ast.TExprAssign (name, op, rhs) ->
+    if op <> Sigma_syntax.Ast.AssignEq then begin
+      match Hashtbl.find_opt tbl name with
+      | Some u -> u.used <- true
+      | None -> ()
+    end;
+    mark_expr_usage tbl rhs
+  | Typed_ast.TExprIncDec (_, name) ->
+    (match Hashtbl.find_opt tbl name with
+     | Some u -> u.used <- true
+     | None -> ())
 
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in

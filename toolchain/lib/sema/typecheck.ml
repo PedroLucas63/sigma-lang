@@ -75,6 +75,22 @@ let rec is_zero_literal (e : Typed_ast.expr) : bool =
   | Typed_ast.TExprUnary (_, sub) -> is_zero_literal sub
   | _ -> false
 
+let binop_of_assign_op (op : Ast.assign_op) : Ast.binop option =
+  match op with
+  | Ast.AssignEq -> None
+  | Ast.AssignAdd -> Some Ast.BinAdd
+  | Ast.AssignSub -> Some Ast.BinSub
+  | Ast.AssignMul -> Some Ast.BinMul
+  | Ast.AssignDiv -> Some Ast.BinDiv
+  | Ast.AssignIntDiv -> Some Ast.BinIntDiv
+  | Ast.AssignMod -> Some Ast.BinMod
+  | Ast.AssignPow -> Some Ast.BinPow
+  | Ast.AssignAnd -> Some Ast.BinAnd
+  | Ast.AssignOr -> Some Ast.BinOr
+  | Ast.AssignXor -> Some Ast.BinXor
+  | Ast.AssignShl -> Some Ast.BinShl
+  | Ast.AssignShr -> Some Ast.BinShr
+
 let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match e.desc with
   | Ast.ExprInt n ->
@@ -217,6 +233,126 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                  ty = Ty.Bool;
                  span = e.span;
                })))
+  | Ast.ExprAssign (name, name_span, op, rhs) ->
+    (match Hashtbl.find_opt env name with
+     | None ->
+       Error
+         (Diagnostic.error
+            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+            ~code:"E0102"
+            ~span:name_span
+            (Printf.sprintf "use of undeclared variable '%s'" name))
+     | Some info ->
+       (match check_expr env rhs with
+        | Error err -> Error err
+        | Ok trhs ->
+          (match binop_of_assign_op op with
+           | None ->
+             if Ty.equal info.ty trhs.ty then
+               Ok
+                 {
+                   Typed_ast.desc = Typed_ast.TExprAssign (name, op, trhs);
+                   ty = info.ty;
+                   span = e.span;
+                 }
+             else
+               Error
+                 (Diagnostic.error
+                    ~hint:
+                      (Printf.sprintf
+                         "Sigma is strongly typed: cannot assign value of type '%s' to variable '%s' of type '%s'"
+                         (Ty.to_string trhs.ty)
+                         name
+                         (Ty.to_string info.ty))
+                    ~code:"E0104"
+                    ~span:e.span
+                    (Printf.sprintf "type mismatch in assignment: variable '%s' has type '%s', found '%s'"
+                       name
+                       (Ty.to_string info.ty)
+                       (Ty.to_string trhs.ty)))
+           | Some binop ->
+             let op_str = Ast.assign_op_to_string op in
+             (match check_binary_type binop info.ty trhs.ty with
+              | None ->
+                Error
+                  (Diagnostic.error
+                     ~hint:
+                       (Printf.sprintf "compound operator '%s' is not defined for (%s, %s)"
+                          op_str
+                          (Ty.to_string info.ty)
+                          (Ty.to_string trhs.ty))
+                     ~code:"E0104"
+                     ~span:e.span
+                     (Printf.sprintf "invalid compound assignment: '%s' between '%s' and '%s'"
+                        op_str
+                        (Ty.to_string info.ty)
+                        (Ty.to_string trhs.ty)))
+              | Some res_ty ->
+                if not (Ty.equal res_ty info.ty) then
+                  let hint =
+                    if op = Ast.AssignDiv && info.ty = Ty.Int then
+                      "in Sigma, '/' returns 'float'; use '//=' for integer division assignment on 'int'"
+                    else
+                      Printf.sprintf
+                        "operation produces '%s', which cannot be stored back into variable '%s' of type '%s'"
+                        (Ty.to_string res_ty)
+                        name
+                        (Ty.to_string info.ty)
+                  in
+                  Error
+                    (Diagnostic.error
+                       ~hint
+                       ~code:"E0104"
+                       ~span:e.span
+                       (Printf.sprintf
+                          "type mismatch in compound assignment '%s': result type '%s' does not match variable '%s' of type '%s'"
+                          op_str
+                          (Ty.to_string res_ty)
+                          name
+                          (Ty.to_string info.ty)))
+                else if
+                  (binop = Ast.BinDiv || binop = Ast.BinIntDiv || binop = Ast.BinMod)
+                  && is_zero_literal trhs
+                then
+                  Error
+                    (Diagnostic.error
+                       ~code:"E0105"
+                       ~span:e.span
+                       (Printf.sprintf "division or modulo by zero in '%s' operation" op_str))
+                else
+                  Ok
+                    {
+                      Typed_ast.desc = Typed_ast.TExprAssign (name, op, trhs);
+                      ty = info.ty;
+                      span = e.span;
+                    }))))
+  | Ast.ExprIncDec (inc_op, name, name_span) ->
+    (match Hashtbl.find_opt env name with
+     | None ->
+       Error
+         (Diagnostic.error
+            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+            ~code:"E0102"
+            ~span:name_span
+            (Printf.sprintf "use of undeclared variable '%s'" name))
+     | Some info ->
+       let op_str = Ast.incdec_op_to_string inc_op in
+       (match info.ty with
+        | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
+          Ok
+            {
+              Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, name);
+              ty = info.ty;
+              span = e.span;
+            }
+        | Ty.Bool | Ty.String ->
+          Error
+            (Diagnostic.error
+               ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
+               ~code:"E0104"
+               ~span:e.span
+               (Printf.sprintf "invalid operator '%s' for variable '%s' of type '%s'"
+                  op_str name (Ty.to_string info.ty)))))
 
 let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   match Ty.of_string ty_name with

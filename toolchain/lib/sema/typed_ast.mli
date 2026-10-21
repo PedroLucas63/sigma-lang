@@ -16,6 +16,8 @@ type expr_desc =
   | TExprUnary of Ast.unop * expr
   | TExprBinary of Ast.binop * expr * expr
   | TExprChainCmp of expr * Ast.binop * expr * Ast.binop * expr
+  | TExprAssign of string * Ast.assign_op * expr
+  | TExprIncDec of Ast.incdec_op * string
 
 and interp_part =
   | TInterpLit of string
