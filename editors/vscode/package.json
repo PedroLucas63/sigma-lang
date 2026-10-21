@@ -29,6 +29,12 @@
         "scopeName": "source.sigma",
         "path": "./syntaxes/sigma.tmLanguage.json"
       }
+    ],
+    "snippets": [
+      {
+        "language": "sigma",
+        "path": "./snippets/sigma.code-snippets"
+      }
     ]
   }
 }

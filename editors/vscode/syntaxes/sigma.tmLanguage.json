@@ -162,6 +162,10 @@
           "match": ":"
         },
         {
+          "name": "punctuation.parens.sigma",
+          "match": "[()]"
+        },
+        {
           "name": "punctuation.terminator.statement.sigma",
           "match": ";"
         }

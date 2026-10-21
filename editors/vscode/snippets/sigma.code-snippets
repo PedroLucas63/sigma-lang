@@ -1,0 +1,37 @@
+{
+  "Variable Declaration (Explicit)": {
+    "prefix": "var",
+    "body": [
+      "var ${1:name}: ${2|int,float,double,decimal,bool,char,string|} = ${3:value};"
+    ],
+    "description": "Declare a Sigma variable with explicit type annotation"
+  },
+  "Variable Declaration (Inferred)": {
+    "prefix": "vari",
+    "body": [
+      "var ${1:name} := ${2:value};"
+    ],
+    "description": "Declare a Sigma variable with type inference (:=)"
+  },
+  "Variable Declaration (Zero-Init)": {
+    "prefix": "varz",
+    "body": [
+      "var ${1:name}: ${2|int,float,double,decimal,bool,char,string|};"
+    ],
+    "description": "Declare a zero-initialized Sigma variable"
+  },
+  "Chained Relational Comparison": {
+    "prefix": "between",
+    "body": [
+      "${1:lower} <= ${2:x} <= ${3:upper}"
+    ],
+    "description": "3-operand chained relational comparison with short-circuit evaluation"
+  },
+  "Interpolated String": {
+    "prefix": "strf",
+    "body": [
+      "\"${1:prefix}: \\${${2:expr}}\""
+    ],
+    "description": "UTF-8 string with embedded expression interpolation"
+  }
+}
