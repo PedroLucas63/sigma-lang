@@ -25,6 +25,27 @@ type binop =
   | BinXor
   | BinOr
 
+type assign_op =
+  | AssignEq
+  | AssignAdd
+  | AssignSub
+  | AssignMul
+  | AssignDiv
+  | AssignIntDiv
+  | AssignMod
+  | AssignPow
+  | AssignAnd
+  | AssignOr
+  | AssignXor
+  | AssignShl
+  | AssignShr
+
+type incdec_op =
+  | PreInc
+  | PreDec
+  | PostInc
+  | PostDec
+
 type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
@@ -38,6 +59,8 @@ type expr_desc =
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
+  | ExprAssign of string * Span.t * assign_op * expr
+  | ExprIncDec of incdec_op * string * Span.t
 
 and interp_part =
   | InterpLit of string
@@ -91,6 +114,25 @@ let binop_to_string = function
   | BinXor -> "xor"
   | BinOr -> "or"
 
+let assign_op_to_string = function
+  | AssignEq -> "="
+  | AssignAdd -> "+="
+  | AssignSub -> "-="
+  | AssignMul -> "*="
+  | AssignDiv -> "/="
+  | AssignIntDiv -> "//="
+  | AssignMod -> "%="
+  | AssignPow -> "^="
+  | AssignAnd -> "and="
+  | AssignOr -> "or="
+  | AssignXor -> "xor="
+  | AssignShl -> "<<="
+  | AssignShr -> ">>="
+
+let incdec_op_to_string = function
+  | PreInc | PostInc -> "++"
+  | PreDec | PostDec -> "--"
+
 let rec pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
@@ -118,6 +160,16 @@ let rec pp_expr fmt (e : expr) =
       pp_expr e1 (binop_to_string op1)
       pp_expr e2 (binop_to_string op2)
       pp_expr e3
+  | ExprAssign (name, _, op, rhs) ->
+    Format.fprintf fmt "(%s %s %a)" name (assign_op_to_string op) pp_expr rhs
+  | ExprIncDec (PreInc, name, _) ->
+    Format.fprintf fmt "(++%s)" name
+  | ExprIncDec (PreDec, name, _) ->
+    Format.fprintf fmt "(--%s)" name
+  | ExprIncDec (PostInc, name, _) ->
+    Format.fprintf fmt "(%s++)" name
+  | ExprIncDec (PostDec, name, _) ->
+    Format.fprintf fmt "(%s--)" name
 
 let pp_stmt fmt (s : stmt) =
   match s.desc with

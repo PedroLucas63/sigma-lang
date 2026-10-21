@@ -167,20 +167,34 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           Buffer.add_char buf (peek st);
           advance st
         done;
-        let end_pos = cur_pos st in
         let word = Buffer.contents buf in
         let kind =
           match word with
           | "var" -> Token.KW_VAR
-          | "and" -> Token.KW_AND
-          | "or" -> Token.KW_OR
-          | "xor" -> Token.KW_XOR
+          | "and" ->
+            if peek st = '=' && peek_next st <> '=' then begin
+              advance st;
+              Token.KW_AND_EQ
+            end else
+              Token.KW_AND
+          | "or" ->
+            if peek st = '=' && peek_next st <> '=' then begin
+              advance st;
+              Token.KW_OR_EQ
+            end else
+              Token.KW_OR
+          | "xor" ->
+            if peek st = '=' && peek_next st <> '=' then begin
+              advance st;
+              Token.KW_XOR_EQ
+            end else
+              Token.KW_XOR
           | "not" -> Token.KW_NOT
           | "true" -> Token.BOOL true
           | "false" -> Token.BOOL false
           | _ -> Token.IDENT word
         in
-        emit kind start_pos end_pos
+        emit kind start_pos (cur_pos st)
       end else if is_digit c then begin
         let raw_buf = Buffer.create 16 in
         let clean_buf = Buffer.create 16 in
@@ -499,31 +513,68 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           emit Token.BANG_EQ start_pos (cur_pos st)
         | '+' ->
           advance st;
-          emit Token.PLUS start_pos (cur_pos st)
+          if peek st = '+' then begin
+            advance st;
+            emit Token.PLUS_PLUS start_pos (cur_pos st)
+          end else if peek st = '=' then begin
+            advance st;
+            emit Token.PLUS_EQ start_pos (cur_pos st)
+          end else
+            emit Token.PLUS start_pos (cur_pos st)
         | '-' ->
           advance st;
-          emit Token.MINUS start_pos (cur_pos st)
+          if peek st = '-' then begin
+            advance st;
+            emit Token.MINUS_MINUS start_pos (cur_pos st)
+          end else if peek st = '=' then begin
+            advance st;
+            emit Token.MINUS_EQ start_pos (cur_pos st)
+          end else
+            emit Token.MINUS start_pos (cur_pos st)
         | '*' ->
           advance st;
-          emit Token.STAR start_pos (cur_pos st)
+          if peek st = '=' then begin
+            advance st;
+            emit Token.STAR_EQ start_pos (cur_pos st)
+          end else
+            emit Token.STAR start_pos (cur_pos st)
         | '/' ->
           advance st;
           if peek st = '/' then begin
             advance st;
-            emit Token.SLASH_SLASH start_pos (cur_pos st)
+            if peek st = '=' then begin
+              advance st;
+              emit Token.SLASH_SLASH_EQ start_pos (cur_pos st)
+            end else
+              emit Token.SLASH_SLASH start_pos (cur_pos st)
+          end else if peek st = '=' then begin
+            advance st;
+            emit Token.SLASH_EQ start_pos (cur_pos st)
           end else
             emit Token.SLASH start_pos (cur_pos st)
         | '^' ->
           advance st;
-          emit Token.CARET start_pos (cur_pos st)
+          if peek st = '=' then begin
+            advance st;
+            emit Token.CARET_EQ start_pos (cur_pos st)
+          end else
+            emit Token.CARET start_pos (cur_pos st)
         | '%' ->
           advance st;
-          emit Token.PERCENT start_pos (cur_pos st)
+          if peek st = '=' then begin
+            advance st;
+            emit Token.PERCENT_EQ start_pos (cur_pos st)
+          end else
+            emit Token.PERCENT start_pos (cur_pos st)
         | '<' ->
           advance st;
           if peek st = '<' then begin
             advance st;
-            emit Token.LSHIFT start_pos (cur_pos st)
+            if peek st = '=' then begin
+              advance st;
+              emit Token.LSHIFT_EQ start_pos (cur_pos st)
+            end else
+              emit Token.LSHIFT start_pos (cur_pos st)
           end else if peek st = '=' then begin
             advance st;
             emit Token.LT_EQ start_pos (cur_pos st)
@@ -533,7 +584,11 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           advance st;
           if peek st = '>' then begin
             advance st;
-            emit Token.RSHIFT start_pos (cur_pos st)
+            if peek st = '=' then begin
+              advance st;
+              emit Token.RSHIFT_EQ start_pos (cur_pos st)
+            end else
+              emit Token.RSHIFT start_pos (cur_pos st)
           end else if peek st = '=' then begin
             advance st;
             emit Token.GT_EQ start_pos (cur_pos st)

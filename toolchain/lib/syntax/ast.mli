@@ -27,6 +27,27 @@ type binop =
   | BinXor
   | BinOr
 
+type assign_op =
+  | AssignEq
+  | AssignAdd
+  | AssignSub
+  | AssignMul
+  | AssignDiv
+  | AssignIntDiv
+  | AssignMod
+  | AssignPow
+  | AssignAnd
+  | AssignOr
+  | AssignXor
+  | AssignShl
+  | AssignShr
+
+type incdec_op =
+  | PreInc
+  | PreDec
+  | PostInc
+  | PostDec
+
 type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
@@ -40,6 +61,8 @@ type expr_desc =
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
+  | ExprAssign of string * Span.t * assign_op * expr
+  | ExprIncDec of incdec_op * string * Span.t
 
 and interp_part =
   | InterpLit of string
@@ -70,4 +93,6 @@ type program = stmt list
 
 val unop_to_string : unop -> string
 val binop_to_string : binop -> string
+val assign_op_to_string : assign_op -> string
+val incdec_op_to_string : incdec_op -> string
 val pp_program : Format.formatter -> program -> unit

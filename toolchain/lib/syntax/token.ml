@@ -18,6 +18,20 @@ type kind =
   | COLON
   | EQUAL
   | COLON_EQUAL
+  | PLUS_EQ
+  | MINUS_EQ
+  | STAR_EQ
+  | SLASH_EQ
+  | SLASH_SLASH_EQ
+  | PERCENT_EQ
+  | CARET_EQ
+  | KW_AND_EQ
+  | KW_OR_EQ
+  | KW_XOR_EQ
+  | LSHIFT_EQ
+  | RSHIFT_EQ
+  | PLUS_PLUS
+  | MINUS_MINUS
   | PLUS
   | MINUS
   | STAR
@@ -65,6 +79,20 @@ let kind_to_string = function
   | COLON -> "':'"
   | EQUAL -> "'='"
   | COLON_EQUAL -> "':='"
+  | PLUS_EQ -> "'+='"
+  | MINUS_EQ -> "'-='"
+  | STAR_EQ -> "'*='"
+  | SLASH_EQ -> "'/='"
+  | SLASH_SLASH_EQ -> "'//='"
+  | PERCENT_EQ -> "'%='"
+  | CARET_EQ -> "'^='"
+  | KW_AND_EQ -> "'and='"
+  | KW_OR_EQ -> "'or='"
+  | KW_XOR_EQ -> "'xor='"
+  | LSHIFT_EQ -> "'<<='"
+  | RSHIFT_EQ -> "'>>='"
+  | PLUS_PLUS -> "'++'"
+  | MINUS_MINUS -> "'--'"
   | PLUS -> "'+'"
   | MINUS -> "'-'"
   | STAR -> "'*'"

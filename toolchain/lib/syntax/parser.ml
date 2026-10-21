@@ -24,8 +24,50 @@ let sync_to_semi st =
   done;
   if (cur st).kind = Token.SEMI then bump st
 
+let match_assign_op (k : Token.kind) : Ast.assign_op option =
+  match k with
+  | Token.EQUAL -> Some Ast.AssignEq
+  | Token.PLUS_EQ -> Some Ast.AssignAdd
+  | Token.MINUS_EQ -> Some Ast.AssignSub
+  | Token.STAR_EQ -> Some Ast.AssignMul
+  | Token.SLASH_EQ -> Some Ast.AssignDiv
+  | Token.SLASH_SLASH_EQ -> Some Ast.AssignIntDiv
+  | Token.PERCENT_EQ -> Some Ast.AssignMod
+  | Token.CARET_EQ -> Some Ast.AssignPow
+  | Token.KW_AND_EQ -> Some Ast.AssignAnd
+  | Token.KW_OR_EQ -> Some Ast.AssignOr
+  | Token.KW_XOR_EQ -> Some Ast.AssignXor
+  | Token.LSHIFT_EQ -> Some Ast.AssignShl
+  | Token.RSHIFT_EQ -> Some Ast.AssignShr
+  | _ -> None
+
 let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
-  parse_logical_or st
+  parse_assignment st
+
+and parse_assignment st : (Ast.expr, Diagnostic.t) result =
+  match parse_logical_or st with
+  | Error e -> Error e
+  | Ok lhs ->
+    (match match_assign_op (cur st).kind with
+     | None -> Ok lhs
+     | Some op ->
+       bump st;
+       (match parse_assignment st with
+        | Error e -> Error e
+        | Ok rhs ->
+          (match lhs.desc with
+           | Ast.ExprIdent name ->
+             let span = Span.merge lhs.span rhs.span in
+             Ok { Ast.desc = Ast.ExprAssign (name, lhs.span, op, rhs); span }
+           | _ ->
+             let op_str = Ast.assign_op_to_string op in
+             Error
+               (Diagnostic.error
+                  ~hint:(Printf.sprintf "assign to a declared variable, e.g. 'x %s <expr>;'" op_str)
+                  ~code:"E0002"
+                  ~span:lhs.span
+                  (Printf.sprintf "invalid assignment target: left-hand side of '%s' must be a variable identifier"
+                     op_str)))))
 
 and parse_logical_or st : (Ast.expr, Diagnostic.t) result =
   match parse_logical_xor st with
@@ -227,10 +269,31 @@ and parse_unary st : (Ast.expr, Diagnostic.t) result =
      | Ok sub ->
        let span = Span.merge tok.span sub.span in
        Ok { Ast.desc = Ast.ExprUnary (Ast.UnNeg, sub); span })
+  | Token.PLUS_PLUS | Token.MINUS_MINUS ->
+    let inc_op =
+      if tok.kind = Token.PLUS_PLUS then Ast.PreInc else Ast.PreDec
+    in
+    let op_str = Ast.incdec_op_to_string inc_op in
+    bump st;
+    (match parse_unary st with
+     | Error e -> Error e
+     | Ok sub ->
+       (match sub.desc with
+        | Ast.ExprIdent name ->
+          let span = Span.merge tok.span sub.span in
+          Ok { Ast.desc = Ast.ExprIncDec (inc_op, name, sub.span); span }
+        | _ ->
+          Error
+            (Diagnostic.error
+               ~hint:(Printf.sprintf "apply '%s' directly to a variable identifier, e.g. '%sx'" op_str op_str)
+               ~code:"E0002"
+               ~span:sub.span
+               (Printf.sprintf "operand of prefix '%s' must be a variable identifier"
+                  op_str))))
   | _ -> parse_power st
 
 and parse_power st : (Ast.expr, Diagnostic.t) result =
-  match parse_primary st with
+  match parse_postfix st with
   | Error e -> Error e
   | Ok lhs ->
     let tok = cur st in
@@ -243,6 +306,35 @@ and parse_power st : (Ast.expr, Diagnostic.t) result =
           let span = Span.merge lhs.span rhs.span in
           Ok { Ast.desc = Ast.ExprBinary (Ast.BinPow, lhs, rhs); span })
      | _ -> Ok lhs)
+
+and parse_postfix st : (Ast.expr, Diagnostic.t) result =
+  match parse_primary st with
+  | Error e -> Error e
+  | Ok lhs ->
+    let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
+      let tok = cur st in
+      match tok.kind with
+      | Token.PLUS_PLUS | Token.MINUS_MINUS ->
+        let inc_op =
+          if tok.kind = Token.PLUS_PLUS then Ast.PostInc else Ast.PostDec
+        in
+        let op_str = Ast.incdec_op_to_string inc_op in
+        bump st;
+        (match acc.desc with
+         | Ast.ExprIdent name ->
+           let span = Span.merge acc.span tok.span in
+           loop { Ast.desc = Ast.ExprIncDec (inc_op, name, acc.span); span }
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:(Printf.sprintf "apply '%s' directly to a variable identifier, e.g. 'x%s'" op_str op_str)
+                ~code:"E0002"
+                ~span:acc.span
+                (Printf.sprintf "operand of postfix '%s' must be a variable identifier"
+                   op_str)))
+      | _ -> Ok acc
+    in
+    loop lhs
 
 and parse_primary st : (Ast.expr, Diagnostic.t) result =
   let tok = cur st in
