@@ -119,6 +119,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_POP
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
@@ -126,6 +127,8 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_SPACE
+  | OP_PRINT_NEWLINE
   | OP_HALT
 
 type instr = {
@@ -254,6 +257,7 @@ let pp_opcode fmt = function
   | OP_SET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_SET_GLOBAL_BOOL %s" name
   | OP_SET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_SET_GLOBAL_CHAR %s" name
   | OP_SET_GLOBAL_STR name -> Format.fprintf fmt "OP_SET_GLOBAL_STR %s" name
+  | OP_POP -> Format.fprintf fmt "OP_POP"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
   | OP_PRINT_F32 -> Format.fprintf fmt "OP_PRINT_F32"
   | OP_PRINT_F64 -> Format.fprintf fmt "OP_PRINT_F64"
@@ -261,6 +265,8 @@ let pp_opcode fmt = function
   | OP_PRINT_BOOL -> Format.fprintf fmt "OP_PRINT_BOOL"
   | OP_PRINT_CHAR -> Format.fprintf fmt "OP_PRINT_CHAR"
   | OP_PRINT_STR -> Format.fprintf fmt "OP_PRINT_STR"
+  | OP_PRINT_SPACE -> Format.fprintf fmt "OP_PRINT_SPACE"
+  | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
   | OP_HALT -> Format.fprintf fmt "OP_HALT"
 
 let pp_program fmt prog =

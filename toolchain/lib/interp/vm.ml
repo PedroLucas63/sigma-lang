@@ -708,11 +708,17 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          st.stack <- v :: st.stack;
          Ok ()
        | None -> Error (Printf.sprintf "VM undefined global '%s'" name))
+    | Ir.OP_POP ->
+      (match st.stack with
+       | _ :: rest ->
+         st.stack <- rest;
+         Ok ()
+       | [] -> Error "VM stack underflow on OP_POP")
     | Ir.OP_PRINT_I64 ->
       (match st.stack with
        | VInt n :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Printf.sprintf "%Ld\n" n);
+         Buffer.add_string out_buf (Printf.sprintf "%Ld" n);
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_I64"
        | [] -> Error "VM stack underflow on OP_PRINT_I64")
@@ -720,7 +726,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VFloat f :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Printf.sprintf "%.6g\n" f);
+         Buffer.add_string out_buf (Printf.sprintf "%.6g" f);
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_F32"
        | [] -> Error "VM stack underflow on OP_PRINT_F32")
@@ -728,7 +734,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VDouble d :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Printf.sprintf "%.15g\n" d);
+         Buffer.add_string out_buf (Printf.sprintf "%.15g" d);
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_F64"
        | [] -> Error "VM stack underflow on OP_PRINT_F64")
@@ -736,7 +742,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VDecimal m :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (Decimal.to_string m ^ "\n");
+         Buffer.add_string out_buf (Decimal.to_string m);
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_DEC"
        | [] -> Error "VM stack underflow on OP_PRINT_DEC")
@@ -744,7 +750,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VBool b :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (if b then "true\n" else "false\n");
+         Buffer.add_string out_buf (if b then "true" else "false");
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_BOOL"
        | [] -> Error "VM stack underflow on OP_PRINT_BOOL")
@@ -752,7 +758,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VChar c :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (c ^ "\n");
+         Buffer.add_string out_buf c;
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_CHAR"
        | [] -> Error "VM stack underflow on OP_PRINT_CHAR")
@@ -760,10 +766,16 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VString s :: rest ->
          st.stack <- rest;
-         Buffer.add_string out_buf (s ^ "\n");
+         Buffer.add_string out_buf s;
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_STR"
        | [] -> Error "VM stack underflow on OP_PRINT_STR")
+    | Ir.OP_PRINT_SPACE ->
+      Buffer.add_char out_buf ' ';
+      Ok ()
+    | Ir.OP_PRINT_NEWLINE ->
+      Buffer.add_char out_buf '\n';
+      Ok ()
     | Ir.OP_HALT ->
       st.halted <- true;
       Ok ()

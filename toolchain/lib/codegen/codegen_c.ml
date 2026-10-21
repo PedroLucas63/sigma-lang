@@ -680,38 +680,47 @@ let emit_c (prog : Typed_ast.program) : string =
              (c_type_of_ty v.ty)
              (mangle_ident v.name)
              (emit_expr v.init))
+      | Typed_ast.TStmtPrint { newline; args } ->
+        List.iteri
+          (fun i (e : Typed_ast.expr) ->
+            if i > 0 then Buffer.add_string buf "  putchar(' ');\n";
+            match e.ty with
+            | Ty.Int ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  printf(\"%%\" PRId64, (int64_t)(%s));\n"
+                   (emit_expr e))
+            | Ty.Float ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  printf(\"%%.6g\", (double)(%s));\n"
+                   (emit_expr e))
+            | Ty.Double ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  printf(\"%%.15g\", (double)(%s));\n"
+                   (emit_expr e))
+            | Ty.Decimal ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  fputs(sgm_fmt_dec(%s), stdout);\n"
+                   (emit_expr e))
+            | Ty.Bool ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  fputs((%s) ? \"true\" : \"false\", stdout);\n"
+                   (emit_expr e))
+            | Ty.Char | Ty.String ->
+              Buffer.add_string
+                buf
+                (Printf.sprintf "  fputs(%s, stdout);\n"
+                   (emit_expr e)))
+          args;
+        if newline then Buffer.add_string buf "  putchar('\\n');\n"
       | Typed_ast.TStmtExpr e ->
-        (match e.ty with
-         | Ty.Int ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  printf(\"%%\" PRId64 \"\\n\", (int64_t)(%s));\n"
-                (emit_expr e))
-         | Ty.Float ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  printf(\"%%.6g\\n\", (double)(%s));\n"
-                (emit_expr e))
-         | Ty.Double ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  printf(\"%%.15g\\n\", (double)(%s));\n"
-                (emit_expr e))
-         | Ty.Decimal ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  sgm_print_decimal(%s);\n"
-                (emit_expr e))
-         | Ty.Bool ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  printf(\"%%s\\n\", (%s) ? \"true\" : \"false\");\n"
-                (emit_expr e))
-         | Ty.Char | Ty.String ->
-           Buffer.add_string
-             buf
-             (Printf.sprintf "  printf(\"%%s\\n\", %s);\n"
-                (emit_expr e))))
+        Buffer.add_string
+          buf
+          (Printf.sprintf "  (void)(%s);\n" (emit_expr e)))
     prog;
   Buffer.add_string buf "  return 0;\n}\n";
   Buffer.contents buf

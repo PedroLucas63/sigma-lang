@@ -96,47 +96,47 @@ var s_utf8 : string = "Olá, Σ! こんにちは 🚀\nLinha 2\t(ok)";
 var s_zero : string;
 var s_interp : string = "Hello ${s_lang}! a=${a}, f=${f1}, d=${d2}, dec=${dec1}, bool=${b1}, char=${ch_greek}";
 
-# Debug print expression statements
-a;
-b;
-c;
-d;
-e;
-m1;
-m2;
-m3;
-m4;
-m5;
-b1;
-b2;
-b3;
-b4;
-f1;
-f2;
-f3;
-f4;
-f5;
-f6;
-f7;
-f8;
-d1;
-d2;
-d3;
-dec1;
-dec2;
-dec3;
-dec_high_prec;
-dec_finance;
-ch_ascii;
-ch_accent;
-ch_greek;
-ch_emoji;
-ch_tab;
-ch_zero;
-s_lang;
-s_utf8;
-s_zero;
-s_interp;
+# Debug print statements
+println(a);
+println(b);
+println(c);
+println(d);
+println(e);
+println(m1);
+println(m2);
+println(m3);
+println(m4);
+println(m5);
+println(b1);
+println(b2);
+println(b3);
+println(b4);
+println(f1);
+println(f2);
+println(f3);
+println(f4);
+println(f5);
+println(f6);
+println(f7);
+println(f8);
+println(d1);
+println(d2);
+println(d3);
+println(dec1);
+println(dec2);
+println(dec3);
+println(dec_high_prec);
+println(dec_finance);
+println(ch_ascii);
+println(ch_accent);
+println(ch_greek);
+println(ch_emoji);
+println(ch_tab);
+println(ch_zero);
+println(s_lang);
+println(s_utf8);
+println(s_zero);
+println(s_interp);
 |}
   in
   let expected_stdout =
@@ -242,15 +242,15 @@ var sc_and   : bool = 10 < 8 and (10 // zero > 1);  # false
 var sc_or    : bool = 15 > 9 or (10 // zero > 1);   # true
 var sc_chain : bool = 10 < 5 < (10 // zero);        # false
 
-u1; u2; p1; p2; p3; p4; p5;
-i_add; i_sub; i_mul; i_div; i_idiv1; i_idiv2; i_idiv3; i_mod1; i_mod2; i_mod3; i_mod4;
-f_mix; d_mix; f_idiv; d_idiv; f_mod; d_mod; d_pow;
-m_add; m_sub; m_mul; m_div; m_idiv1; m_idiv2; m_mod; m_pow;
-c_add_c; c_sub_c; c_add_s; s_add_c; s_add_s; c_add_i; c_sub_i; c_mul_i; s_mul_i; s_mul_0; interp_expr;
-l1; l2; l3; l4; l5; l6; l7; l8; l9; l10; l11;
-bw_not; bw_and; bw_xor; bw_or; bw_shl; bw_shr; bw_shr_neg; bw_prec;
-r1; r2; r3; r4; r5; r6; r7; r8; r9;
-sc_and; sc_or; sc_chain;
+println(u1); println(u2); println(p1); println(p2); println(p3); println(p4); println(p5);
+println(i_add); println(i_sub); println(i_mul); println(i_div); println(i_idiv1); println(i_idiv2); println(i_idiv3); println(i_mod1); println(i_mod2); println(i_mod3); println(i_mod4);
+println(f_mix); println(d_mix); println(f_idiv); println(d_idiv); println(f_mod); println(d_mod); println(d_pow);
+println(m_add); println(m_sub); println(m_mul); println(m_div); println(m_idiv1); println(m_idiv2); println(m_mod); println(m_pow);
+println(c_add_c); println(c_sub_c); println(c_add_s); println(s_add_c); println(s_add_s); println(c_add_i); println(c_sub_i); println(c_mul_i); println(s_mul_i); println(s_mul_0); println(interp_expr);
+println(l1); println(l2); println(l3); println(l4); println(l5); println(l6); println(l7); println(l8); println(l9); println(l10); println(l11);
+println(bw_not); println(bw_and); println(bw_xor); println(bw_or); println(bw_shl); println(bw_shr); println(bw_shr_neg); println(bw_prec);
+println(r1); println(r2); println(r3); println(r4); println(r5); println(r6); println(r7); println(r8); println(r9);
+println(sc_and); println(sc_or); println(sc_chain);
 |}
   in
   let expected_stdout =
@@ -406,7 +406,7 @@ let test_all_operations_csv_matrix () =
     (fun i (lty, rty, op, res_ty) ->
       Buffer.add_string
         buf
-        (Printf.sprintf "var r_%d : %s = %s %s %s;\nr_%d;\n"
+        (Printf.sprintf "var r_%d : %s = %s %s %s;\nprintln(r_%d);\n"
            i res_ty (sample_of lty) op (sample_of rty) i))
     rows;
   let code = Buffer.contents buf in
@@ -635,6 +635,11 @@ let test_syntax_and_semantic_errors () =
       ("var n := 10; n //= 0;", "E0105");
       ("var f := 10.0; f /= 0.0;", "E0105");
       ("var n := 10; n %= 0;", "E0105");
+      ("print 10;", "E0002");
+      ("print(10;", "E0002");
+      ("println(10, );", "E0002");
+      ("var x := println(10);", "E0002");
+      ("println(nao_declarada);", "E0102");
     ]
 
 let test_assignment_and_incdec_parity () =
@@ -642,106 +647,106 @@ let test_assignment_and_incdec_parity () =
     {|# 1. Simple and right-associative chained assignment
 var a : int;
 var b : int;
-a = b = 10;
-a;
-b;
+println(a = b = 10);
+println(a);
+println(b);
 
 # 2. Compound arithmetic assignments on int
-a += 5;
-a -= 3;
-a *= 2;
-a //= 5;
-a %= 3;
-a ^= 4;
+println(a += 5);
+println(a -= 3);
+println(a *= 2);
+println(a //= 5);
+println(a %= 3);
+println(a ^= 4);
 var neg_mod := -7;
-neg_mod %= 3;
+println(neg_mod %= 3);
 
 # 3. Float, Double, Decimal compound assignments & promotions
 var f := 10.0;
-f += 2;
-f -= 1.5;
-f *= 2;
-f /= 3.0;
-f %= 2.0;
-f ^= 2;
+println(f += 2);
+println(f -= 1.5);
+println(f *= 2);
+println(f /= 3.0);
+println(f %= 2.0);
+println(f ^= 2);
 
 var d := 20.0d;
-d += 5;
-d += 2.5f;
-d /= 2d;
+println(d += 5);
+println(d += 2.5f);
+println(d /= 2d);
 
 var m := 100.50m;
-m += 20;
-m -= 0.25m;
-m *= 2;
-m /= 2m;
-m %= 7m;
-m ^= 2;
+println(m += 20);
+println(m -= 0.25m);
+println(m *= 2);
+println(m /= 2m);
+println(m %= 7m);
+println(m ^= 2);
 
 # 4. Char & String compound assignments
 var c := 'a';
-c += 3;
-c -= 1;
+println(c += 3);
+println(c -= 1);
 
 var s := "Ha";
-s += '!';
-s += "Ho";
-s *= 2;
+println(s += '!');
+println(s += "Ho");
+println(s *= 2);
 
 # 5. Logical compound assignments on bool (with short-circuit!)
 var zero := 0;
 var ok := false;
-ok and= (10 // zero == 1);
-ok or= true;
-ok or= (10 // zero == 1);
-ok and= (5 > 2);
-ok xor= true;
-ok xor= true;
+println(ok and= (10 // zero == 1));
+println(ok or= true);
+println(ok or= (10 // zero == 1));
+println(ok and= (5 > 2));
+println(ok xor= true);
+println(ok xor= true);
 
 # 6. Bitwise & shift compound assignments on int
 var bits := 6;
-bits and= 3;
-bits or= 8;
-bits xor= 15;
-bits <<= 2;
-bits >>= 1;
+println(bits and= 3);
+println(bits or= 8);
+println(bits xor= 15);
+println(bits <<= 2);
+println(bits >>= 1);
 
 # 7. Prefix and postfix ++ and -- (int, float, double, decimal, char)
 var i := 10;
-++i;
-i;
-i++;
-i;
---i;
-i;
-i--;
-i;
+println(++i);
+println(i);
+println(i++);
+println(i);
+println(--i);
+println(i);
+println(i--);
+println(i);
 
 var pf := 1.5;
-++pf;
-pf++;
-pf;
+println(++pf);
+println(pf++);
+println(pf);
 
 var pd := 2.5d;
---pd;
-pd--;
-pd;
+println(--pd);
+println(pd--);
+println(pd);
 
 var pm := 10.25m;
-++pm;
-pm++;
-pm;
---pm;
-pm--;
-pm;
+println(++pm);
+println(pm++);
+println(pm);
+println(--pm);
+println(pm--);
+println(pm);
 
 var pc := 'b';
-++pc;
-pc++;
-pc;
---pc;
-pc--;
-pc;
+println(++pc);
+println(pc++);
+println(pc);
+println(--pc);
+println(pc--);
+println(pc);
 |}
   in
   let src = Source.of_string ~filename:"assign_incdec.sgm" ~content:code in
@@ -802,11 +807,35 @@ pc;
        ~msg:(Printf.sprintf "assign_incdec compiler parity mismatch:\nGot:\n%s\nExpected:\n%s" comp_out interp_out)
        (comp_out = interp_out))
 
+let test_print_and_println_parity () =
+  let code =
+    {|# Standalone expression statements do NOT print anything:
+var x := 10;
+x += 5;
+x++;
+100 + 200;
+
+# print() without newline and println() with newline and multi-args:
+print("Valor:");
+print(" ");
+println(x);
+print();
+println("Multi:", x, 1.5f, 2.25d, 0.3m, true, 'Σ', "fim");
+println();
+println("After:", x += 4, ++x);
+|}
+  in
+  let expected_stdout =
+    "Valor: 16\nMulti: 16 1.5 2.25 0.3 true Σ fim\n\nAfter: 20 21\n"
+  in
+  run_and_check_parity ~name:"print_builtin" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
   test_all_operations_csv_matrix ();
   test_assignment_and_incdec_parity ();
+  test_print_and_println_parity ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();

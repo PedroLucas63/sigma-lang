@@ -121,6 +121,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_POP
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
@@ -128,6 +129,8 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_SPACE
+  | OP_PRINT_NEWLINE
   | OP_HALT
 
 type instr = {

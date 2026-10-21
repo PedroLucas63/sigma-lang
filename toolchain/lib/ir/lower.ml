@@ -413,19 +413,27 @@ let lower_stmt b (s : Typed_ast.stmt) =
       | Ty.String -> Ir.OP_DEF_GLOBAL_STR v.name
     in
     ignore (emit b op s.span)
+  | Typed_ast.TStmtPrint { newline; args } ->
+    List.iteri
+      (fun i (arg : Typed_ast.expr) ->
+        if i > 0 then ignore (emit b Ir.OP_PRINT_SPACE s.span);
+        lower_expr b arg;
+        let op =
+          match arg.ty with
+          | Ty.Int -> Ir.OP_PRINT_I64
+          | Ty.Float -> Ir.OP_PRINT_F32
+          | Ty.Double -> Ir.OP_PRINT_F64
+          | Ty.Decimal -> Ir.OP_PRINT_DEC
+          | Ty.Bool -> Ir.OP_PRINT_BOOL
+          | Ty.Char -> Ir.OP_PRINT_CHAR
+          | Ty.String -> Ir.OP_PRINT_STR
+        in
+        ignore (emit b op arg.span))
+      args;
+    if newline then ignore (emit b Ir.OP_PRINT_NEWLINE s.span)
   | Typed_ast.TStmtExpr e ->
     lower_expr b e;
-    let op =
-      match e.ty with
-      | Ty.Int -> Ir.OP_PRINT_I64
-      | Ty.Float -> Ir.OP_PRINT_F32
-      | Ty.Double -> Ir.OP_PRINT_F64
-      | Ty.Decimal -> Ir.OP_PRINT_DEC
-      | Ty.Bool -> Ir.OP_PRINT_BOOL
-      | Ty.Char -> Ir.OP_PRINT_CHAR
-      | Ty.String -> Ir.OP_PRINT_STR
-    in
-    ignore (emit b op s.span)
+    ignore (emit b Ir.OP_POP s.span)
 
 let lower_program (prog : Typed_ast.program) : Ir.program =
   let b = create_builder () in
