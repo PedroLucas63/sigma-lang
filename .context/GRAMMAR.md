@@ -23,6 +23,20 @@
 | Pontuação | `COLON` | `:` |
 | Operador | `EQUAL` | `=` |
 | Operador | `COLON_EQUAL` | `:=` |
+| Operador | `PLUS_EQ` | `+=` |
+| Operador | `MINUS_EQ` | `-=` |
+| Operador | `STAR_EQ` | `*=` |
+| Operador | `SLASH_EQ` | `/=` |
+| Operador | `SLASH_SLASH_EQ` | `//=` |
+| Operador | `PERCENT_EQ` | `%=` |
+| Operador | `CARET_EQ` | `^=` |
+| Operador | `KW_AND_EQ` | `and=` |
+| Operador | `KW_OR_EQ` | `or=` |
+| Operador | `KW_XOR_EQ` | `xor=` |
+| Operador | `LSHIFT_EQ` | `<<=` |
+| Operador | `RSHIFT_EQ` | `>>=` |
+| Operador | `PLUS_PLUS` | `++` |
+| Operador | `MINUS_MINUS` | `--` |
 | Operador | `PLUS` | `+` |
 | Operador | `MINUS` | `-` |
 | Operador | `STAR` | `*` |
@@ -57,7 +71,11 @@ var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
 
 expr_stmt     ::= expr ;
 
-expr          ::= logical_or ;
+expr          ::= assignment ;
+assignment    ::= IDENT ASSIGN_OP assignment
+                | logical_or ;
+ASSIGN_OP     ::= "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^="
+                | "and=" | "or=" | "xor=" | "<<=" | ">>=" ;
 logical_or    ::= logical_xor ( "or" logical_xor )* ;
 logical_xor   ::= logical_and ( "xor" logical_and )* ;
 logical_and   ::= logical_not ( "and" logical_not )* ;
@@ -68,9 +86,10 @@ REL_OP        ::= "==" | "!=" | "<" | ">" | "<=" | ">=" ;
 shift         ::= additive ( ( "<<" | ">>" ) additive )* ;
 additive      ::= mult ( ( "+" | "-" ) mult )* ;
 mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
-unary         ::= ( "+" | "-" ) unary
+unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
-power         ::= primary ( "^" unary )? ;
+power         ::= postfix ( "^" unary )? ;
+postfix       ::= primary ( "++" | "--" )* ;
 primary       ::= INT
                 | FLOAT
                 | DOUBLE
@@ -129,6 +148,27 @@ type binop =
   | BinXor
   | BinOr
 
+type assign_op =
+  | AssignEq
+  | AssignAdd
+  | AssignSub
+  | AssignMul
+  | AssignDiv
+  | AssignIntDiv
+  | AssignMod
+  | AssignPow
+  | AssignAnd
+  | AssignOr
+  | AssignXor
+  | AssignShl
+  | AssignShr
+
+type incdec_op =
+  | PreInc
+  | PreDec
+  | PostInc
+  | PostDec
+
 type expr_desc =
   | ExprInt of int64
   | ExprFloat of float
@@ -142,6 +182,8 @@ type expr_desc =
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
+  | ExprAssign of string * Span.t * assign_op * expr
+  | ExprIncDec of incdec_op * string * Span.t
 
 and interp_part =
   | InterpLit of string
@@ -215,6 +257,13 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_I64 of string
+  | OP_SET_GLOBAL_F32 of string
+  | OP_SET_GLOBAL_F64 of string
+  | OP_SET_GLOBAL_DEC of string
+  | OP_SET_GLOBAL_BOOL of string
+  | OP_SET_GLOBAL_CHAR of string
+  | OP_SET_GLOBAL_STR of string
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
