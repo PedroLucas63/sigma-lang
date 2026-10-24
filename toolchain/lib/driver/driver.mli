@@ -21,3 +21,25 @@ val lint_source : Source.t -> (Diagnostic.t list, Diagnostic.t list) result
 
 (** Executa o debugger passo-a-passo sobre o código-fonte. *)
 val debug_source : Source.t -> (string, Diagnostic.t list) result
+
+type test_mode =
+  | ModeVm
+  | ModeNative
+  | ModeParity
+
+type file_test_result = {
+  filename : string;
+  passed_count : int;
+  failed_count : int;
+  assertions : Sigma_interp.Vm.assertion_result list;
+  native_ok : bool option;
+  error_msg : string option;
+}
+
+(** Executa um arquivo de teste na VM, em C99 nativo ou em modo de paridade (ambos). *)
+val test_source :
+  ?mode:test_mode -> Source.t -> (file_test_result, Diagnostic.t list) result
+
+(** Renderiza um relatório completo da suíte de testes e retorna [(relatorio, tudo_passou)]. *)
+val render_test_suite :
+  mode:test_mode -> file_test_result list -> string * bool
