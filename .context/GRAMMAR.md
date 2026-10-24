@@ -7,6 +7,7 @@
 | Categoria | Token OCaml | Representação Textual |
 | :--- | :--- | :--- |
 | Palavra-chave | `KW_VAR` | `var` |
+| Palavra-chave | `KW_CONST` | `const` |
 | Palavra-chave | `KW_IF` | `if` |
 | Palavra-chave | `KW_ELSE` | `else` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -71,8 +72,11 @@
 ```ebnf
 program       ::= stmt* EOF ;
 
-stmt          ::= var_decl ";"
+stmt          ::= decl_stmt ";"
                 | non_decl_stmt ;
+
+decl_stmt     ::= var_decl
+                | const_decl ;
 
 non_decl_stmt ::= if_stmt
                 | block_stmt
@@ -84,6 +88,7 @@ if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
 block_stmt    ::= "{" stmt* "}" ;
 
 var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
+const_decl    ::= "const" IDENT ( ":" TYPE "=" expr | ":=" expr ) ;
 
 print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
 arg_list      ::= expr ( "," expr )* ;
@@ -210,6 +215,33 @@ and interp_part =
 
 and expr = {
   desc : expr_desc;
+  span : Sigma_common.Span.t;
+}
+
+type var_decl = {
+  name : string;
+  name_span : Sigma_common.Span.t;
+  is_const : bool;
+  ty_annot : (string * Sigma_common.Span.t) option;
+  init : expr option;
+}
+
+type stmt_desc =
+  | StmtVarDecl of var_decl
+  | StmtBlock of stmt list
+  | StmtIf of {
+      cond : expr;
+      then_branch : stmt;
+      else_branch : stmt option;
+    }
+  | StmtPrint of {
+      newline : bool;
+      args : expr list;
+    }
+  | StmtExpr of expr
+
+and stmt = {
+  desc : stmt_desc;
   span : Sigma_common.Span.t;
 }
 ```

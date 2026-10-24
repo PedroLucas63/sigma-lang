@@ -16,7 +16,7 @@
 | `sigma_common` | `Source` | [`source.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/source.mli) | `t`, `of_string`, `load`, `get_line` |
 | `sigma_common` | `Decimal` | [`decimal.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/common/decimal.mli) | `t` (128-bit base-10 exact decimal), `zero`, `is_zero`, `negate`, `compare`, `of_int64`, `add`, `sub`, `mul`, `div`, `div_trunc_i64`, `rem`, `pow`, `of_string_opt`, `to_string` |
 | `sigma_diagnostics` | `Diagnostic` | [`diagnostic.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/diagnostics/diagnostic.mli) | `severity`, `t`, `error`, `warning`, `render`, `pp` |
-| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `KW_IF`, `KW_ELSE`, `KW_PRINT`, `KW_PRINTLN`, `KW_AND..KW_NOT`, `KW_{AND,OR,XOR}_EQ`, `IDENT`, `INT..INTERP_STRING`, `COLON`, `EQUAL`, `COLON_EQUAL`, `PLUS_EQ..RSHIFT_EQ`, `PLUS_PLUS`, `MINUS_MINUS`, `PLUS..RSHIFT`, `EQ_EQ..GT_EQ`, `LPAREN`, `RPAREN`, `LBRACE`, `RBRACE`, `COMMA`, `SEMI`, `EOF`), `t` |
+| `sigma_syntax` | `Token` | [`token.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/token.mli) | `kind` (`KW_VAR`, `KW_CONST`, `KW_IF`, `KW_ELSE`, `KW_PRINT`, `KW_PRINTLN`, `KW_AND..KW_NOT`, `KW_{AND,OR,XOR}_EQ`, `IDENT`, `INT..INTERP_STRING`, `COLON`, `EQUAL`, `COLON_EQUAL`, `PLUS_EQ..RSHIFT_EQ`, `PLUS_PLUS`, `MINUS_MINUS`, `PLUS..RSHIFT`, `EQ_EQ..GT_EQ`, `LPAREN`, `RPAREN`, `LBRACE`, `RBRACE`, `COMMA`, `SEMI`, `EOF`), `t` |
 | `sigma_syntax` | `Ast` | [`ast.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/ast.mli) | `unop`, `binop`, `assign_op`, `incdec_op`, `expr` (`ExprInt..ExprChainCmp`, `ExprAssign`, `ExprIncDec`), `var_decl`, `stmt` (`StmtVarDecl`, `StmtBlock`, `StmtIf`, `StmtPrint`, `StmtExpr`), `program` |
 | `sigma_syntax` | `Lexer` | [`lexer.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/lexer.mli) | `tokenize : Source.t -> (Token.t list, Diagnostic.t list) result` |
 | `sigma_syntax` | `Parser` | [`parser.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/syntax/parser.mli) | `parse : Token.t list -> (Ast.program, Diagnostic.t list) result` |
@@ -41,4 +41,6 @@
 - `E0103`: Redeclaração de variável já existente no mesmo escopo.
 - `E0104`: Incompatibilidade de tipos em declaração ou operação unária/binária (ex: misturar `float`/`double` com `decimal`).
 - `E0105`: Divisão ou módulo por zero detectado em tempo de compilação.
+- `E0106`: Declaração de constante sem expressão de inicialização.
+- `E0107`: Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_`).
