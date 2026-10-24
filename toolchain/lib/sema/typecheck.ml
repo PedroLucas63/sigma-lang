@@ -5,6 +5,7 @@ open Sigma_syntax
 type symbol_info = {
   ty : Ty.t;
   decl_span : Span.t;
+  is_const : bool;
 }
 
 type env = (string, symbol_info) Hashtbl.t
@@ -238,15 +239,23 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
      | None ->
        Error
          (Diagnostic.error
-            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
             ~code:"E0102"
             ~span:name_span
             (Printf.sprintf "use of undeclared variable '%s'" name))
      | Some info ->
-       (match check_expr env rhs with
-        | Error err -> Error err
-        | Ok trhs ->
-          (match binop_of_assign_op op with
+       if info.is_const then
+         Error
+           (Diagnostic.error
+              ~hint:(Printf.sprintf "'%s' was declared as a constant at %s" name (Span.to_string info.decl_span))
+              ~code:"E0107"
+              ~span:name_span
+              (Printf.sprintf "cannot assign to constant '%s'" name))
+       else
+         (match check_expr env rhs with
+          | Error err -> Error err
+          | Ok trhs ->
+            (match binop_of_assign_op op with
            | None ->
              if Ty.equal info.ty trhs.ty then
                Ok
@@ -331,28 +340,36 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
      | None ->
        Error
          (Diagnostic.error
-            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
             ~code:"E0102"
             ~span:name_span
             (Printf.sprintf "use of undeclared variable '%s'" name))
      | Some info ->
-       let op_str = Ast.incdec_op_to_string inc_op in
-       (match info.ty with
-        | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
-          Ok
-            {
-              Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, name);
-              ty = info.ty;
-              span = e.span;
-            }
-        | Ty.Bool | Ty.String ->
-          Error
-            (Diagnostic.error
-               ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
-               ~code:"E0104"
-               ~span:e.span
-               (Printf.sprintf "invalid operator '%s' for variable '%s' of type '%s'"
-                  op_str name (Ty.to_string info.ty)))))
+       if info.is_const then
+         Error
+           (Diagnostic.error
+              ~hint:(Printf.sprintf "'%s' was declared as a constant at %s" name (Span.to_string info.decl_span))
+              ~code:"E0107"
+              ~span:name_span
+              (Printf.sprintf "cannot mutate constant '%s' with '%s'" name (Ast.incdec_op_to_string inc_op)))
+       else
+         let op_str = Ast.incdec_op_to_string inc_op in
+         (match info.ty with
+          | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
+            Ok
+              {
+                Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, name);
+                ty = info.ty;
+                span = e.span;
+              }
+          | Ty.Bool | Ty.String ->
+            Error
+              (Diagnostic.error
+                 ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
+                 ~code:"E0104"
+                 ~span:e.span
+                 (Printf.sprintf "invalid operator '%s' for variable '%s' of type '%s'"
+                    op_str name (Ty.to_string info.ty)))))
 
 let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
   match Ty.of_string ty_name with
@@ -472,13 +489,22 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
     (match Hashtbl.find_opt env v.name with
      | None -> ()
      | Some prev ->
+       let entity = if prev.is_const then "constant" else "variable" in
        errs :=
          Diagnostic.error
            ~hint:(Printf.sprintf "previously declared at %s" (Span.to_string prev.decl_span))
            ~code:"E0103"
            ~span:v.name_span
-           (Printf.sprintf "variable '%s' is already declared in this scope" v.name)
+           (Printf.sprintf "%s '%s' is already declared in this scope" entity v.name)
          :: !errs);
+    if v.is_const && Option.is_none v.init then
+      errs :=
+        Diagnostic.error
+          ~hint:(Printf.sprintf "provide a value, e.g. 'const %s := <value>;'" v.name)
+          ~code:"E0106"
+          ~span:v.name_span
+          (Printf.sprintf "constant '%s' requires an initializing expression" v.name)
+        :: !errs;
     let resolved_annot =
       match v.ty_annot with
       | None -> None
@@ -504,13 +530,15 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
      | [] ->
        (match resolved_annot, resolved_init with
         | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+          let entity = if v.is_const then "constant" else "variable" in
           Error
             [
               Diagnostic.error
                 ~hint:
                   (Printf.sprintf
-                     "Sigma is strongly typed: cannot assign value of type '%s' to variable '%s' of type '%s'"
+                     "Sigma is strongly typed: cannot assign value of type '%s' to %s '%s' of type '%s'"
                      (Ty.to_string init_te.ty)
+                     entity
                      v.name
                      (Ty.to_string annot_ty))
                 ~code:"E0104"
@@ -531,12 +559,13 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
             | None, None ->
               (Ty.Int, default_expr_for_type Ty.Int v.name_span, true)
           in
-          Hashtbl.replace env v.name { ty = final_ty; decl_span = v.name_span };
+          Hashtbl.replace env v.name { ty = final_ty; decl_span = v.name_span; is_const = v.is_const };
           scope_vars := v.name :: !scope_vars;
           let tdecl =
             {
               Typed_ast.name = v.name;
               name_span = v.name_span;
+              is_const = v.is_const;
               ty = final_ty;
               init = final_init;
               was_default_initialized;

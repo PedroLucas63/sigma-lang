@@ -32,6 +32,7 @@ and expr = {
 type var_decl = {
   name : string;
   name_span : Span.t;
+  is_const : bool;
   ty : Ty.t;
   init : expr;   (** Já resolvido (com zero-initialization explícita quando omitido) *)
   was_default_initialized : bool;
