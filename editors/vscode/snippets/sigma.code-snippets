@@ -20,6 +20,20 @@
     ],
     "description": "Declare a zero-initialized Sigma variable"
   },
+  "Constant Declaration (Explicit)": {
+    "prefix": "const",
+    "body": [
+      "const ${1:NAME}: ${2|int,float,double,decimal,bool,char,string|} = ${3:value};"
+    ],
+    "description": "Declare an immutable Sigma constant with explicit type annotation"
+  },
+  "Constant Declaration (Inferred)": {
+    "prefix": "consti",
+    "body": [
+      "const ${1:NAME} := ${2:value};"
+    ],
+    "description": "Declare an immutable Sigma constant with type inference (:=)"
+  },
   "Chained Relational Comparison": {
     "prefix": "between",
     "body": [

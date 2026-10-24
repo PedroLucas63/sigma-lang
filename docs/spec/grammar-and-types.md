@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `if`, `else`, `print`, `println`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `const`, `if`, `else`, `print`, `println`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -29,8 +29,11 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 ```ebnf
 program       ::= stmt* EOF ;
 
-stmt          ::= var_decl ";"
+stmt          ::= decl_stmt ";"
                 | non_decl_stmt ;
+
+decl_stmt     ::= var_decl
+                | const_decl ;
 
 non_decl_stmt ::= if_stmt
                 | block_stmt
@@ -42,6 +45,7 @@ if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
 block_stmt    ::= "{" stmt* "}" ;
 
 var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
+const_decl    ::= "const" IDENT ( ":" TYPE "=" expr | ":=" expr ) ;
 
 print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
 arg_list      ::= expr ( "," expr )* ;
@@ -125,6 +129,10 @@ primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP
    - `if (<expr-bool>) <stmt> [else <stmt>]`: exige condição do tipo `bool` (`E0104`) entre parênteses `(...)` (`E0002`).
    - Chaves `{ ... }` não são obrigatórias para comandos únicos (exceto declarações `var`, que exigem um bloco `{ var x := ...; }` com `E0002`).
    - `{ <stmt>* }` pode ser usado em qualquer ponto do programa, abrindo um novo escopo léxico sem permitir *shadowing* de variáveis já ativas no escopo externo (`E0103`) e descartando todas as variáveis locais ao fechar `}` (`E0102` se acessadas fora do bloco).
+8. **Constantes Imutáveis (`const`):**
+   - Declarações `const x := <expr>;` e `const x : <type> = <expr>;` definem símbolos imutáveis.
+   - Toda constante exige obrigatoriamente um valor inicial (`E0106` caso omitido).
+   - Qualquer tentativa de reatribuição (`=`, `+=`, etc.) ou incremento/decremento (`++`/`--`) resulta em erro estático `E0107`.
 
 ---
 
@@ -140,4 +148,6 @@ primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP
 | `E0103` | Sema | Erro | Redeclaração de variável já existente no mesmo escopo. |
 | `E0104` | Sema | Erro | Incompatibilidade de tipos em atribuição ou operação unária/binária/relacional. |
 | `E0105` | Sema | Erro | Divisão ou módulo por zero detectado em tempo de compilação. |
+| `E0106` | Sema/Parser | Erro | Declaração de constante sem expressão de inicialização. |
+| `E0107` | Sema | Erro | Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável. |
 | `W0001` | Linter | Aviso | Variável declarada e nunca utilizada (suprimido se o nome iniciar com `_`). |

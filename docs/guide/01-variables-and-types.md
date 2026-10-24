@@ -116,7 +116,37 @@ var c : int = true;
 
 ---
 
-## 6. Executando e Compilando seu Código
+## 6. Constantes Imutáveis (`const`)
+
+Para valores que nunca devem ser modificados após a inicialização, a Sigma disponibiliza a palavra-chave `const` (simétrica ao `var`):
+
+- **Com inferência de tipo:** `const <id> := <expr>;`
+- **Com anotação explícita de tipo:** `const <id> : <tipo> = <expr>;`
+
+```sigma
+const PI := 3.141592653589793d;
+const MAX_ITER : int = 10_000;
+const EMPRESA := "Sigma Scientific";
+const ATIVO : bool = true;
+
+println("Constantes:", PI, MAX_ITER, EMPRESA, ATIVO);
+```
+
+### Regras de Segurança para Constantes:
+1. **Inicializador Obrigatório (`E0106`):** Constantes não permitem declaração sem valor (não existe *zero-init* para `const`).
+   ```sigma
+   const X : int; # ERRO E0106: constant 'X' requires an initializing expression
+   ```
+2. **Imutabilidade Estrita (`E0107`):** Qualquer tentativa posterior de atribuição (`=`, `+=`, etc.) ou incremento/decremento (`++`/`--`) é rejeitada estaticamente pelo compilador:
+   ```sigma
+   const MAX := 100;
+   MAX = 200; # ERRO E0107: cannot assign to constant 'MAX'
+   MAX++;     # ERRO E0107: cannot mutate constant 'MAX' with '++'
+   ```
+
+---
+
+## 7. Executando e Compilando seu Código
 
 Salve um dos exemplos válidos acima em `exemplo.sgm` e execute:
 

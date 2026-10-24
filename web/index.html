@@ -191,13 +191,14 @@
         <div class="toolbar">
           <select id="example-select">
             <option value="if_else_blocks">1. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
-            <option value="assign_incdec">2. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
-            <option value="arithmetic">3. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">4. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">5. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">6. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">7. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="typeerror">8. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="const_decl">2. Constantes Imutáveis (const) e Segurança Estática</option>
+            <option value="assign_incdec">3. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">4. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">5. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">6. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">7. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">8. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="typeerror">9. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -242,16 +243,17 @@ println(q); # imprime "Quociente: 3"</pre>
       </article>
 
       <article class="card">
-        <h3>2. Declaração de Variáveis e Zero-Initialization</h3>
-        <p>Variáveis são declaradas com a palavra-chave <code>var</code> em três formatos (nunca é permitido <code>var x = 10;</code> sem tipo, erro <code>E0002</code>):</p>
+        <h3>2. Declaração de Variáveis (<code>var</code>), Constantes (<code>const</code>) e Imutabilidade</h3>
+        <p>Variáveis mutáveis usam <code>var</code> e constantes imutáveis usam <code>const</code> (nunca é permitido <code>var x = 10;</code> sem tipo, erro <code>E0002</code>):</p>
         <ul>
-          <li><code>var nome := expr;</code> — Inferência estática automática do tipo.</li>
-          <li><code>var nome : tipo = expr;</code> — Tipo explícito verificado estaticamente (<code>E0104</code> se divergir).</li>
-          <li><code>var nome : tipo;</code> — <em>Zero-Initialization</em> (estilo Go): <code>int = 0</code>, <code>float/double/decimal = 0</code>, <code>bool = false</code>, <code>char/string = ""</code>.</li>
+          <li><code>var nome := expr;</code> / <code>const NOME := expr;</code> — Inferência estática automática do tipo.</li>
+          <li><code>var nome : tipo = expr;</code> / <code>const NOME : tipo = expr;</code> — Tipo explícito verificado estaticamente (<code>E0104</code> se divergir).</li>
+          <li><code>var nome : tipo;</code> — <em>Zero-Initialization</em> (estilo Go). Proibido para <code>const</code> (<code>E0106</code>: constante exige valor).</li>
+          <li><strong>Imutabilidade Estrita:</strong> Tentativas de reatribuição (<code>=</code>, <code>+=</code>, etc.) ou incremento (<code>++</code>/<code>--</code>) em símbolos declarados com <code>const</code> são rejeitadas com <code>E0107</code>.</li>
         </ul>
-        <pre>var a := 1_000_000;      # int inferido (separador '_' estrito)
-var b : double = 2.5d;   # double explícito
-var c : int;             # zero-init -> 0</pre>
+        <pre>const PI := 3.1415926535d;      # constante imutável
+var a := 1_000_000;             # variável mutável
+var c : int;                    # zero-init -> 0</pre>
       </article>
 
       <article class="card">
@@ -417,6 +419,24 @@ println("Após cadeia if/else -> x =", x, "| y =", y);
   println("Segundo bloco ->", temp);
 }`,
         out: `Após if sem chaves -> x = 10\nApós cadeia if/else -> x = 10 | y = 11\nDentro do bloco -> temp = 21\nSegundo bloco -> escopo irmão independente`
+      },
+      const_decl: {
+        code: `# Constantes imutáveis com const (inferência e tipo explícito)
+const PI := 3.1415926535d;
+const MAX_RETRIES : int = 5;
+const APP_NAME := "Sigma Scientific";
+const IS_READY : bool = true;
+
+var raio := 10.0d;
+var area := PI * raio ^ 2;
+
+println("Área do círculo:", area);
+println("Constantes:", MAX_RETRIES, APP_NAME, IS_READY);
+
+# Imutabilidade estrita:
+# MAX_RETRIES = 10;   -> Erro E0107: cannot assign to constant 'MAX_RETRIES'
+# MAX_RETRIES++;      -> Erro E0107: cannot mutate constant 'MAX_RETRIES' with '++'`,
+        out: `Área do círculo: 314.15926535\nConstantes: 5 Sigma Scientific true`
       },
       assign_incdec: {
         code: `# Atribuições simples/compostas, ++ / -- e print / println
