@@ -664,11 +664,20 @@ __attribute__((unused)) static const char* sgm_concat(int n, const char **parts)
 let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
+    let c_type, const_qualifier =
+      if v.is_const then
+        match v.ty with
+        | Ty.Char | Ty.String -> ("const char* const", "")
+        | _ -> (c_type_of_ty v.ty, "const ")
+      else
+        (c_type_of_ty v.ty, "")
+    in
     Buffer.add_string
       buf
-      (Printf.sprintf "%s%s %s = %s;\n"
+      (Printf.sprintf "%s%s%s %s = %s;\n"
          indent
-         (c_type_of_ty v.ty)
+         const_qualifier
+         c_type
          (mangle_ident v.name)
          (emit_expr v.init))
   | Typed_ast.TStmtBlock stmts ->

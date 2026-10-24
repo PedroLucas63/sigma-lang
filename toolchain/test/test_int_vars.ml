@@ -646,6 +646,13 @@ let test_syntax_and_semantic_errors () =
       ("var x := 10; if (x) println(x);", "E0104");
       ("var x := 10; { var x := 20; }", "E0103");
       ("{ var y := 10; } println(y);", "E0102");
+      ("const x : int;", "E0106");
+      ("const c := 10; c = 20;", "E0107");
+      ("const c := 10; c += 1;", "E0107");
+      ("const c := 10; c++;", "E0107");
+      ("const c := 10; --c;", "E0107");
+      ("if (true) const y := 10;", "E0002");
+      ("const x : int = true;", "E0104");
     ]
 
 let test_assignment_and_incdec_parity () =
@@ -912,6 +919,39 @@ println(d);
   in
   run_and_check_parity ~name:"if_else_blocks" ~code ~expected_stdout
 
+let test_const_declarations_parity () =
+  let code =
+    {|
+# 1. Constants with inferred types
+const PI := 3.1415926535d;
+const MAX_RETRIES := 5;
+const APP_NAME := "Sigma Scientific";
+const IS_READY := true;
+
+# 2. Constants with explicit types
+const TAU : double = 6.2831853071d;
+const TIMEOUT_MS : int = 3000;
+const TAX_RATE : decimal = 0.15m;
+const DELIM : char = ',';
+
+# 3. Usage in mathematical expressions
+var radius := 10.0d;
+var area := PI * radius ^ 2;
+println("Area:", area);
+println("Consts:", MAX_RETRIES, APP_NAME, IS_READY, TIMEOUT_MS, TAX_RATE, DELIM);
+
+# 4. Constants inside lexical blocks
+{
+  const LOCAL_CONST := 42;
+  println("Local const:", LOCAL_CONST);
+}
+|}
+  in
+  let expected_stdout =
+    "Area: 314.15926535\nConsts: 5 Sigma Scientific true 3000 0.15 ,\nLocal const: 42\n"
+  in
+  run_and_check_parity ~name:"const_declarations" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -919,6 +959,7 @@ let () =
   test_assignment_and_incdec_parity ();
   test_print_and_println_parity ();
   test_if_else_and_blocks_parity ();
+  test_const_declarations_parity ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();
