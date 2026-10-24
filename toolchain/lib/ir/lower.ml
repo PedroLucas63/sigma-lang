@@ -452,6 +452,18 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
         ignore (emit b op arg.span))
       args;
     if newline then ignore (emit b Ir.OP_PRINT_NEWLINE s.span)
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    lower_expr b actual;
+    lower_expr b expected;
+    (match message with
+     | Some m -> lower_expr b m
+     | None -> ignore (emit b (Ir.OP_CONST_STR "") s.span));
+    ignore (emit b Ir.OP_ASSERT_EQ s.span)
+  | Typed_ast.TStmtAssertError { expected_code; actual_codes; passed; message } ->
+    (match message with
+     | Some m -> lower_expr b m
+     | None -> ignore (emit b (Ir.OP_CONST_STR "") s.span));
+    ignore (emit b (Ir.OP_ASSERT_ERR { expected_code; actual_codes; passed }) s.span)
   | Typed_ast.TStmtExpr e ->
     lower_expr b e;
     ignore (emit b Ir.OP_POP s.span)

@@ -97,15 +97,50 @@ let mod_euclid_float (a : float) (b : float) : (float, string) result =
     let r = if r < 0.0 then r +. abs_b else r in
     Ok (if r = 0.0 then 0.0 else r)
 
+type assertion_result = {
+  passed : bool;
+  span : Span.t;
+  expected : string;
+  actual : string;
+  message : string;
+}
+
+type test_report = {
+  stdout : string;
+  passed_count : int;
+  failed_count : int;
+  assertions : assertion_result list;
+}
+
+let value_equal (a : value) (b : value) : bool =
+  match a, b with
+  | VInt x, VInt y -> x = y
+  | VFloat x, VFloat y -> x = y
+  | VDouble x, VDouble y -> x = y
+  | VDecimal x, VDecimal y -> Decimal.compare x y = 0
+  | VBool x, VBool y -> x = y
+  | VChar x, VChar y -> decode_utf8 x = decode_utf8 y
+  | VString x, VString y -> String.equal x y
+  | _ -> false
+
 type state = {
   mutable ip : int;
   mutable stack : value list;
   globals : (string, value) Hashtbl.t;
   mutable halted : bool;
+  mutable collect_assertions : bool;
+  mutable assertions_rev : assertion_result list;
 }
 
-let create_state () =
-  { ip = 0; stack = []; globals = Hashtbl.create 16; halted = false }
+let create_state ?(collect_assertions = false) () =
+  {
+    ip = 0;
+    stack = [];
+    globals = Hashtbl.create 16;
+    halted = false;
+    collect_assertions;
+    assertions_rev = [];
+  }
 
 let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
   if st.halted || st.ip >= Array.length prog then begin
@@ -532,7 +567,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
        | _ -> Error "VM type error on OP_EQ_BOOL")
     | Ir.OP_EQ_CHAR ->
       (match st.stack with
-       | VChar b :: VChar a :: rest -> st.stack <- VBool (String.equal a b) :: rest; Ok ()
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a = decode_utf8 b) :: rest; Ok ()
        | _ -> Error "VM type error on OP_EQ_CHAR")
     | Ir.OP_EQ_STR ->
       (match st.stack with
@@ -560,7 +595,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
        | _ -> Error "VM type error on OP_NE_BOOL")
     | Ir.OP_NE_CHAR ->
       (match st.stack with
-       | VChar b :: VChar a :: rest -> st.stack <- VBool (not (String.equal a b)) :: rest; Ok ()
+       | VChar b :: VChar a :: rest -> st.stack <- VBool (decode_utf8 a <> decode_utf8 b) :: rest; Ok ()
        | _ -> Error "VM type error on OP_NE_CHAR")
     | Ir.OP_NE_STR ->
       (match st.stack with
@@ -779,6 +814,50 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_PRINT_NEWLINE ->
       Buffer.add_char out_buf '\n';
       Ok ()
+    | Ir.OP_ASSERT_EQ ->
+      (match st.stack with
+       | VString msg :: expected_val :: actual_val :: rest ->
+         st.stack <- rest;
+         let passed = value_equal actual_val expected_val in
+         let expected_s = value_to_string expected_val in
+         let actual_s = value_to_string actual_val in
+         let res =
+           { passed; span = instr.span; expected = expected_s; actual = actual_s; message = msg }
+         in
+         st.assertions_rev <- res :: st.assertions_rev;
+         if passed || st.collect_assertions then
+           Ok ()
+         else
+           let msg_part = if msg = "" then "" else Printf.sprintf " (%s)" msg in
+           Error
+             (Printf.sprintf "assertion failed at %s%s: expected %s, got %s"
+                (Span.to_string instr.span) msg_part expected_s actual_s)
+       | _ -> Error "VM stack underflow or type error on OP_ASSERT_EQ")
+    | Ir.OP_ASSERT_ERR { expected_code; actual_codes; passed } ->
+      (match st.stack with
+       | VString msg :: rest ->
+         st.stack <- rest;
+         let actual_s =
+           if actual_codes = [] then "no error" else String.concat ", " actual_codes
+         in
+         let res =
+           {
+             passed;
+             span = instr.span;
+             expected = expected_code;
+             actual = actual_s;
+             message = msg;
+           }
+         in
+         st.assertions_rev <- res :: st.assertions_rev;
+         if passed || st.collect_assertions then
+           Ok ()
+         else
+           let msg_part = if msg = "" then "" else Printf.sprintf " (%s)" msg in
+           Error
+             (Printf.sprintf "assert_error failed at %s%s: expected '%s', got %s"
+                (Span.to_string instr.span) msg_part expected_code actual_s)
+       | _ -> Error "VM stack underflow or type error on OP_ASSERT_ERR")
     | Ir.OP_HALT ->
       st.halted <- true;
       Ok ()
@@ -790,6 +869,28 @@ let run (prog : Ir.program) : (string, string) result =
   let rec loop () =
     if st.halted then Ok (Buffer.contents out_buf)
     else
+      match step ~out_buf prog st with
+      | Ok () -> loop ()
+      | Error msg -> Error msg
+  in
+  loop ()
+
+let run_tests (prog : Ir.program) : (test_report, string) result =
+  let st = create_state ~collect_assertions:true () in
+  let out_buf = Buffer.create 64 in
+  let rec loop () =
+    if st.halted then begin
+      let assertions = List.rev st.assertions_rev in
+      let passed_count = List.length (List.filter (fun a -> a.passed) assertions) in
+      let failed_count = List.length (List.filter (fun a -> not a.passed) assertions) in
+      Ok
+        {
+          stdout = Buffer.contents out_buf;
+          passed_count;
+          failed_count;
+          assertions;
+        }
+    end else
       match step ~out_buf prog st with
       | Ok () -> loop ()
       | Error msg -> Error msg

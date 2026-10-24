@@ -130,6 +130,12 @@ type opcode =
   | OP_PRINT_STR
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_ASSERT_EQ
+  | OP_ASSERT_ERR of {
+      expected_code : string;
+      actual_codes : string list;
+      passed : bool;
+    }
   | OP_HALT
 
 type instr = {
@@ -269,6 +275,9 @@ let pp_opcode fmt = function
   | OP_PRINT_STR -> Format.fprintf fmt "OP_PRINT_STR"
   | OP_PRINT_SPACE -> Format.fprintf fmt "OP_PRINT_SPACE"
   | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
+  | OP_ASSERT_EQ -> Format.fprintf fmt "OP_ASSERT_EQ"
+  | OP_ASSERT_ERR { expected_code; passed; _ } ->
+    Format.fprintf fmt "OP_ASSERT_ERR %s (%B)" expected_code passed
   | OP_HALT -> Format.fprintf fmt "OP_HALT"
 
 let pp_program fmt prog =

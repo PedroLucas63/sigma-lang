@@ -132,6 +132,12 @@ type opcode =
   | OP_PRINT_STR
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_ASSERT_EQ
+  | OP_ASSERT_ERR of {
+      expected_code : string;
+      actual_codes : string list;
+      passed : bool;
+    }
   | OP_HALT
 
 type instr = {
