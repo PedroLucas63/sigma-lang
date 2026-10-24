@@ -12,6 +12,8 @@
 | Palavra-chave | `KW_ELSE` | `else` |
 | Palavra-chave | `KW_PRINT` | `print` |
 | Palavra-chave | `KW_PRINTLN` | `println` |
+| Palavra-chave | `KW_ASSERT` | `assert` |
+| Palavra-chave | `KW_ASSERT_ERROR` | `assert_error` |
 | Palavra-chave | `KW_AND` | `and` |
 | Palavra-chave | `KW_OR` | `or` |
 | Palavra-chave | `KW_XOR` | `xor` |
@@ -81,6 +83,7 @@ decl_stmt     ::= var_decl
 non_decl_stmt ::= if_stmt
                 | block_stmt
                 | print_stmt ";"
+                | assert_stmt ";"
                 | expr_stmt ";" ;
 
 if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
@@ -92,6 +95,9 @@ const_decl    ::= "const" IDENT ( ":" TYPE "=" expr | ":=" expr ) ;
 
 print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
 arg_list      ::= expr ( "," expr )* ;
+
+assert_stmt   ::= "assert" "(" expr ( "," expr ( "," expr )? )? ")"
+                | "assert_error" "(" STRING "," STRING ( "," expr )? ")" ;
 
 expr_stmt     ::= expr ;
 
@@ -238,6 +244,18 @@ type stmt_desc =
       newline : bool;
       args : expr list;
     }
+  | StmtAssert of {
+      actual : expr;
+      expected : expr option;
+      message : expr option;
+    }
+  | StmtAssertError of {
+      expected_code : string;
+      code_span : Sigma_common.Span.t;
+      snippet : string;
+      snippet_span : Sigma_common.Span.t;
+      message : expr option;
+    }
   | StmtExpr of expr
 
 and stmt = {
@@ -326,5 +344,11 @@ type opcode =
   | OP_PRINT_STR
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_ASSERT_EQ
+  | OP_ASSERT_ERR of {
+      expected_code : string;
+      actual_codes : string list;
+      passed : bool;
+    }
   | OP_HALT
 ```

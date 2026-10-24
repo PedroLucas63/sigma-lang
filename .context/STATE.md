@@ -21,9 +21,12 @@
 - [x] Saída padrão explícita com `print(e1, e2, ...)` (sem `\n`) e `println(e1, e2, ...)` (com `\n`), aceitando 0 ou mais argumentos separados por vírgula; `<expr>;` avalia efeitos colaterais silenciosamente (`OP_POP`).
 - [x] Estruturas condicionais `if (<expr-bool>) <stmt> [else <stmt>]` (com ou sem chaves, incluindo `else if`) e blocos de escopo léxico `{ <stmt>* }` em qualquer ponto do código (sem *shadowing* `E0103` e com descarte de variáveis locais ao sair das chaves `E0102`).
 - [x] Declaração de constantes imutáveis `const` com inferência `:=` e tipo explícito `: <ty> =`, exigindo inicializador obrigatório (`E0106`) e proibindo estaticamente reatribuição ou incremento/decremento (`E0107`).
+- [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
+- [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 126 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
-- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `check`, `lint`, `debug`, `pkg init`.
-- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo constantes `const`, `if`/`else`, blocos de escopo léxico `{ ... }`, atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
+- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else`, blocos de escopo léxico `{ ... }`, atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
 - [ ] Implementar laços de repetição (`while`, `for`), funções definidas pelo usuário, leitura de entrada (`input`) ou tuplas `(T1, T2)`.
@@ -36,4 +39,4 @@
 - **2026-10-20:** Implementação dos operadores relacionais (`==`, `!=`, `<`, `>`, `<=`, `>=`), comparações encadeadas de 3 operandos (`a < x <= b`) e avaliação em curto-circuito para `and`, `or` e cadeias relacionais (`feature/relational-operators`, `ADR-017`).
 - **2026-10-20:** Atualização da skill `ecosystem-sync` para exigir documentação integrada em `web/index.html` com links para `docs/`, e sincronização completa de `editors/vscode/`, `docs/` e `web/` com todas as funcionalidades do Milestone M1 (`feature/ecosystem-sync-m1`).
 - **2026-10-21:** Implementação de atribuições (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos de escopo léxico `{ ... }` (`ADR-018` a `ADR-020`), com sincronização completa do ecossistema (`feature/ecosystem-sync-if-blocks`).
-- **2026-10-24:** Implementação da declaração de constantes imutáveis (`const`), diagnósticos `E0106`/`E0107`, paridade total VM e C99, e sincronização do ecossistema (`feature/const-declarations`, `ADR-021`).
+- **2026-10-24:** Implementação de constantes imutáveis (`const`) e testes integrados (`assert`, `assert_error`), test runner `sigma test` (--native, --parity), `sigma.toml` e suíte modular `.sgm` (`feature/test-runner-and-pkg-manager`, `ADR-021` e `ADR-022`).
