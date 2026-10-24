@@ -171,6 +171,7 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
         let kind =
           match word with
           | "var" -> Token.KW_VAR
+          | "const" -> Token.KW_CONST
           | "if" -> Token.KW_IF
           | "else" -> Token.KW_ELSE
           | "print" -> Token.KW_PRINT

@@ -74,6 +74,7 @@ and expr = {
 type var_decl = {
   name : string;
   name_span : Span.t;
+  is_const : bool;
   ty_annot : (string * Span.t) option;
   init : expr option;
 }

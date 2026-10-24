@@ -446,7 +446,9 @@ let expect_semi st start_span : (Span.t, Diagnostic.t) result =
          (Printf.sprintf "expected ';' at end of statement, found %s"
             (Token.kind_to_string tok.kind)))
 
-let parse_var_decl st var_tok : (Ast.stmt, Diagnostic.t) result =
+let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
+  let kw_name = if is_const then "const" else "var" in
+  let entity_name = if is_const then "constant" else "variable" in
   let name_tok = cur st in
   match name_tok.kind with
   | Token.IDENT name ->
@@ -458,11 +460,11 @@ let parse_var_decl st var_tok : (Ast.stmt, Diagnostic.t) result =
        (match parse_expr st with
         | Error e -> Error e
         | Ok init ->
-          (match expect_semi st var_tok.Token.span with
+          (match expect_semi st kw_tok.Token.span with
            | Error e -> Error e
            | Ok full_span ->
              let decl =
-               { Ast.name; name_span = name_tok.span; ty_annot = None; init = Some init }
+               { Ast.name; name_span = name_tok.span; is_const; ty_annot = None; init = Some init }
              in
              Ok { Ast.desc = Ast.StmtVarDecl decl; span = full_span }))
      | Token.COLON ->
@@ -479,28 +481,43 @@ let parse_var_decl st var_tok : (Ast.stmt, Diagnostic.t) result =
              (match parse_expr st with
               | Error e -> Error e
               | Ok init ->
-                (match expect_semi st var_tok.span with
+                (match expect_semi st kw_tok.span with
                  | Error e -> Error e
                  | Ok full_span ->
                    let decl =
-                     { Ast.name; name_span = name_tok.span; ty_annot; init = Some init }
+                     { Ast.name; name_span = name_tok.span; is_const; ty_annot; init = Some init }
                    in
                    Ok { Ast.desc = Ast.StmtVarDecl decl; span = full_span }))
            | Token.SEMI ->
              bump st;
-             let full_span = Span.merge var_tok.span after_ty.span in
-             let decl =
-               { Ast.name; name_span = name_tok.span; ty_annot; init = None }
-             in
-             Ok { Ast.desc = Ast.StmtVarDecl decl; span = full_span }
+             let full_span = Span.merge kw_tok.span after_ty.span in
+             if is_const then
+               Error
+                 (Diagnostic.error
+                    ~hint:(Printf.sprintf "provide a value, e.g. 'const %s : %s = <value>;'" name ty_name)
+                    ~code:"E0106"
+                    ~span:full_span
+                    (Printf.sprintf "constant '%s' requires an initializing expression" name))
+             else
+               let decl =
+                 { Ast.name; name_span = name_tok.span; is_const = false; ty_annot; init = None }
+               in
+               Ok { Ast.desc = Ast.StmtVarDecl decl; span = full_span }
            | _ ->
+             let hint =
+               if is_const then
+                 Printf.sprintf "use 'const %s : %s = <value>;'" name ty_name
+               else
+                 Printf.sprintf "use 'var %s : %s = <value>;' or 'var %s : %s;'" name ty_name name ty_name
+             in
+             let expected_msg = if is_const then "expected '=' after" else "expected '=' or ';' after" in
              Error
                (Diagnostic.error
-                  ~hint:"use 'var x : int = 10;' or 'var x : int;'"
+                  ~hint
                   ~code:"E0003"
                   ~span:after_ty.span
-                  (Printf.sprintf "expected '=' or ';' after type '%s', found %s"
-                     ty_name (Token.kind_to_string after_ty.kind))))
+                  (Printf.sprintf "%s type '%s', found %s"
+                     expected_msg ty_name (Token.kind_to_string after_ty.kind))))
         | _ ->
           Error
             (Diagnostic.error
@@ -511,25 +528,25 @@ let parse_var_decl st var_tok : (Ast.stmt, Diagnostic.t) result =
      | Token.EQUAL ->
        Error
          (Diagnostic.error
-            ~hint:(Printf.sprintf "use 'var %s := <value>;' for type inference or 'var %s : int = <value>;'" name name)
+            ~hint:(Printf.sprintf "use '%s %s := <value>;' for type inference or '%s %s : int = <value>;'" kw_name name kw_name name)
             ~code:"E0002"
             ~span:op_tok.span
-            "cannot use '=' without an explicit type annotation in 'var' declaration")
+            (Printf.sprintf "cannot use '=' without an explicit type annotation in '%s' declaration" kw_name))
      | _ ->
        Error
          (Diagnostic.error
-            ~hint:(Printf.sprintf "use 'var %s : <type> [= <value>];' or 'var %s := <value>;'" name name)
+            ~hint:(Printf.sprintf "use '%s %s : <type> = <value>;' or '%s %s := <value>;'" kw_name name kw_name name)
             ~code:"E0002"
             ~span:op_tok.span
-            (Printf.sprintf "expected ':' or ':=' after variable name '%s', found %s"
-               name (Token.kind_to_string op_tok.kind))))
+            (Printf.sprintf "expected ':' or ':=' after %s name '%s', found %s"
+               entity_name name (Token.kind_to_string op_tok.kind))))
   | _ ->
     Error
       (Diagnostic.error
          ~code:"E0002"
          ~span:name_tok.span
-         (Printf.sprintf "expected variable name after 'var', found %s"
-            (Token.kind_to_string name_tok.kind)))
+         (Printf.sprintf "expected %s name after '%s', found %s"
+            entity_name kw_name (Token.kind_to_string name_tok.kind)))
 
 let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
   let fn_name = if newline then "println" else "print" in
@@ -587,19 +604,24 @@ let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   match tok.kind with
   | Token.KW_VAR ->
     bump st;
-    parse_var_decl st tok
+    parse_decl st tok ~is_const:false
+  | Token.KW_CONST ->
+    bump st;
+    parse_decl st tok ~is_const:true
   | _ -> parse_non_decl_stmt st
 
 and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
-  | Token.KW_VAR ->
+  | Token.KW_VAR | Token.KW_CONST ->
+    let kw_str = if tok.kind = Token.KW_VAR then "variable declaration 'var'" else "constant declaration 'const'" in
+    let kw_name = if tok.kind = Token.KW_VAR then "var" else "const" in
     Error
       (Diagnostic.error
-         ~hint:"wrap the variable declaration in braces, e.g. 'if (cond) { var x := ...; }'"
+         ~hint:(Printf.sprintf "wrap the declaration in braces, e.g. 'if (cond) { %s x := ...; }'" kw_name)
          ~code:"E0002"
          ~span:tok.span
-         "variable declaration 'var' is not allowed directly inside an unbraced branch")
+         (Printf.sprintf "%s is not allowed directly inside an unbraced branch" kw_str))
   | Token.KW_IF ->
     bump st;
     parse_if_stmt st tok

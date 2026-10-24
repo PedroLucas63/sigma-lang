@@ -4,6 +4,7 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_CONST
   | KW_IF
   | KW_ELSE
   | KW_PRINT

@@ -2,6 +2,7 @@ open Sigma_common
 
 type kind =
   | KW_VAR
+  | KW_CONST
   | KW_IF
   | KW_ELSE
   | KW_PRINT
@@ -70,6 +71,7 @@ and t = {
 
 let kind_to_string = function
   | KW_VAR -> "'var'"
+  | KW_CONST -> "'const'"
   | KW_IF -> "'if'"
   | KW_ELSE -> "'else'"
   | KW_PRINT -> "'print'"
