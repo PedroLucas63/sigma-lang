@@ -3,11 +3,11 @@ set -euo pipefail
 
 # install.sh — Instalador automático da Linguagem de Programação Sigma
 # Uso:
-#   curl -fsSL https://raw.githubusercontent.com/pedrolcs/sigma-lang/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/PedroLucas63/sigma-lang/main/install.sh | bash
 #   ou:
 #   SIGMA_VERSION="0.1.0" bash install.sh
 
-REPO="pedrolcs/sigma-lang"
+REPO="PedroLucas63/sigma-lang"
 SIGMA_VERSION="${SIGMA_VERSION:-latest}"
 
 echo "=== Instalador da Linguagem Sigma ==="

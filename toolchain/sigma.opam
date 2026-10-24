@@ -5,8 +5,8 @@ synopsis:
 description:
   "Unified CLI for the Sigma interpreter, native compiler, linter, debugger, and package manager."
 license: "MIT"
-homepage: "https://github.com/pedrolcs/sigma"
-bug-reports: "https://github.com/pedrolcs/sigma/issues"
+homepage: "https://github.com/PedroLucas63/sigma-lang"
+bug-reports: "https://github.com/PedroLucas63/sigma-lang/issues"
 depends: [
   "dune" {>= "3.16"}
   "ocaml" {>= "5.1"}
@@ -26,4 +26,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/pedrolcs/sigma.git"
+dev-repo: "git+https://github.com/PedroLucas63/sigma-lang.git"

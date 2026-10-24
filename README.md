@@ -1,7 +1,7 @@
 # Linguagem de Programação Sigma (`Σ`)
 
-[![CI — Testes & Validação](https://github.com/pedrolcs/sigma-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/pedrolcs/sigma-lang/actions/workflows/ci.yml)
-[![Release & Deploy — Main](https://github.com/pedrolcs/sigma-lang/actions/workflows/release.yml/badge.svg)](https://github.com/pedrolcs/sigma-lang/actions/workflows/release.yml)
+[![CI — Testes & Validação](https://github.com/PedroLucas63/sigma-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/PedroLucas63/sigma-lang/actions/workflows/ci.yml)
+[![Release & Deploy — Main](https://github.com/PedroLucas63/sigma-lang/actions/workflows/release.yml/badge.svg)](https://github.com/PedroLucas63/sigma-lang/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Sigma** é uma linguagem de programação moderna de propósito geral, com foco em computação científica, estatística e alta performance (compilada nativamente via C99 e interpretada via máquina virtual baseada em pilha).
@@ -13,12 +13,12 @@
 ### Linux & macOS (Instalador Automático)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pedrolcs/sigma-lang/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PedroLucas63/sigma-lang/main/install.sh | bash
 ```
 
 ### Pacote Debian / Ubuntu (`.deb`)
 
-Baixe a versão mais recente na página de [Releases](https://github.com/pedrolcs/sigma-lang/releases) e instale:
+Baixe a versão mais recente na página de [Releases](https://github.com/PedroLucas63/sigma-lang/releases) e instale:
 
 ```bash
 sudo dpkg -i sigma_*_amd64.deb
@@ -26,7 +26,7 @@ sudo dpkg -i sigma_*_amd64.deb
 
 ### Arquivos Binários (`.tar.gz` / `.zip`)
 
-Baixe o arquivo comprimido na página de [Releases](https://github.com/pedrolcs/sigma-lang/releases), descompacte e adicione o executável `sigma` ao seu `PATH`.
+Baixe o arquivo comprimido na página de [Releases](https://github.com/PedroLucas63/sigma-lang/releases), descompacte e adicione o executável `sigma` ao seu `PATH`.
 
 ---
 
@@ -77,7 +77,7 @@ sigma test --parity
 
 ## 🌐 Site, Playground & Documentação
 
-- **Playground Online & Documentação:** Acesse o site oficial publicado via GitHub Pages: [pedrolcs.github.io/sigma-lang](https://pedrolcs.github.io/sigma-lang/)
+- **Playground Online & Documentação:** Acesse o site oficial publicado via GitHub Pages: [pedrolucas63.github.io/sigma-lang](https://pedrolucas63.github.io/sigma-lang/)
 - **Documentação Markdown no Repositório:** Consulte [`docs/`](docs/README.md) para especificações formais, referências de sintaxe e guias passo a passo.
 
 ---
