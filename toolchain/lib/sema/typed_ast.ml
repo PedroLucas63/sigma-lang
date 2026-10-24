@@ -48,6 +48,17 @@ type stmt_desc =
       newline : bool;
       args : expr list;
     }
+  | TStmtAssert of {
+      actual : expr;
+      expected : expr;
+      message : expr option;
+    }
+  | TStmtAssertError of {
+      expected_code : string;
+      actual_codes : string list;
+      passed : bool;
+      message : expr option;
+    }
   | TStmtExpr of expr
 
 and stmt = {

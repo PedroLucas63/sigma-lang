@@ -73,6 +73,12 @@ let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     Option.iter (lint_stmt tbl decl_order) else_branch
   | Typed_ast.TStmtPrint { args; _ } ->
     List.iter (mark_expr_usage tbl) args
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    mark_expr_usage tbl actual;
+    mark_expr_usage tbl expected;
+    Option.iter (mark_expr_usage tbl) message
+  | Typed_ast.TStmtAssertError { message; _ } ->
+    Option.iter (mark_expr_usage tbl) message
   | Typed_ast.TStmtExpr e ->
     mark_expr_usage tbl e
 

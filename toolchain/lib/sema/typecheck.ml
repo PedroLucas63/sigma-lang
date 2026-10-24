@@ -484,6 +484,141 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
            span = s.span;
          }
      | errors -> Error errors)
+  | Ast.StmtAssert { actual; expected; message } ->
+    let errs = ref [] in
+    let tactual_opt =
+      match check_expr env actual with
+      | Ok ta -> Some ta
+      | Error e ->
+        errs := e :: !errs;
+        None
+    in
+    let texpected_opt =
+      match expected with
+      | None -> None
+      | Some exp_e ->
+        (match check_expr env exp_e with
+         | Ok te -> Some te
+         | Error e ->
+           errs := e :: !errs;
+           None)
+    in
+    let tmsg_opt =
+      match message with
+      | None -> None
+      | Some msg_e ->
+        (match check_expr env msg_e with
+         | Error e ->
+           errs := e :: !errs;
+           None
+         | Ok tm ->
+           if tm.ty = Ty.String then
+             Some tm
+           else begin
+             errs :=
+               Diagnostic.error
+                 ~hint:"the optional 3rd argument of 'assert' is a diagnostic description string"
+                 ~code:"E0104"
+                 ~span:tm.span
+                 (Printf.sprintf "type mismatch in 'assert' message: expected 'string', found '%s'"
+                    (Ty.to_string tm.ty))
+               :: !errs;
+             None
+           end)
+    in
+    (match List.rev !errs, tactual_opt, expected, texpected_opt with
+     | _ :: _ as errors, _, _, _ -> Error errors
+     | [], Some ta, None, _ ->
+       if ta.ty = Ty.Bool then
+         let ttrue =
+           { Typed_ast.desc = Typed_ast.TExprBool true; ty = Ty.Bool; span = ta.span }
+         in
+         Ok
+           {
+             Typed_ast.desc =
+               Typed_ast.TStmtAssert { actual = ta; expected = ttrue; message = tmsg_opt };
+             span = s.span;
+           }
+       else
+         Error
+           [
+             Diagnostic.error
+               ~hint:"pass an expected value as second argument, e.g. 'assert(actual, expected);'"
+               ~code:"E0104"
+               ~span:ta.span
+               (Printf.sprintf "single-argument 'assert' expects a 'bool' condition, found '%s'"
+                  (Ty.to_string ta.ty));
+           ]
+     | [], Some ta, Some _, Some te ->
+       if Ty.equal ta.ty te.ty then
+         Ok
+           {
+             Typed_ast.desc =
+               Typed_ast.TStmtAssert { actual = ta; expected = te; message = tmsg_opt };
+             span = s.span;
+           }
+       else
+         Error
+           [
+             Diagnostic.error
+               ~hint:"both arguments in 'assert(actual, expected)' must have the exact same type"
+               ~code:"E0104"
+               ~span:s.span
+               (Printf.sprintf
+                  "type mismatch in 'assert': actual value has type '%s', expected value has type '%s'"
+                  (Ty.to_string ta.ty)
+                  (Ty.to_string te.ty));
+           ]
+     | _ -> Error [])
+  | Ast.StmtAssertError { expected_code; snippet; message; _ } ->
+    let errs = ref [] in
+    let tmsg_opt =
+      match message with
+      | None -> None
+      | Some msg_e ->
+        (match check_expr env msg_e with
+         | Error e ->
+           errs := e :: !errs;
+           None
+         | Ok tm ->
+           if tm.ty = Ty.String then
+             Some tm
+           else begin
+             errs :=
+               Diagnostic.error
+                 ~hint:"the optional 3rd argument of 'assert_error' is a diagnostic description string"
+                 ~code:"E0104"
+                 ~span:tm.span
+                 (Printf.sprintf "type mismatch in 'assert_error' message: expected 'string', found '%s'"
+                    (Ty.to_string tm.ty))
+               :: !errs;
+             None
+           end)
+    in
+    (match List.rev !errs with
+     | _ :: _ as errors -> Error errors
+     | [] ->
+       let snippet_src = Source.of_string ~filename:"<assert_error>" ~content:snippet in
+       let diags =
+         match Lexer.tokenize snippet_src with
+         | Error lex_errs -> lex_errs
+         | Ok tokens ->
+           (match Parser.parse tokens with
+            | Error parse_errs -> parse_errs
+            | Ok ast ->
+              (match check_program ast with
+               | Error sema_errs -> sema_errs
+               | Ok _ -> []))
+       in
+       let actual_codes = List.map (fun (d : Diagnostic.t) -> d.code) diags in
+       let passed = List.exists (fun c -> c = expected_code) actual_codes in
+       Ok
+         {
+           Typed_ast.desc =
+             Typed_ast.TStmtAssertError
+               { expected_code; actual_codes; passed; message = tmsg_opt };
+           span = s.span;
+         })
   | Ast.StmtVarDecl v ->
     let errs = ref [] in
     (match Hashtbl.find_opt env v.name with
@@ -573,7 +708,7 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
           in
           Ok { Typed_ast.desc = Typed_ast.TStmtVarDecl tdecl; span = s.span }))
 
-let check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) result =
+and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) result =
   let env : env = Hashtbl.create 16 in
   let root_scope = ref [] in
   let tstmts = ref [] in
