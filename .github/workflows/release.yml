@@ -24,26 +24,26 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Configurar OCaml & Dune
+      - name: Configurar OCaml
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.2.x
-          dune-cache: true
 
-      - name: Instalar Dependências do Sistema
+      - name: Instalar Dependências do Sistema & Dune
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc make
+          opam install -y dune
 
       - name: Compilar Toolchain em Modo Release
         run: |
           cd toolchain
-          dune build --profile release
+          opam exec -- dune build --profile release
 
       - name: Executar Testes Unitários OCaml
         run: |
           cd toolchain
-          dune runtest
+          opam exec -- dune runtest
 
       - name: Executar Testes com a Própria Linguagem Sigma (Paridade VM vs C99)
         run: |
@@ -58,21 +58,21 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Configurar OCaml & Dune
+      - name: Configurar OCaml
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: 5.2.x
-          dune-cache: true
 
-      - name: Instalar Dependências de Empacotamento
+      - name: Instalar Dependências de Empacotamento & Dune
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc make zip dpkg binutils
+          opam install -y dune
 
       - name: Compilar Binário Otimizado
         run: |
           cd toolchain
-          dune build --profile release
+          opam exec -- dune build --profile release
 
       - name: Gerar Pacotes (.tar.gz, .zip, .deb, SHA256SUMS.txt)
         run: |
