@@ -26,6 +26,7 @@
 - [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 126 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
+- [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else`, blocos de escopo léxico `{ ... }`, atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
