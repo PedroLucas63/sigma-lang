@@ -653,6 +653,13 @@ let test_syntax_and_semantic_errors () =
       ("const c := 10; --c;", "E0107");
       ("if (true) const y := 10;", "E0002");
       ("const x : int = true;", "E0104");
+      ("assert();", "E0002");
+      ("assert(1, 2, \"msg\", 4);", "E0002");
+      ("assert(42);", "E0104");
+      ("assert(10, 10.0);", "E0104");
+      ("assert(10, 10, 123);", "E0104");
+      ("assert_error(\"E0106\");", "E0002");
+      ("var s := \"const x : int;\"; assert_error(\"E0106\", s);", "E0002");
     ]
 
 let test_assignment_and_incdec_parity () =
@@ -952,6 +959,71 @@ println("Consts:", MAX_RETRIES, APP_NAME, IS_READY, TIMEOUT_MS, TAX_RATE, DELIM)
   in
   run_and_check_parity ~name:"const_declarations" ~code ~expected_stdout
 
+let test_assert_and_test_runner_parity () =
+  let code =
+    {|
+assert(10 + 3, 13, "Operação de soma com inteiros literais");
+assert(10.0 - 6.0, 4.0, "Operação de subtração com float literais");
+assert(0.1m + 0.2m, 0.3m, "Soma exata decimal 128-bit");
+assert(true and not false);
+assert("Sigma", 'S' + "igma", "Concatenação char + string");
+assert_error("E0106", "const X : int;", "Constante sem inicializador");
+assert_error("E0107", "const MAX := 10; MAX = 20;", "Mutação de constante");
+assert_error("E0104", "var x := 0.1f + 0.2m;", "Mistura float e decimal");
+|}
+  in
+  let src = Source.of_string ~filename:"self_test.sgm" ~content:code in
+  (match Driver.test_source ~mode:Driver.ModeParity src with
+   | Error errs ->
+     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+     assert_true ~msg:"self_test.sgm should compile and run in ModeParity" false
+   | Ok res ->
+     assert_true ~msg:"8 assertions should pass" (res.passed_count = 8);
+     assert_true ~msg:"0 assertions should fail" (res.failed_count = 0);
+     assert_true ~msg:"native parity should be Some true" (res.native_ok = Some true));
+  (* Verify failure reporting when an assertion fails *)
+  let bad_code =
+    {|
+assert(10 + 3, 13, "Ok");
+assert(10 + 3, 99, "Soma incorreta proposital");
+assert_error("E0106", "var x := 10;", "Esperava E0106 mas código é válido");
+|}
+  in
+  let bad_src = Source.of_string ~filename:"failing_test.sgm" ~content:bad_code in
+  (match Driver.test_source ~mode:Driver.ModeParity bad_src with
+   | Error _ -> assert_true ~msg:"failing_test.sgm should compile cleanly" false
+   | Ok res ->
+     assert_true ~msg:"1 assertion should pass" (res.passed_count = 1);
+     assert_true ~msg:"2 assertions should fail" (res.failed_count = 2))
+
+let test_pkg_manifest_and_scaffold () =
+  let open Sigma_pkg in
+  let m =
+    Manifest.default
+      ~version:"0.2.0"
+      ~description:"Pacote científico Sigma"
+      ~authors:[ "Pedro Lucas <pedro@sigma.dev>" ]
+      ~src_dir:"src"
+      ~entry:"src/main.sgm"
+      ~test_dir:"tests"
+      ~name:"sigma_stats"
+      ()
+  in
+  let toml = Manifest.to_toml m in
+  match Manifest.parse_toml toml with
+  | Error msg ->
+    Printf.eprintf "Manifest parse error: %s\n" msg;
+    assert_true ~msg:"Manifest.parse_toml should succeed" false
+  | Ok parsed ->
+    assert_eq ~msg:"manifest name" "sigma_stats" parsed.name;
+    assert_eq ~msg:"manifest version" "0.2.0" parsed.version;
+    assert_eq ~msg:"manifest description" "Pacote científico Sigma" parsed.description;
+    assert_eq ~msg:"manifest entry" "src/main.sgm" parsed.entry;
+    assert_eq ~msg:"manifest test_dir" "tests" parsed.test_dir;
+    assert_true
+      ~msg:"manifest script 'test' exists"
+      (Manifest.find_script "test" parsed = Some "sigma test")
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -960,6 +1032,8 @@ let () =
   test_print_and_println_parity ();
   test_if_else_and_blocks_parity ();
   test_const_declarations_parity ();
+  test_assert_and_test_runner_parity ();
+  test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();
   test_debugger_trace ();
   test_syntax_and_semantic_errors ();

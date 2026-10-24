@@ -1,0 +1,35 @@
+# 03. Testes de Operadores Lógicos, Bitwise e Relacionais Encadeados
+
+# 1. Álgebra booleana e precedência (not > and > xor > or)
+assert(not false, true, "Negação lógica");
+assert(not false and true xor false, true, "Precedência not > and > xor");
+assert(true or true xor true, true, "Precedência xor > or");
+assert(true xor true, false, "XOR booleano com operandos iguais");
+assert(true xor false, true, "XOR booleano com operandos diferentes");
+
+# 2. Operações Bitwise de 64 bits sobre int
+assert(not 0, -1, "NOT bitwise de 64 bits (~0 == -1)");
+assert(6 and 3, 2, "AND bitwise (0110 & 0011 == 0010)");
+assert(6 xor 3, 5, "XOR bitwise (0110 ^ 0011 == 0101)");
+assert(6 or 3, 7, "OR bitwise (0110 | 0011 == 0111)");
+assert(1 << 10, 1024, "Shift left <<");
+assert(-16 >> 2, -4, "Shift right aritmético >> preserva sinal");
+
+# 3. Operadores relacionais e cadeias ternárias (a < x <= b)
+var x := 18;
+assert(7 < x <= 30, true, "Comparação encadeada verdadeira (7 < 18 <= 30)");
+assert(20 < x <= 30, false, "Comparação encadeada falsa no primeiro termo");
+assert(7 < x <= 15, false, "Comparação encadeada falsa no segundo termo");
+assert(8 < 10 != 11, true, "Cadeia relacional mista");
+
+# 4. Avaliação em curto-circuito (short-circuit) evitando divisão por zero
+var zero := 0;
+assert(false and (10 // zero > 0), false, "Curto-circuito em 'and' não avalia o lado direito");
+assert(true or (10 // zero > 0), true, "Curto-circuito em 'or' não avalia o lado direito");
+assert(10 < 5 < (10 // zero), false, "Curto-circuito em cadeia relacional não avalia o 3º operando");
+
+# 5. Erros estáticos em lógicos, bitwise e relacionais
+assert_error("E0104", "var x := true and 1;", "Proibido misturar bool e int em 'and'");
+assert_error("E0104", "var x := true << 1;", "Shift bitwise exclusivo para int");
+assert_error("E0104", "var x := \"abc\" < \"def\";", "Strings suportam apenas == e !=");
+assert_error("E0002", "var x := 1 < 2 < 3 < 4;", "Cadeia relacional limitada a 3 operandos");

@@ -1,0 +1,74 @@
+# 01. Testes de Variáveis (var), Constantes (const), Tipos Primitivos e Interpolação
+
+# 1. Inteiros, inferência, tipo explícito, zero-init e separador '_'
+var a := 10;
+var b : int = 15;
+var z_int : int;
+var neg : int = -42;
+var milhao := 1_000_000;
+
+assert(a, 10, "Inteiro inferido com :=");
+assert(b, 15, "Inteiro com tipo explícito");
+assert(z_int, 0, "Zero-initialization de int deve ser 0");
+assert(neg, -42, "Inteiro negativo");
+assert(milhao, 1000000, "Separador visual '_' em literal inteiro");
+
+# 2. Ponto flutuante (float, double) e Decimal Exato de 128 bits (decimal)
+var f1 := 10.5;
+var f2 : float = 1.5e2f;
+var z_flt : float;
+
+var d1 := 3.141592653589793d;
+var z_dbl : double;
+
+var m1 := 10.90m;
+var m2 : decimal = 123_456.789m;
+var z_dec : decimal;
+
+assert(f1, 10.5f, "Literal float padrão");
+assert(f2, 150.0f, "Literal float em notação científica");
+assert(z_flt, 0.0f, "Zero-initialization de float");
+assert(d1, 3.141592653589793d, "Precisão de 64 bits em double");
+assert(z_dbl, 0.0d, "Zero-initialization de double");
+assert(m1, 10.9m, "Literal decimal 128-bit");
+assert(m2, 123456.789m, "Literal decimal com separador '_'");
+assert(z_dec, 0.0m, "Zero-initialization de decimal");
+
+# 3. Booleano, Char Unicode e String Interpolada
+var b_true := true;
+var z_bool : bool;
+var c_sigma : char = 'Σ';
+var z_char : char;
+var z_str : string;
+
+assert(b_true);
+assert(z_bool, false, "Zero-initialization de bool deve ser false");
+assert(c_sigma, 'Σ', "Char Unicode UTF-8");
+assert(z_char, '\0', "Zero-initialization de char");
+assert(z_str, "", "Zero-initialization de string");
+
+var msg := "[${c_sigma}] a=${a}, m1=${m1}, ok=${b_true}";
+assert(msg, "[Σ] a=10, m1=10.9, ok=true", "Interpolação de múltiplos tipos em string");
+
+# 4. Constantes Imutáveis (const)
+const PI := 3.1415926535d;
+const MAX_ITERS : int = 500;
+const NOME_LINGUAGEM := "Sigma";
+
+assert(PI, 3.1415926535d, "Constante double inferida");
+assert(MAX_ITERS, 500, "Constante int explícita");
+assert(NOME_LINGUAGEM, "Sigma", "Constante string");
+
+# 5. Erros Léxicos, Sintáticos e Semânticos de Declaração
+assert_error("E0001", "var x := 1_000_;", "Separador '_' no final do número deve falhar");
+assert_error("E0001", "var x := 1__000;", "Separadores '__' consecutivos devem falhar");
+assert_error("E0002", "var x = 10;", "Uso de '=' sem anotação de tipo deve falhar");
+assert_error("E0003", "var x := 10", "Falta de ponto-e-vírgula deve falhar");
+assert_error("E0101", "var x : matrix = 10;", "Tipo inexistente deve falhar com E0101");
+assert_error("E0102", "println(nao_existe);", "Variável não declarada deve falhar com E0102");
+assert_error("E0103", "var dup := 1; var dup := 2;", "Redeclaração no mesmo escopo deve falhar com E0103");
+assert_error("E0104", "var d : double = 10.0f;", "Incompatibilidade float em double deve falhar com E0104");
+assert_error("E0106", "const X : int;", "Constante sem inicializador deve falhar com E0106");
+assert_error("E0107", "const C := 10; C = 20;", "Reatribuição de constante deve falhar com E0107");
+assert_error("E0107", "const C := 10; C += 1;", "Atribuição composta em constante deve falhar com E0107");
+assert_error("E0107", "const C := 10; C++;", "Incremento em constante deve falhar com E0107");

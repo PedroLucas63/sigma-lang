@@ -1,0 +1,73 @@
+# 04. Testes de Atribuições (=, <op>=) e Incremento/Decremento (++, --)
+
+# 1. Atribuição simples e encadeada (associativa à direita)
+var a : int;
+var b : int;
+assert(a = b = 10, 10, "Atribuição encadeada retorna o valor atribuído");
+assert(a, 10);
+assert(b, 10);
+
+# 2. Atribuições compostas em int, float, double, decimal, char, string e bool
+a += 5;
+assert(a, 15, "Atribuição '+=' em int");
+a -= 3;
+assert(a, 12, "Atribuição '-=' em int");
+a *= 2;
+assert(a, 24, "Atribuição '*=' em int");
+a //= 5;
+assert(a, 4, "Atribuição '//=' em int");
+a ^= 3;
+assert(a, 64, "Atribuição '^=' em int");
+a %= 10;
+assert(a, 4, "Atribuição '%=' em int");
+
+var mask := 6;
+mask and= 3;
+assert(mask, 2, "Atribuição bitwise 'and='");
+mask or= 8;
+assert(mask, 10, "Atribuição bitwise 'or='");
+mask xor= 15;
+assert(mask, 5, "Atribuição bitwise 'xor='");
+mask <<= 2;
+assert(mask, 20, "Atribuição '<<='");
+mask >>= 1;
+assert(mask, 10, "Atribuição '>>='");
+
+var f := 10.0f;
+f += 2;
+f /= 3.0f;
+assert(f, 4.0f, "Atribuição '+=' com promoção int->float e '/='");
+
+var m := 100.50m;
+m += 20;
+m -= 0.50m;
+m /= 2m;
+assert(m, 60.0m, "Atribuições compostas em decimal 128-bit");
+
+var ch := 'a';
+ch += 4;
+assert(ch, 'e', "Deslocamento Unicode com '+=' em char");
+
+var s := "Sig";
+s += 'm';
+s += "a";
+s *= 2;
+assert(s, "SigmaSigma", "Concatenação e repetição com '+=' e '*=' em string");
+
+# 3. Incremento e Decremento pré e pós-fixados (++, --)
+var i := 10;
+assert(++i, 11, "Pré-incremento retorna novo valor");
+assert(i++, 11, "Pós-incremento retorna valor antigo");
+assert(i, 12, "Valor após pós-incremento");
+assert(--i, 11, "Pré-decremento retorna novo valor");
+assert(i--, 11, "Pós-decremento retorna valor antigo");
+assert(i, 10, "Valor após pós-decremento");
+
+var c_inc := 'b';
+assert(++c_inc, 'c', "Pré-incremento em char");
+assert(--c_inc, 'b', "Pré-decremento em char");
+
+# 4. Erros estáticos em atribuições
+assert_error("E0104", "var n := 10; n /= 2;", "Divisão real '/=' em int deve falhar sugerindo '//='");
+assert_error("E0104", "var b := true; b++;", "Incremento não é permitido em bool");
+assert_error("E0105", "var n := 10; n //= 0;", "Atribuição '//=' por zero detectada estaticamente");

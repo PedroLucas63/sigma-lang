@@ -1,0 +1,4 @@
+# Ponto de entrada padrão — Sigma
+const VERSAO := "0.1.0";
+println("Sigma Language v" + VERSAO);
+println("Execute 'sigma test' para rodar a suíte completa de testes.");

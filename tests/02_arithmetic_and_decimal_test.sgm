@@ -1,0 +1,42 @@
+# 02. Testes de Operações Aritméticas, Precedência, Decimal 128-bit e Char/String
+
+# 1. Precedência matemática e associatividade à direita de '^'
+assert(-2 ^ 2, -4, "Unário '-' tem menor precedência que potenciação '^'");
+assert((-2) ^ 2, 4, "Parênteses antes da potenciação");
+assert(2 ^ 3 ^ 2, 512, "Potenciação '^' é associativa à direita (2 ^ (3 ^ 2))");
+assert(2 + 3 * 4, 14, "Multiplicação precede adição");
+assert((2 + 3) * 4, 20, "Parênteses alteram precedência");
+
+# 2. Divisão real (/), Divisão inteira truncada (//) e Módulo Euclidiano (%)
+assert(7 / 2, 3.5f, "Divisão '/' entre inteiros retorna float");
+assert(7 // 2, 3, "Divisão inteira '//' positiva");
+assert(-7 // 2, -3, "Divisão inteira '//' trunca em direção a zero");
+assert(7.9d // 2.0d, 3, "Divisão inteira '//' em double retorna int truncado");
+
+assert(-7 % 2, 1, "Módulo Euclidiano '%' é sempre não-negativo para dividendo negativo");
+assert(7 % -2, 1, "Módulo Euclidiano '%' é sempre não-negativo para divisor negativo");
+assert(-7 % -2, 1, "Módulo Euclidiano '%' com ambos negativos");
+assert(-7.5f % 2.0f, 0.5f, "Módulo Euclidiano '%' em float");
+assert(-7.5m % 2.0m, 0.5m, "Módulo Euclidiano '%' em decimal");
+
+# 3. Exatidão de Base-10 em Decimal de 128 bits
+assert(0.1m + 0.2m, 0.3m, "Soma exata em base 10 (0.1m + 0.2m == 0.3m)");
+assert((0.1m + 0.2m) * 10, 3.0m, "Promoção de int para decimal sem perda de precisão");
+assert(10m ^ 2, 100m, "Potenciação em decimal");
+
+# 4. Operações sobre char e string
+assert('a' + 3, 'd', "Deslocamento Unicode positivo (char + int -> char)");
+assert('d' - 3, 'a', "Deslocamento Unicode negativo (char - int -> char)");
+assert('z' - 'a', 25, "Distância entre code points (char - char -> int)");
+assert('S' + 'i', "Si", "Concatenação de dois chars (char + char -> string)");
+assert('S' + "igma", "Sigma", "Concatenação char + string");
+assert("Sig" + 'm' + 'a', "Sigma", "Concatenação string + char");
+assert('-' * 5, "-----", "Repetição de char (char * int -> string)");
+assert("ha" * 3, "hahaha", "Repetição de string (string * int -> string)");
+
+# 5. Erros estáticos de tipo e divisão por zero
+assert_error("E0104", "var x := 0.1f + 0.2m;", "Proibido misturar float binário com decimal base-10");
+assert_error("E0104", "var x := 0.1d + 0.2m;", "Proibido misturar double binário com decimal base-10");
+assert_error("E0105", "var x := 10 / 0;", "Divisão real por zero detectada em compilação");
+assert_error("E0105", "var x := 10 // 0;", "Divisão inteira por zero detectada em compilação");
+assert_error("E0105", "var x := 10 % 0;", "Módulo por zero detectado em compilação");

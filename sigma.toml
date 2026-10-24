@@ -1,0 +1,17 @@
+[package]
+name = "sigma-lang"
+version = "0.1.0"
+description = "Sigma Language Monorepo & Test Suite"
+authors = ["Pedro Lucas <pedrolucas.jsrn@gmail.com>"]
+
+[build]
+src_dir = "src"
+entry = "src/main.sgm"
+test_dir = "tests"
+
+[scripts]
+start = "sigma run"
+build = "sigma build"
+test = "sigma test"
+test-parity = "sigma test --parity"
+lint = "sigma lint"

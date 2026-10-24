@@ -1,4 +1,4 @@
 (test
  (name test_int_vars)
  (package sigma)
- (libraries unix sigma_common sigma_diagnostics sigma_driver))
+ (libraries unix sigma_common sigma_diagnostics sigma_driver sigma_pkg))

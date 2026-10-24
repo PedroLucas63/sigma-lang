@@ -1,0 +1,56 @@
+# 05. Testes de Condicionais (if / else) e Blocos de Escopo Léxico ({ ... })
+
+# 1. if / else sem chaves e com chaves
+var res := 0;
+if (10 > 5) res = 1; else res = 2;
+assert(res, 1, "if sem chaves (ramo verdadeiro)");
+
+if (10 < 5) res = 1; else res = 2;
+assert(res, 2, "if sem chaves (ramo falso)");
+
+# 2. Cadeia if / else if / else com blocos
+var nota := 85;
+var conceito := 'F';
+if (nota >= 90) {
+  conceito = 'A';
+} else if (nota >= 80) {
+  conceito = 'B';
+} else if (nota >= 70) {
+  conceito = 'C';
+} else {
+  conceito = 'D';
+}
+assert(conceito, 'B', "Cadeia if / else if / else");
+
+# 3. Dangling else associa ao if mais interno
+var d := 0;
+if (true)
+  if (false)
+    d = 1;
+  else
+    d = 2;
+assert(d, 2, "Dangling else liga ao if mais interno");
+
+# 4. Blocos léxicos autônomos { ... } e reutilização de nomes em escopos irmãos
+var soma_externa := 0;
+{
+  const BASE := 40;
+  var local_v := 2;
+  {
+    var interna := BASE + local_v;
+    soma_externa = interna;
+  }
+}
+assert(soma_externa, 42, "Acesso a constantes e variáveis do bloco pai");
+
+{
+  var local_v := "reutilizada com outro tipo em escopo irmão";
+  assert(local_v, "reutilizada com outro tipo em escopo irmão");
+}
+
+# 5. Erros estáticos de escopo e condicionais
+assert_error("E0104", "if (10) println(1);", "Condição de 'if' deve ser estritamente bool");
+assert_error("E0002", "if (true) var x := 10;", "Declaração 'var' exige chaves em ramo de 'if'");
+assert_error("E0002", "if (true) const X := 10;", "Declaração 'const' exige chaves em ramo de 'if'");
+assert_error("E0103", "var x := 1; { var x := 2; }", "Shadowing de variável ativa é proibido (E0103)");
+assert_error("E0102", "{ var temp := 10; } println(temp);", "Variável de bloco não existe fora das chaves (E0102)");
