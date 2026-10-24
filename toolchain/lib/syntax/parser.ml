@@ -423,6 +423,15 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
          ~span:tok.span
          (Printf.sprintf "'%s' is a void output statement and cannot be used inside an expression"
             fn_name))
+  | Token.KW_ASSERT | Token.KW_ASSERT_ERROR ->
+    let fn_name = if tok.kind = Token.KW_ASSERT_ERROR then "assert_error" else "assert" in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "use '%s(...);' as a standalone statement" fn_name)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "'%s' is a verification statement and cannot be used inside an expression"
+            fn_name))
   | _ ->
     Error
       (Diagnostic.error
@@ -599,6 +608,120 @@ let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after '%s', found %s"
             fn_name (Token.kind_to_string open_tok.kind)))
 
+let parse_call_args st fn_name fn_tok : (Ast.expr list * Span.t, Diagnostic.t) result =
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    let rec parse_args acc =
+      match parse_expr st with
+      | Error e -> Error e
+      | Ok arg ->
+        let acc = arg :: acc in
+        let next_tok = cur st in
+        (match next_tok.kind with
+         | Token.COMMA ->
+           bump st;
+           parse_args acc
+         | Token.RPAREN ->
+           bump st;
+           Ok (List.rev acc)
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:(Printf.sprintf "use '%s(a, b);' and close with ')'" fn_name)
+                ~code:"E0002"
+                ~span:next_tok.span
+                (Printf.sprintf "expected ')' or ',' after argument in '%s', found %s"
+                   fn_name (Token.kind_to_string next_tok.kind))))
+    in
+    let args_res =
+      if (cur st).kind = Token.RPAREN then begin
+        bump st;
+        Ok []
+      end else
+        parse_args []
+    in
+    (match args_res with
+     | Error e -> Error e
+     | Ok args ->
+       (match expect_semi st fn_tok.Token.span with
+        | Error e -> Error e
+        | Ok full_span -> Ok (args, full_span)))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "call '%s' with parentheses, e.g. '%s(...);'" fn_name fn_name)
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after '%s', found %s"
+            fn_name (Token.kind_to_string open_tok.kind)))
+
+let parse_assert_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
+  match parse_call_args st "assert" fn_tok with
+  | Error e -> Error e
+  | Ok (args, full_span) ->
+    (match args with
+     | [ actual ] ->
+       Ok { Ast.desc = Ast.StmtAssert { actual; expected = None; message = None }; span = full_span }
+     | [ actual; expected ] ->
+       Ok { Ast.desc = Ast.StmtAssert { actual; expected = Some expected; message = None }; span = full_span }
+     | [ actual; expected; msg ] ->
+       Ok { Ast.desc = Ast.StmtAssert { actual; expected = Some expected; message = Some msg }; span = full_span }
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~hint:"use 'assert(cond);', 'assert(actual, expected);', or 'assert(actual, expected, \"message\");'"
+            ~code:"E0002"
+            ~span:full_span
+            (Printf.sprintf "'assert' expects 1, 2, or 3 arguments, found %d" (List.length args))))
+
+let parse_assert_error_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
+  match parse_call_args st "assert_error" fn_tok with
+  | Error e -> Error e
+  | Ok (args, full_span) ->
+    let extract_str (e : Ast.expr) (arg_desc : string) =
+      match e.desc with
+      | Ast.ExprString s -> Ok (s, e.span)
+      | _ ->
+        Error
+          (Diagnostic.error
+             ~hint:"use a string literal, e.g. 'assert_error(\"E0106\", \"const x : int;\");'"
+             ~code:"E0002"
+             ~span:e.span
+             (Printf.sprintf "'assert_error' requires a string literal for %s" arg_desc))
+    in
+    (match args with
+     | [ code_expr; snippet_expr ] ->
+       (match extract_str code_expr "expected error code", extract_str snippet_expr "code snippet" with
+        | Error e, _ | _, Error e -> Error e
+        | Ok (expected_code, code_span), Ok (snippet, snippet_span) ->
+          Ok
+            {
+              Ast.desc =
+                Ast.StmtAssertError
+                  { expected_code; code_span; snippet; snippet_span; message = None };
+              span = full_span;
+            })
+     | [ code_expr; snippet_expr; msg_expr ] ->
+       (match extract_str code_expr "expected error code", extract_str snippet_expr "code snippet" with
+        | Error e, _ | _, Error e -> Error e
+        | Ok (expected_code, code_span), Ok (snippet, snippet_span) ->
+          Ok
+            {
+              Ast.desc =
+                Ast.StmtAssertError
+                  { expected_code; code_span; snippet; snippet_span; message = Some msg_expr };
+              span = full_span;
+            })
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~hint:"use 'assert_error(\"E0106\", \"const x : int;\");' or 'assert_error(\"E0106\", \"const x : int;\", \"message\");'"
+            ~code:"E0002"
+            ~span:full_span
+            (Printf.sprintf "'assert_error' expects 2 or 3 arguments, found %d" (List.length args))))
+
 let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
@@ -634,6 +757,12 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_PRINTLN ->
     bump st;
     parse_print_stmt st tok ~newline:true
+  | Token.KW_ASSERT ->
+    bump st;
+    parse_assert_stmt st tok
+  | Token.KW_ASSERT_ERROR ->
+    bump st;
+    parse_assert_error_stmt st tok
   | _ ->
     (match parse_expr st with
      | Error e -> Error e

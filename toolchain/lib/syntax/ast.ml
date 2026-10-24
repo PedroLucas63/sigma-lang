@@ -91,6 +91,18 @@ type stmt_desc =
       newline : bool;
       args : expr list;
     }
+  | StmtAssert of {
+      actual : expr;
+      expected : expr option;
+      message : expr option;
+    }
+  | StmtAssertError of {
+      expected_code : string;
+      code_span : Span.t;
+      snippet : string;
+      snippet_span : Span.t;
+      message : expr option;
+    }
   | StmtExpr of expr
 
 and stmt = {
@@ -185,6 +197,7 @@ let rec pp_expr fmt (e : expr) =
 let rec pp_stmt fmt (s : stmt) =
   match s.desc with
   | StmtVarDecl v ->
+    let kw = if v.is_const then "const" else "var" in
     let ty_s =
       match v.ty_annot with
       | None -> ""
@@ -192,11 +205,11 @@ let rec pp_stmt fmt (s : stmt) =
     in
     (match v.init, v.ty_annot with
      | Some init, None ->
-       Format.fprintf fmt "var %s := %a;" v.name pp_expr init
+       Format.fprintf fmt "%s %s := %a;" kw v.name pp_expr init
      | Some init, Some _ ->
-       Format.fprintf fmt "var %s%s = %a;" v.name ty_s pp_expr init
+       Format.fprintf fmt "%s %s%s = %a;" kw v.name ty_s pp_expr init
      | None, _ ->
-       Format.fprintf fmt "var %s%s;" v.name ty_s)
+       Format.fprintf fmt "%s %s%s;" kw v.name ty_s)
   | StmtBlock stmts ->
     Format.fprintf fmt "{ %a }"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
@@ -210,6 +223,18 @@ let rec pp_stmt fmt (s : stmt) =
     Format.fprintf fmt "%s(%a);" fn_name
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_expr)
       args
+  | StmtAssert { actual; expected; message } ->
+    (match expected, message with
+     | None, None -> Format.fprintf fmt "assert(%a);" pp_expr actual
+     | Some exp, None -> Format.fprintf fmt "assert(%a, %a);" pp_expr actual pp_expr exp
+     | Some exp, Some msg ->
+       Format.fprintf fmt "assert(%a, %a, %a);" pp_expr actual pp_expr exp pp_expr msg
+     | None, Some msg ->
+       Format.fprintf fmt "assert(%a, %a);" pp_expr actual pp_expr msg)
+  | StmtAssertError { expected_code; snippet; message; _ } ->
+    (match message with
+     | None -> Format.fprintf fmt "assert_error(%S, %S);" expected_code snippet
+     | Some msg -> Format.fprintf fmt "assert_error(%S, %S, %a);" expected_code snippet pp_expr msg)
   | StmtExpr e ->
     Format.fprintf fmt "%a;" pp_expr e
 

@@ -7,6 +7,8 @@ type kind =
   | KW_ELSE
   | KW_PRINT
   | KW_PRINTLN
+  | KW_ASSERT
+  | KW_ASSERT_ERROR
   | KW_AND
   | KW_OR
   | KW_XOR
@@ -76,6 +78,8 @@ let kind_to_string = function
   | KW_ELSE -> "'else'"
   | KW_PRINT -> "'print'"
   | KW_PRINTLN -> "'println'"
+  | KW_ASSERT -> "'assert'"
+  | KW_ASSERT_ERROR -> "'assert_error'"
   | KW_AND -> "'and'"
   | KW_OR -> "'or'"
   | KW_XOR -> "'xor'"

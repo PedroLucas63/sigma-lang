@@ -176,6 +176,8 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "else" -> Token.KW_ELSE
           | "print" -> Token.KW_PRINT
           | "println" -> Token.KW_PRINTLN
+          | "assert" -> Token.KW_ASSERT
+          | "assert_error" -> Token.KW_ASSERT_ERROR
           | "and" ->
             if peek st = '=' && peek_next st <> '=' then begin
               advance st;

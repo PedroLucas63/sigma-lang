@@ -93,6 +93,18 @@ type stmt_desc =
       newline : bool;
       args : expr list;
     }
+  | StmtAssert of {
+      actual : expr;
+      expected : expr option;
+      message : expr option;
+    }
+  | StmtAssertError of {
+      expected_code : string;
+      code_span : Span.t;
+      snippet : string;
+      snippet_span : Span.t;
+      message : expr option;
+    }
   | StmtExpr of expr
 
 and stmt = {
