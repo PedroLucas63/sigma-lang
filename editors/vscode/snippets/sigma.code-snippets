@@ -81,5 +81,19 @@
       "}"
     ],
     "description": "Conditional if / else block"
+  },
+  "Assert Condition": {
+    "prefix": "assert",
+    "body": [
+      "assert(${1:actual}, ${2:expected}, \"${3:message}\");"
+    ],
+    "description": "Assert actual equals expected with an optional diagnostic description"
+  },
+  "Assert Compile Error": {
+    "prefix": "asserterr",
+    "body": [
+      "assert_error(\"${1:E0106}\", \"${2:const X : int;}\", \"${3:message}\");"
+    ],
+    "description": "Assert that a snippet produces a specific compile/static error code"
   }
 }

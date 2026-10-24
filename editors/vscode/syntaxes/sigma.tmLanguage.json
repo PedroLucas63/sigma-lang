@@ -42,6 +42,10 @@
           "match": "\\b(println|print)\\b"
         },
         {
+          "name": "support.function.builtin.test.sigma",
+          "match": "\\b(assert|assert_error)\\b"
+        },
+        {
           "name": "keyword.operator.assignment.logical.sigma",
           "match": "\\b(and=|or=|xor=)"
         },

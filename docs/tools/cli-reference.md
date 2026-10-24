@@ -6,12 +6,36 @@ O executável `sigma` (localizado em `toolchain/bin/main.ml`) concentra todas as
 
 | Subcomando | Exemplo | Descrição |
 | :--- | :--- | :--- |
-| `sigma run <arq.sgm>` | `dune exec sigma -- run prog.sgm` | Executa o arquivo imediatamente na Máquina Virtual (Interpretador). |
-| `sigma build <arq.sgm> [-o <bin>]` | `dune exec sigma -- build prog.sgm -o prog` | Compila o código Sigma para um executável nativo otimizado (via backend C99 `-O3`). |
-| `sigma check <arq.sgm>` | `dune exec sigma -- check prog.sgm` | Executa apenas o Lexer, Parser e Typechecker, validando tipos sem executar o programa. |
-| `sigma lint <arq.sgm>` | `dune exec sigma -- lint prog.sgm` | Analisa o código estaticamente em busca de variáveis não utilizadas (`W0001`). |
-| `sigma debug <arq.sgm>` | `dune exec sigma -- debug prog.sgm` | Executa o programa passo-a-passo na VM exibindo `ip`, opcode, pilha (`stack`) e variáveis globais (`globals`). |
-| `sigma pkg init <nome>` | `dune exec sigma -- pkg init meu_proj` | Gera um manifesto de pacote `sigma.toml` padrão no diretório atual. |
+| `sigma run [arq.sgm \| <script>]` | `sigma run` ou `sigma run prog.sgm` | Executa o arquivo ou `entry` do projeto na VM, ou roda um script configurado em `[scripts]` do `sigma.toml`. |
+| `sigma build [arq.sgm] [-o <bin>]` | `sigma build` ou `sigma build prog.sgm -o prog` | Compila o arquivo ou `entry` do projeto para binário nativo otimizado (C99 `-O3`). |
+| `sigma test [path] [--native \| --parity]` | `sigma test` ou `sigma test --parity` | Executa a suíte de testes (`tests/`) na VM (padrão), em C99 nativo (`--native`) ou verificando paridade absoluta (`--parity`). |
+| `sigma check [arq.sgm]` | `sigma check` ou `sigma check prog.sgm` | Valida sintaxe e tipos (Front-end) sem executar o programa. |
+| `sigma lint [arq.sgm]` | `sigma lint` ou `sigma lint prog.sgm` | Analisa o código estaticamente em busca de variáveis não utilizadas (`W0001`). |
+| `sigma debug [arq.sgm]` | `sigma debug prog.sgm` | Executa o programa passo-a-passo na VM exibindo `ip`, opcodes, pilha e variáveis globais. |
+| `sigma pkg init [nome] [-y]` | `sigma pkg init` ou `sigma pkg init meu_proj -y` | Inicializa interativamente (ou direto com `-y`) um novo projeto Sigma (`sigma.toml`, `src/main.sgm`, `tests/main_test.sgm`). |
+| `sigma pkg run <script>` | `sigma pkg run test-parity` | Executa um comando configurado na seção `[scripts]` do manifesto `sigma.toml`. |
+
+## Estrutura do Manifesto `sigma.toml`
+
+```toml
+[package]
+name = "meu_projeto"
+version = "0.1.0"
+description = "Descrição do pacote científico"
+authors = ["Autor <autor@email.com>"]
+
+[build]
+src_dir = "src"
+entry = "src/main.sgm"
+test_dir = "tests"
+
+[scripts]
+start = "sigma run"
+build = "sigma build"
+test = "sigma test"
+test-parity = "sigma test --parity"
+lint = "sigma lint"
+```
 
 ## Paridade entre Interpretador e Compilador
 

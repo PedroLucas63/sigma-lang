@@ -198,7 +198,8 @@
             <option value="logical_bitwise">6. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
             <option value="strings">7. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
             <option value="primitives">8. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="typeerror">9. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="assert_tests">9. Testes Integrados (assert, assert_error) e Test Runner</option>
+            <option value="typeerror">10. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -221,6 +222,7 @@
       <a href="../docs/guide/01-variables-and-types.md">📘 Guia 01: Variáveis &amp; Tipos (docs/guide/)</a>
       <a href="../docs/guide/02-operators-and-expressions.md">📙 Guia 02: Operadores &amp; Expressões (docs/guide/)</a>
       <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais (if/else) &amp; Blocos (docs/guide/)</a>
+      <a href="../docs/guide/04-testing-and-project-management.md">🧪 Guia 04: Testes &amp; Projetos (docs/guide/)</a>
       <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
       <a href="../operations.csv">📊 Matriz Completa (operations.csv)</a>
     </div>
@@ -336,6 +338,17 @@ var c : int;                    # zero-init -> 0</pre>
           <li><strong>Condição Booleana Estrita:</strong> A expressão dentro de <code>if (...)</code> exige parênteses obrigatórios (<code>E0002</code>) e tipo estritamente <code>bool</code> (<code>E0104</code>; sem truthiness implícito de inteiros ou strings).</li>
           <li><strong>Com ou Sem Chaves:</strong> As chaves <code>{ ... }</code> são opcionais para comandos únicos (<code>if (true) x = 10; else x = 11;</code>) e cadeias <code>else if</code> funcionam naturalmente. Declarações <code>var</code> diretamente em ramos sem chaves são proibidas (<code>E0002</code>).</li>
           <li><strong>Escopos Léxicos (<code>{ ... }</code>):</strong> Podem ser abertos em qualquer ponto do código. Variáveis declaradas dentro de <code>{ ... }</code> deixam de existir ao fechar <code>}</code> (<code>E0102</code> se acessadas fora) e seu nome pode ser reutilizado em blocos irmãos subsequentes. <em>Shadowing</em> de variáveis ativas de escopos externos é proibido (<code>E0103</code>).</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>10. Testes Integrados (<code>assert</code>, <code>assert_error</code>), <code>sigma test</code> e <code>sigma.toml</code></h3>
+        <p>A Sigma adota testes integrados de primeira classe (<em>First-Class Built-in Testing</em>), executáveis tanto na VM quanto em binário nativo C99:</p>
+        <ul>
+          <li><strong><code>assert(actual, expected [, msg]);</code>:</strong> Compara igualdade estrita entre dois valores do mesmo tipo. Aceita também <code>assert(cond);</code> para condições booleanas.</li>
+          <li><strong><code>assert_error("E01xx", "codigo..." [, msg]);</code>:</strong> Valida que o trecho de código falha exatamente com o código estático esperado (ex: <code>E0106</code>, <code>E0104</code>).</li>
+          <li><strong><code>sigma test [--native | --parity]</code>:</strong> Descobre e executa todos os arquivos da pasta <code>tests/</code>, exibindo relatório com acertos, falhas e paridade absoluta.</li>
+          <li><strong>Gerenciamento de Projetos:</strong> <code>sigma pkg init</code> cria a estrutura padronizada (<code>sigma.toml</code>, <code>src/main.sgm</code>, <code>tests/main_test.sgm</code>) com suporte a scripts (<code>sigma run &lt;script&gt;</code>).</li>
         </ul>
       </article>
     </div>
@@ -537,6 +550,21 @@ var z_bool : bool;
 println(populacao, f32, f64);
 println(dec, z_int, z_bool);`,
         out: `1000000 150 3.141592653589793\n999999.123456789 0 false`
+      },
+      assert_tests: {
+        code: `# Testes nativos integrados com assert e assert_error
+assert(10 + 3, 13, "Soma de inteiros literais");
+assert(0.1m + 0.2m, 0.3m, "Precisão exata decimal 128-bit");
+assert(2 ^ 3 ^ 2, 512, "Potenciação associativa à direita");
+assert("Sig" + "ma", "Sigma", "Concatenação de texto");
+
+# Testes de erros de compilação esperados (validado estaticamente)
+assert_error("E0106", "const X : int;", "Constante sem valor inicial");
+assert_error("E0107", "const MAX := 10; MAX = 20;", "Reatribuição de constante");
+assert_error("E0105", "var x := 10 // 0;", "Divisão inteira por zero");
+
+println("Todas as asserções foram verificadas com sucesso!");`,
+        out: `Todas as asserções foram verificadas com sucesso!`
       },
       typeerror: {
         code: `# Proibido misturar ponto flutuante binário (float/double) com decimal base-10 (E0104)
