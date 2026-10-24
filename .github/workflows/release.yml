@@ -1,0 +1,170 @@
+name: Release & Deploy — Main
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  # 1. Validação Completa (Testes OCaml e Testes Nativos em Sigma)
+  test:
+    name: Testes & Validação de Paridade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar OCaml & Dune
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.2.x
+          dune-cache: true
+
+      - name: Instalar Dependências do Sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make
+
+      - name: Compilar Toolchain em Modo Release
+        run: |
+          cd toolchain
+          dune build --profile release
+
+      - name: Executar Testes Unitários OCaml
+        run: |
+          cd toolchain
+          dune runtest
+
+      - name: Executar Testes com a Própria Linguagem Sigma (Paridade VM vs C99)
+        run: |
+          ./toolchain/_build/default/bin/main.exe test tests/ --parity
+
+  # 2. Build Completo & Empacotamento Multi-Formato
+  build-and-package:
+    name: Build & Empacotamento
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar OCaml & Dune
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.2.x
+          dune-cache: true
+
+      - name: Instalar Dependências de Empacotamento
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make zip dpkg binutils
+
+      - name: Compilar Binário Otimizado
+        run: |
+          cd toolchain
+          dune build --profile release
+
+      - name: Gerar Pacotes (.tar.gz, .zip, .deb, SHA256SUMS.txt)
+        run: |
+          chmod +x scripts/package.sh
+          ./scripts/package.sh "" toolchain/_build/default/bin/main.exe dist
+
+      - name: Salvar Artefatos para Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: dist/*
+          if-no-files-found: error
+
+  # 3. Criação da GitHub Release com Changelog Automático
+  release:
+    name: Criar GitHub Release
+    needs: [build-and-package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Baixar Pacotes Compilados
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: dist
+
+      - name: Determinar Versão e Tag da Release
+        id: get_version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          else
+            VERSION=$(grep -E '^[[:space:]]*version[[:space:]]*=' sigma.toml | head -n1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+            [ -z "$VERSION" ] && VERSION="0.1.0"
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar Release no GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          echo "Publicando release para tag: $TAG (Versão: $VERSION)"
+          
+          # Se a release já existir, atualiza os arquivos; se não, cria uma nova com changelog automático
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe. Atualizando assets..."
+            gh release upload "$TAG" dist/* --clobber
+          else
+            echo "Criando nova release $TAG com changelog gerado a partir dos commits..."
+            gh release create "$TAG" dist/* \
+              --title "Sigma ${TAG} — Release" \
+              --generate-notes \
+              --target "${{ github.sha }}"
+          fi
+
+  # 4. Deploy no GitHub Pages (Site, Playground e Documentação)
+  deploy-pages:
+    name: Deploy GitHub Pages
+    needs: [test]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Preparar Diretório do Site & Documentação
+        run: |
+          mkdir -p _site
+          cp -r web/* _site/
+          mkdir -p _site/docs
+          cp -r docs/* _site/docs/
+          touch _site/.nojekyll
+
+      - name: Carregar Artefatos do Site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Realizar Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,44 @@
+name: CI — Testes & Validação
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Testes & Paridade Sigma
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar OCaml & Dune
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5.2.x
+          dune-cache: true
+
+      - name: Instalar Dependências do Sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make
+
+      - name: Compilar Toolchain
+        run: |
+          cd toolchain
+          dune build --profile release
+
+      - name: Executar Testes Unitários OCaml
+        run: |
+          cd toolchain
+          dune runtest
+
+      - name: Executar Suíte de Testes Sigma (Paridade VM vs Compilador C99)
+        run: |
+          ./toolchain/_build/default/bin/main.exe test tests/ --parity
