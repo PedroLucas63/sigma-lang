@@ -10,6 +10,8 @@ type t =
   | Bool
   | Char
   | String
+  | Tuple of t list
+  | Array of t * int
 
 val equal : t -> t -> bool
 val to_string : t -> string

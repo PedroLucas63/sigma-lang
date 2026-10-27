@@ -27,6 +27,15 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true
      | None -> ())
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.iter
+      (function
+        | Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub ->
+          mark_expr_usage tbl sub)
+      items
+  | Typed_ast.TExprIndex (target, idx) ->
+    mark_expr_usage tbl target;
+    mark_expr_usage tbl idx
   | Typed_ast.TExprUnary (_, sub) ->
     mark_expr_usage tbl sub
   | Typed_ast.TExprBinary (_, lhs, rhs) ->
@@ -36,17 +45,27 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     mark_expr_usage tbl e1;
     mark_expr_usage tbl e2;
     mark_expr_usage tbl e3
-  | Typed_ast.TExprAssign (name, op, rhs) ->
-    if op <> Sigma_syntax.Ast.AssignEq then begin
-      match Hashtbl.find_opt tbl name with
-      | Some u -> u.used <- true
-      | None -> ()
-    end;
+  | Typed_ast.TExprAssign (lval, op, rhs) ->
+    (match lval with
+     | Typed_ast.TLValIdent name ->
+       if op <> Sigma_syntax.Ast.AssignEq then begin
+         match Hashtbl.find_opt tbl name with
+         | Some u -> u.used <- true
+         | None -> ()
+       end
+     | Typed_ast.TLValIndex (target, idx) ->
+       mark_expr_usage tbl target;
+       mark_expr_usage tbl idx);
     mark_expr_usage tbl rhs
-  | Typed_ast.TExprIncDec (_, name) ->
-    (match Hashtbl.find_opt tbl name with
-     | Some u -> u.used <- true
-     | None -> ())
+  | Typed_ast.TExprIncDec (_, lval) ->
+    (match lval with
+     | Typed_ast.TLValIdent name ->
+       (match Hashtbl.find_opt tbl name with
+        | Some u -> u.used <- true
+        | None -> ())
+     | Typed_ast.TLValIndex (target, idx) ->
+       mark_expr_usage tbl target;
+       mark_expr_usage tbl idx)
 
 let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
   match s.desc with
@@ -57,12 +76,32 @@ let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
       Hashtbl.replace tbl v.name u;
       decl_order := u :: !decl_order
     end
+  | Typed_ast.TStmtDestruct d ->
+    mark_expr_usage tbl d.init;
+    List.iter
+      (fun (bind : Typed_ast.destruct_binding) ->
+        match bind.name with
+        | None -> ()
+        | Some name ->
+          if not (String.starts_with ~prefix:"_" name) then begin
+            let u = { name; span = bind.name_span; used = false } in
+            Hashtbl.replace tbl name u;
+            decl_order := u :: !decl_order
+          end)
+      d.bindings
   | Typed_ast.TStmtBlock stmts ->
     let block_vars = ref [] in
     List.iter
       (fun (sub : Typed_ast.stmt) ->
         match sub.desc with
         | Typed_ast.TStmtVarDecl v -> block_vars := v.name :: !block_vars
+        | Typed_ast.TStmtDestruct d ->
+          List.iter
+            (fun (bind : Typed_ast.destruct_binding) ->
+              match bind.name with
+              | Some name -> block_vars := name :: !block_vars
+              | None -> ())
+            d.bindings
         | _ -> ())
       stmts;
     List.iter (lint_stmt tbl decl_order) stmts;

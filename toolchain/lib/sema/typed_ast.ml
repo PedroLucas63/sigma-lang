@@ -1,7 +1,15 @@
 open Sigma_common
 open Sigma_syntax
 
-type expr_desc =
+type collection_item =
+  | TItemExpr of expr
+  | TItemSpread of expr
+
+and lvalue =
+  | TLValIdent of string
+  | TLValIndex of expr * expr
+
+and expr_desc =
   | TExprInt of int64
   | TExprFloat of float
   | TExprDouble of float
@@ -11,11 +19,14 @@ type expr_desc =
   | TExprString of string
   | TExprInterp of interp_part list
   | TExprIdent of string
+  | TExprTuple of collection_item list
+  | TExprArray of collection_item list
+  | TExprIndex of expr * expr
   | TExprUnary of Ast.unop * expr
   | TExprBinary of Ast.binop * expr * expr
   | TExprChainCmp of expr * Ast.binop * expr * Ast.binop * expr
-  | TExprAssign of string * Ast.assign_op * expr
-  | TExprIncDec of Ast.incdec_op * string
+  | TExprAssign of lvalue * Ast.assign_op * expr
+  | TExprIncDec of Ast.incdec_op * lvalue
 
 and interp_part =
   | TInterpLit of string
@@ -36,8 +47,22 @@ type var_decl = {
   was_default_initialized : bool;
 }
 
+type destruct_binding = {
+  name : string option;
+  name_span : Span.t;
+  ty : Ty.t;
+}
+
+type destruct_decl = {
+  bindings : destruct_binding list;
+  is_const : bool;
+  ty : Ty.t;
+  init : expr;
+}
+
 type stmt_desc =
   | TStmtVarDecl of var_decl
+  | TStmtDestruct of destruct_decl
   | TStmtBlock of stmt list
   | TStmtIf of {
       cond : expr;

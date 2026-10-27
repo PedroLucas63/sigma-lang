@@ -6,9 +6,21 @@ type symbol_info = {
   ty : Ty.t;
   decl_span : Span.t;
   is_const : bool;
+  const_int : int64 option;
 }
 
 type env = (string, symbol_info) Hashtbl.t
+
+let rec eval_const_int (env : env) (e : Typed_ast.expr) : int64 option =
+  match e.desc with
+  | Typed_ast.TExprInt n -> Some n
+  | Typed_ast.TExprUnary (Ast.UnPos, sub) -> eval_const_int env sub
+  | Typed_ast.TExprUnary (Ast.UnNeg, sub) -> Option.map Int64.neg (eval_const_int env sub)
+  | Typed_ast.TExprIdent name ->
+    (match Hashtbl.find_opt env name with
+     | Some { is_const = true; const_int; _ } -> const_int
+     | _ -> None)
+  | _ -> None
 
 let check_unary_type (op : Ast.unop) (ty : Ty.t) : Ty.t option =
   match op, ty with
@@ -18,6 +30,12 @@ let check_unary_type (op : Ast.unop) (ty : Ty.t) : Ty.t option =
 
 let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   match lty, rty, op with
+  (* tuple and array structural equality *)
+  | Ty.Tuple _, Ty.Tuple _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
+  | Ty.Array _, Ty.Array _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
+  (* array concatenation *)
+  | Ty.Array (t1, n1), Ty.Array (t2, n2), Ast.BinAdd when Ty.equal t1 t2 ->
+    Some (Ty.Array (t1, n1 + n2))
   (* logical & equality operations on bool *)
   | Ty.Bool, Ty.Bool, (Ast.BinAnd | Ast.BinOr | Ast.BinXor | Ast.BinEq | Ast.BinNe) -> Some Ty.Bool
   (* bitwise operations on int *)
@@ -133,6 +151,67 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
             ~code:"E0102"
             ~span:e.span
             (Printf.sprintf "use of undeclared variable '%s'" name)))
+  | Ast.ExprTuple items ->
+    (match check_collection_items env items with
+     | Error err -> Error err
+     | Ok checked ->
+       let titems = List.map fst checked in
+       let elem_tys = List.concat_map snd checked in
+       Ok
+         {
+           Typed_ast.desc = Typed_ast.TExprTuple titems;
+           ty = Ty.Tuple elem_tys;
+           span = e.span;
+         })
+  | Ast.ExprArray items ->
+    if items = [] then
+      Error
+        (Diagnostic.error
+           ~hint:"static arrays require at least 1 element (or declare with explicit size like 'var a : int[3];')"
+           ~code:"E0108"
+           ~span:e.span
+           "empty array literal '[]' is not allowed")
+    else
+      (match check_collection_items env items with
+       | Error err -> Error err
+       | Ok checked ->
+         let titems = List.map fst checked in
+         let elem_tys = List.concat_map snd checked in
+         match elem_tys with
+         | [] ->
+           Error
+             (Diagnostic.error
+                ~code:"E0108"
+                ~span:e.span
+                "array literal must contain at least 1 element")
+         | first_ty :: rest_tys ->
+           (match List.find_opt (fun t -> not (Ty.equal first_ty t)) rest_tys with
+            | Some bad_ty ->
+              Error
+                (Diagnostic.error
+                   ~hint:"all elements in an array must have the exact same type; use a tuple '(a, b)' for heterogeneous values"
+                   ~code:"E0104"
+                   ~span:e.span
+                   (Printf.sprintf "array elements must all have the same type: expected '%s', found '%s'"
+                      (Ty.to_string first_ty)
+                      (Ty.to_string bad_ty)))
+            | None ->
+              Ok
+                {
+                  Typed_ast.desc = Typed_ast.TExprArray titems;
+                  ty = Ty.Array (first_ty, List.length elem_tys);
+                  span = e.span;
+                }))
+  | Ast.ExprIndex (target, idx) ->
+    (match check_index_access env ~span:e.span target idx with
+     | Error err -> Error err
+     | Ok (ttarget, tidx, elem_ty) ->
+       Ok
+         {
+           Typed_ast.desc = Typed_ast.TExprIndex (ttarget, tidx);
+           ty = elem_ty;
+           span = e.span;
+         })
   | Ast.ExprUnary (op, sub) ->
     (match check_expr env sub with
      | Error err -> Error err
@@ -161,47 +240,97 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
        (match check_expr env rhs with
         | Error err -> Error err
         | Ok trhs ->
-          (match check_binary_type op tlhs.ty trhs.ty with
-           | None ->
-             let hint =
-               if
-                 (tlhs.ty = Ty.Decimal && (trhs.ty = Ty.Float || trhs.ty = Ty.Double))
-                 || (trhs.ty = Ty.Decimal && (tlhs.ty = Ty.Float || tlhs.ty = Ty.Double))
-               then
-                 "mixing binary floating-point ('float'/'double') with exact base-10 'decimal' is forbidden to prevent precision loss"
-               else
-                 Printf.sprintf "operator '%s' is not defined for (%s, %s)"
-                   (Ast.binop_to_string op)
-                   (Ty.to_string tlhs.ty)
-                   (Ty.to_string trhs.ty)
-             in
-             Error
-               (Diagnostic.error
-                  ~hint
-                  ~code:"E0104"
-                  ~span:e.span
-                  (Printf.sprintf "invalid binary operation: '%s' between '%s' and '%s'"
-                     (Ast.binop_to_string op)
-                     (Ty.to_string tlhs.ty)
-                     (Ty.to_string trhs.ty)))
-           | Some res_ty ->
-             if
-               (op = Ast.BinDiv || op = Ast.BinIntDiv || op = Ast.BinMod)
-               && is_zero_literal trhs
-             then
-               Error
-                 (Diagnostic.error
-                    ~code:"E0105"
-                    ~span:e.span
-                    (Printf.sprintf "division or modulo by zero in '%s' operation"
-                       (Ast.binop_to_string op)))
-             else
-               Ok
-                 {
-                   Typed_ast.desc = Typed_ast.TExprBinary (op, tlhs, trhs);
-                   ty = res_ty;
-                   span = e.span;
-                 })))
+          (match op, tlhs.ty, trhs.ty with
+           | Ast.BinMul, Ty.Array (elem_ty, n), Ty.Int ->
+             (match eval_const_int env trhs with
+              | None ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"array repetition requires a compile-time constant integer so the static array size is known"
+                     ~code:"E0104"
+                     ~span:trhs.span
+                     "array repetition multiplier must be a compile-time integer constant")
+              | Some k when k <= 0L ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"use a positive repetition count >= 1, e.g. 'arr * 3'"
+                     ~code:"E0108"
+                     ~span:trhs.span
+                     (Printf.sprintf "array repetition factor must be positive (> 0), found %Ld" k))
+              | Some k ->
+                let res_ty = Ty.Array (elem_ty, n * Int64.to_int k) in
+                Ok
+                  {
+                    Typed_ast.desc = Typed_ast.TExprBinary (op, tlhs, trhs);
+                    ty = res_ty;
+                    span = e.span;
+                  })
+           | Ast.BinMul, Ty.Int, Ty.Array (elem_ty, n) ->
+             (match eval_const_int env tlhs with
+              | None ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"array repetition requires a compile-time constant integer so the static array size is known"
+                     ~code:"E0104"
+                     ~span:tlhs.span
+                     "array repetition multiplier must be a compile-time integer constant")
+              | Some k when k <= 0L ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"use a positive repetition count >= 1, e.g. '3 * arr'"
+                     ~code:"E0108"
+                     ~span:tlhs.span
+                     (Printf.sprintf "array repetition factor must be positive (> 0), found %Ld" k))
+              | Some k ->
+                let res_ty = Ty.Array (elem_ty, n * Int64.to_int k) in
+                Ok
+                  {
+                    Typed_ast.desc = Typed_ast.TExprBinary (op, tlhs, trhs);
+                    ty = res_ty;
+                    span = e.span;
+                  })
+           | _ ->
+             (match check_binary_type op tlhs.ty trhs.ty with
+              | None ->
+                let hint =
+                  if
+                    (tlhs.ty = Ty.Decimal && (trhs.ty = Ty.Float || trhs.ty = Ty.Double))
+                    || (trhs.ty = Ty.Decimal && (tlhs.ty = Ty.Float || tlhs.ty = Ty.Double))
+                  then
+                    "mixing binary floating-point ('float'/'double') with exact base-10 'decimal' is forbidden to prevent precision loss"
+                  else
+                    Printf.sprintf "operator '%s' is not defined for (%s, %s)"
+                      (Ast.binop_to_string op)
+                      (Ty.to_string tlhs.ty)
+                      (Ty.to_string trhs.ty)
+                in
+                Error
+                  (Diagnostic.error
+                     ~hint
+                     ~code:"E0104"
+                     ~span:e.span
+                     (Printf.sprintf "invalid binary operation: '%s' between '%s' and '%s'"
+                        (Ast.binop_to_string op)
+                        (Ty.to_string tlhs.ty)
+                        (Ty.to_string trhs.ty)))
+              | Some res_ty ->
+                if
+                  (op = Ast.BinDiv || op = Ast.BinIntDiv || op = Ast.BinMod)
+                  && is_zero_literal trhs
+                then
+                  Error
+                    (Diagnostic.error
+                       ~code:"E0105"
+                       ~span:e.span
+                       (Printf.sprintf "division or modulo by zero in '%s' operation"
+                          (Ast.binop_to_string op)))
+                else
+                  Ok
+                    {
+                      Typed_ast.desc = Typed_ast.TExprBinary (op, tlhs, trhs);
+                      ty = res_ty;
+                      span = e.span;
+                    }))))
   | Ast.ExprChainCmp (e1, op1, e2, op2, e3) ->
     (match check_expr env e1, check_expr env e2, check_expr env e3 with
      | Error err, _, _ | _, Error err, _ | _, _, Error err -> Error err
@@ -234,34 +363,20 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                  ty = Ty.Bool;
                  span = e.span;
                })))
-  | Ast.ExprAssign (name, name_span, op, rhs) ->
-    (match Hashtbl.find_opt env name with
-     | None ->
-       Error
-         (Diagnostic.error
-            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
-            ~code:"E0102"
-            ~span:name_span
-            (Printf.sprintf "use of undeclared variable '%s'" name))
-     | Some info ->
-       if info.is_const then
-         Error
-           (Diagnostic.error
-              ~hint:(Printf.sprintf "'%s' was declared as a constant at %s" name (Span.to_string info.decl_span))
-              ~code:"E0107"
-              ~span:name_span
-              (Printf.sprintf "cannot assign to constant '%s'" name))
-       else
-         (match check_expr env rhs with
-          | Error err -> Error err
-          | Ok trhs ->
-            (match binop_of_assign_op op with
+  | Ast.ExprAssign (lval, op, rhs) ->
+    (match check_lvalue env ~for_op:(Ast.assign_op_to_string op) lval with
+     | Error err -> Error err
+     | Ok (tlval, lval_ty, lval_label) ->
+       (match check_expr env rhs with
+        | Error err -> Error err
+        | Ok trhs ->
+          (match binop_of_assign_op op with
            | None ->
-             if Ty.equal info.ty trhs.ty then
+             if Ty.equal lval_ty trhs.ty then
                Ok
                  {
-                   Typed_ast.desc = Typed_ast.TExprAssign (name, op, trhs);
-                   ty = info.ty;
+                   Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs);
+                   ty = lval_ty;
                    span = e.span;
                  }
              else
@@ -269,44 +384,52 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                  (Diagnostic.error
                     ~hint:
                       (Printf.sprintf
-                         "Sigma is strongly typed: cannot assign value of type '%s' to variable '%s' of type '%s'"
+                         "Sigma is strongly typed: cannot assign value of type '%s' to %s of type '%s'"
                          (Ty.to_string trhs.ty)
-                         name
-                         (Ty.to_string info.ty))
+                         lval_label
+                         (Ty.to_string lval_ty))
                     ~code:"E0104"
                     ~span:e.span
-                    (Printf.sprintf "type mismatch in assignment: variable '%s' has type '%s', found '%s'"
-                       name
-                       (Ty.to_string info.ty)
+                    (Printf.sprintf "type mismatch in assignment: %s has type '%s', found '%s'"
+                       lval_label
+                       (Ty.to_string lval_ty)
                        (Ty.to_string trhs.ty)))
            | Some binop ->
              let op_str = Ast.assign_op_to_string op in
-             (match check_binary_type binop info.ty trhs.ty with
+             let eval_res =
+               match binop, lval_ty, trhs.ty with
+               | Ast.BinMul, Ty.Array (elem_ty, n), Ty.Int ->
+                 (match eval_const_int env trhs with
+                  | Some k when k > 0L -> Some (Ty.Array (elem_ty, n * Int64.to_int k))
+                  | _ -> None)
+               | _ -> check_binary_type binop lval_ty trhs.ty
+             in
+             (match eval_res with
               | None ->
                 Error
                   (Diagnostic.error
                      ~hint:
                        (Printf.sprintf "compound operator '%s' is not defined for (%s, %s)"
                           op_str
-                          (Ty.to_string info.ty)
+                          (Ty.to_string lval_ty)
                           (Ty.to_string trhs.ty))
                      ~code:"E0104"
                      ~span:e.span
                      (Printf.sprintf "invalid compound assignment: '%s' between '%s' and '%s'"
                         op_str
-                        (Ty.to_string info.ty)
+                        (Ty.to_string lval_ty)
                         (Ty.to_string trhs.ty)))
               | Some res_ty ->
-                if not (Ty.equal res_ty info.ty) then
+                if not (Ty.equal res_ty lval_ty) then
                   let hint =
-                    if op = Ast.AssignDiv && info.ty = Ty.Int then
+                    if op = Ast.AssignDiv && lval_ty = Ty.Int then
                       "in Sigma, '/' returns 'float'; use '//=' for integer division assignment on 'int'"
                     else
                       Printf.sprintf
-                        "operation produces '%s', which cannot be stored back into variable '%s' of type '%s'"
+                        "operation produces '%s', which cannot be stored back into %s of type '%s'"
                         (Ty.to_string res_ty)
-                        name
-                        (Ty.to_string info.ty)
+                        lval_label
+                        (Ty.to_string lval_ty)
                   in
                   Error
                     (Diagnostic.error
@@ -314,11 +437,11 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                        ~code:"E0104"
                        ~span:e.span
                        (Printf.sprintf
-                          "type mismatch in compound assignment '%s': result type '%s' does not match variable '%s' of type '%s'"
+                          "type mismatch in compound assignment '%s': result type '%s' does not match %s of type '%s'"
                           op_str
                           (Ty.to_string res_ty)
-                          name
-                          (Ty.to_string info.ty)))
+                          lval_label
+                          (Ty.to_string lval_ty)))
                 else if
                   (binop = Ast.BinDiv || binop = Ast.BinIntDiv || binop = Ast.BinMod)
                   && is_zero_literal trhs
@@ -331,11 +454,130 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                 else
                   Ok
                     {
-                      Typed_ast.desc = Typed_ast.TExprAssign (name, op, trhs);
-                      ty = info.ty;
+                      Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs);
+                      ty = lval_ty;
                       span = e.span;
                     }))))
-  | Ast.ExprIncDec (inc_op, name, name_span) ->
+  | Ast.ExprIncDec (inc_op, lval) ->
+    let op_str = Ast.incdec_op_to_string inc_op in
+    (match check_lvalue env ~for_op:op_str lval with
+     | Error err -> Error err
+     | Ok (tlval, lval_ty, lval_label) ->
+       (match lval_ty with
+        | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
+          Ok
+            {
+              Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, tlval);
+              ty = lval_ty;
+              span = e.span;
+            }
+        | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ ->
+          Error
+            (Diagnostic.error
+               ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
+               ~code:"E0104"
+               ~span:e.span
+               (Printf.sprintf "invalid operator '%s' for %s of type '%s'"
+                  op_str lval_label (Ty.to_string lval_ty)))))
+
+and check_collection_items (env : env) (items : Ast.collection_item list)
+    : ((Typed_ast.collection_item * Ty.t list) list, Diagnostic.t) result =
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | Ast.ItemExpr sub :: rest ->
+      (match check_expr env sub with
+       | Error err -> Error err
+       | Ok tsub ->
+         loop ((Typed_ast.TItemExpr tsub, [ tsub.ty ]) :: acc) rest)
+    | Ast.ItemSpread (sub, sp) :: rest ->
+      (match check_expr env sub with
+       | Error err -> Error err
+       | Ok tsub ->
+         (match tsub.ty with
+          | Ty.Tuple elem_tys ->
+            loop ((Typed_ast.TItemSpread tsub, elem_tys) :: acc) rest
+          | Ty.Array (elem_ty, n) ->
+            let tys = List.init n (fun _ -> elem_ty) in
+            loop ((Typed_ast.TItemSpread tsub, tys) :: acc) rest
+          | _ ->
+            Error
+              (Diagnostic.error
+                 ~hint:"the spread operator '..' can only unpack tuples or arrays, e.g. '[..t, ..l, 50]'"
+                 ~code:"E0104"
+                 ~span:sp
+                 (Printf.sprintf "cannot spread value of type '%s' with '..' (expected a tuple or array)"
+                    (Ty.to_string tsub.ty)))))
+  in
+  loop [] items
+
+and check_index_access (env : env) ~span:_ (target : Ast.expr) (idx : Ast.expr)
+    : (Typed_ast.expr * Typed_ast.expr * Ty.t, Diagnostic.t) result =
+  match check_expr env target with
+  | Error err -> Error err
+  | Ok ttarget ->
+    (match check_expr env idx with
+     | Error err -> Error err
+     | Ok tidx ->
+       if tidx.ty <> Ty.Int then
+         Error
+           (Diagnostic.error
+              ~hint:"indices must be integer expressions of type 'int' (0-based)"
+              ~code:"E0104"
+              ~span:tidx.span
+              (Printf.sprintf "index must be of type 'int', found '%s'"
+                 (Ty.to_string tidx.ty)))
+       else
+         (match ttarget.ty with
+          | Ty.Tuple elem_tys ->
+            let len = List.length elem_tys in
+            (match eval_const_int env tidx with
+             | Some k ->
+               if k < 0L || k >= Int64.of_int len then
+                 Error
+                   (Diagnostic.error
+                      ~hint:(Printf.sprintf "valid indices for this tuple are 0..%d" (len - 1))
+                      ~code:"E0108"
+                      ~span:tidx.span
+                      (Printf.sprintf "tuple index %Ld out of bounds for tuple of type '%s' (length %d)"
+                         k (Ty.to_string ttarget.ty) len))
+               else
+                 Ok (ttarget, tidx, List.nth elem_tys (Int64.to_int k))
+             | None ->
+               let first_ty = List.hd elem_tys in
+               if List.for_all (Ty.equal first_ty) elem_tys then
+                 Ok (ttarget, tidx, first_ty)
+               else
+                 Error
+                   (Diagnostic.error
+                      ~hint:"use a constant integer literal index like 'tuple[0]' for heterogeneous tuples"
+                      ~code:"E0104"
+                      ~span:tidx.span
+                      "indexing a heterogeneous tuple requires a compile-time constant integer index"))
+          | Ty.Array (elem_ty, len) ->
+            (match eval_const_int env tidx with
+             | Some k when k < 0L || k >= Int64.of_int len ->
+               Error
+                 (Diagnostic.error
+                    ~hint:(Printf.sprintf "valid indices for '%s' are 0..%d" (Ty.to_string ttarget.ty) (len - 1))
+                    ~code:"E0108"
+                    ~span:tidx.span
+                    (Printf.sprintf "array index %Ld out of bounds for array of type '%s' (length %d)"
+                       k (Ty.to_string ttarget.ty) len))
+             | _ ->
+               Ok (ttarget, tidx, elem_ty))
+          | _ ->
+            Error
+              (Diagnostic.error
+                 ~hint:"indexing '[i]' is only supported on tuples and arrays"
+                 ~code:"E0104"
+                 ~span:ttarget.span
+                 (Printf.sprintf "cannot index value of type '%s' (expected a tuple or array)"
+                    (Ty.to_string ttarget.ty)))))
+
+and check_lvalue (env : env) ~for_op (lval : Ast.lvalue)
+    : (Typed_ast.lvalue * Ty.t * string, Diagnostic.t) result =
+  match lval with
+  | Ast.LValIdent (name, name_span) ->
     (match Hashtbl.find_opt env name with
      | None ->
        Error
@@ -346,43 +588,131 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
             (Printf.sprintf "use of undeclared variable '%s'" name))
      | Some info ->
        if info.is_const then
+         let msg =
+           if for_op = "++" || for_op = "--" then
+             Printf.sprintf "cannot mutate constant '%s' with '%s'" name for_op
+           else
+             Printf.sprintf "cannot assign to constant '%s'" name
+         in
          Error
            (Diagnostic.error
               ~hint:(Printf.sprintf "'%s' was declared as a constant at %s" name (Span.to_string info.decl_span))
               ~code:"E0107"
               ~span:name_span
-              (Printf.sprintf "cannot mutate constant '%s' with '%s'" name (Ast.incdec_op_to_string inc_op)))
+              msg)
        else
-         let op_str = Ast.incdec_op_to_string inc_op in
-         (match info.ty with
-          | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
-            Ok
-              {
-                Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, name);
-                ty = info.ty;
-                span = e.span;
-              }
-          | Ty.Bool | Ty.String ->
+         Ok (Typed_ast.TLValIdent name, info.ty, Printf.sprintf "variable '%s'" name))
+  | Ast.LValIndex (base, idx, span) ->
+    let rec check_chain_mutable (e : Ast.expr) : Diagnostic.t option =
+      match e.desc with
+      | Ast.ExprIdent name ->
+        (match Hashtbl.find_opt env name with
+         | Some info when info.is_const ->
+           Some
+             (Diagnostic.error
+                ~hint:(Printf.sprintf "'%s' was declared as a constant at %s" name (Span.to_string info.decl_span))
+                ~code:"E0107"
+                ~span
+                (Printf.sprintf "cannot mutate element of constant '%s'" name))
+         | _ -> None)
+      | Ast.ExprIndex (sub_base, _) -> check_chain_mutable sub_base
+      | _ -> None
+    in
+    (match check_index_access env ~span base idx with
+     | Error err -> Error err
+     | Ok (tbase, tidx, elem_ty) ->
+       let rec has_tuple_in_base (te : Typed_ast.expr) : bool =
+         match te.ty with
+         | Ty.Tuple _ -> true
+         | _ ->
+           (match te.desc with
+            | Typed_ast.TExprIndex (inner, _) -> has_tuple_in_base inner
+            | _ -> false)
+       in
+       if has_tuple_in_base tbase then
+         Error
+           (Diagnostic.error
+              ~hint:"tuples are immutable; overwrite the entire tuple variable instead (e.g. 't = (...);') or use an array '[...]'"
+              ~code:"E0107"
+              ~span
+              "cannot mutate tuple element: tuples are immutable")
+       else
+         (match check_chain_mutable base with
+          | Some err -> Error err
+          | None ->
+            Ok (Typed_ast.TLValIndex (tbase, tidx), elem_ty, "indexed element")))
+
+let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
+    : (Ty.t, Diagnostic.t) result =
+  match te with
+  | Ast.TypeNamed (ty_name, ty_span) ->
+    (match Ty.of_string ty_name with
+     | Some ty -> Ok ty
+     | None ->
+       Error
+         (Diagnostic.error
+            ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string', tuples '(T1, T2)', or arrays 'T[N]'"
+            ~code:"E0101"
+            ~span:ty_span
+            (Printf.sprintf "unknown or unsupported type '%s'" ty_name)))
+  | Ast.TypeTuple (sub_tes, _) ->
+    let init_subs =
+      match init_ty_opt with
+      | Some (Ty.Tuple tys) when List.length tys = List.length sub_tes ->
+        List.map (fun t -> Some t) tys
+      | _ -> List.map (fun _ -> None) sub_tes
+    in
+    let rec loop acc = function
+      | [], [] -> Ok (Ty.Tuple (List.rev acc))
+      | sub_te :: r1, sub_init :: r2 ->
+        (match resolve_type_expr sub_te sub_init with
+         | Error err -> Error err
+         | Ok sub_ty -> loop (sub_ty :: acc) (r1, r2))
+      | _ -> Ok (Ty.Tuple (List.rev acc))
+    in
+    loop [] (sub_tes, init_subs)
+  | Ast.TypeArray (elem_te, size_opt, sp) ->
+    let init_elem_opt, init_len_opt =
+      match init_ty_opt with
+      | Some (Ty.Array (ie_ty, ilen)) -> (Some ie_ty, Some ilen)
+      | _ -> (None, None)
+    in
+    (match resolve_type_expr elem_te init_elem_opt with
+     | Error err -> Error err
+     | Ok elem_ty ->
+       (match size_opt with
+        | Some n ->
+          if n <= 0 then
             Error
               (Diagnostic.error
-                 ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
-                 ~code:"E0104"
-                 ~span:e.span
-                 (Printf.sprintf "invalid operator '%s' for variable '%s' of type '%s'"
-                    op_str name (Ty.to_string info.ty)))))
+                 ~hint:"specify a positive array size >= 1, e.g. 'int[3]'"
+                 ~code:"E0108"
+                 ~span:sp
+                 (Printf.sprintf "array size must be greater than 0, found %d" n))
+          else
+            Ok (Ty.Array (elem_ty, n))
+        | None ->
+          (match init_len_opt, init_ty_opt with
+           | Some ilen, _ -> Ok (Ty.Array (elem_ty, ilen))
+           | None, None ->
+             Error
+               (Diagnostic.error
+                  ~hint:(Printf.sprintf "provide an initializer like 'var a : %s = [...];' or specify a fixed size like '%s[3]'"
+                           (Ast.type_expr_to_string te) (Ty.to_string elem_ty))
+                  ~code:"E0106"
+                  ~span:sp
+                  (Printf.sprintf "array type '%s' with omitted size requires an initializing expression to infer its length"
+                     (Ast.type_expr_to_string te)))
+           | None, Some bad_init_ty ->
+             Error
+               (Diagnostic.error
+                  ~code:"E0104"
+                  ~span:sp
+                  (Printf.sprintf "type mismatch: expected array type '%s', found '%s'"
+                     (Ast.type_expr_to_string te)
+                     (Ty.to_string bad_init_ty))))))
 
-let resolve_type_annot (ty_name, ty_span) : (Ty.t, Diagnostic.t) result =
-  match Ty.of_string ty_name with
-  | Some ty -> Ok ty
-  | None ->
-    Error
-      (Diagnostic.error
-         ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string'"
-         ~code:"E0101"
-         ~span:ty_span
-         (Printf.sprintf "unknown or unsupported type '%s'" ty_name))
-
-let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
+let rec default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   match ty with
   | Ty.Int ->
     { Typed_ast.desc = Typed_ast.TExprInt Ty.default_int_value; ty = Ty.Int; span }
@@ -398,6 +728,16 @@ let default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
     { Typed_ast.desc = Typed_ast.TExprChar Ty.default_char_value; ty = Ty.Char; span }
   | Ty.String ->
     { Typed_ast.desc = Typed_ast.TExprString Ty.default_string_value; ty = Ty.String; span }
+  | Ty.Tuple tys ->
+    let items =
+      List.map (fun sub_ty -> Typed_ast.TItemExpr (default_expr_for_type sub_ty span)) tys
+    in
+    { Typed_ast.desc = Typed_ast.TExprTuple items; ty; span }
+  | Ty.Array (elem_ty, n) ->
+    let items =
+      List.init n (fun _ -> Typed_ast.TItemExpr (default_expr_for_type elem_ty span))
+    in
+    { Typed_ast.desc = Typed_ast.TExprArray items; ty; span }
 
 let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
     : (Typed_ast.stmt, Diagnostic.t list) result =
@@ -619,6 +959,136 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
                { expected_code; actual_codes; passed; message = tmsg_opt };
            span = s.span;
          })
+  | Ast.StmtDestruct d ->
+    let errs = ref [] in
+    let seen_in_pattern : (string, Span.t) Hashtbl.t = Hashtbl.create 8 in
+    List.iter
+      (fun (name, name_span) ->
+        if name <> "_" then begin
+          (match Hashtbl.find_opt env name with
+           | None -> ()
+           | Some prev ->
+             let entity = if prev.is_const then "constant" else "variable" in
+             errs :=
+               Diagnostic.error
+                 ~hint:(Printf.sprintf "previously declared at %s" (Span.to_string prev.decl_span))
+                 ~code:"E0103"
+                 ~span:name_span
+                 (Printf.sprintf "%s '%s' is already declared in this scope" entity name)
+               :: !errs);
+          (match Hashtbl.find_opt seen_in_pattern name with
+           | None -> Hashtbl.replace seen_in_pattern name name_span
+           | Some prev_sp ->
+             errs :=
+               Diagnostic.error
+                 ~hint:(Printf.sprintf "first bound in this pattern at %s" (Span.to_string prev_sp))
+                 ~code:"E0103"
+                 ~span:name_span
+                 (Printf.sprintf "duplicate variable '%s' in destructuring pattern" name)
+               :: !errs)
+        end)
+      d.names;
+    if d.is_const && Option.is_none d.init then
+      errs :=
+        Diagnostic.error
+          ~code:"E0106"
+          ~span:s.span
+          "constant destructuring declaration requires an initializing expression"
+        :: !errs;
+    let resolved_init =
+      match d.init with
+      | None -> None
+      | Some init_expr ->
+        (match check_expr env init_expr with
+         | Ok te -> Some te
+         | Error err ->
+           errs := err :: !errs;
+           None)
+    in
+    let init_ty_opt = Option.map (fun (te : Typed_ast.expr) -> te.ty) resolved_init in
+    let resolved_annot =
+      match d.ty_annot with
+      | None -> None
+      | Some annot ->
+        (match resolve_type_expr annot init_ty_opt with
+         | Ok ty -> Some ty
+         | Error err ->
+           errs := err :: !errs;
+           None)
+    in
+    (match List.rev !errs with
+     | _ :: _ as errors -> Error errors
+     | [] ->
+       (match resolved_annot, resolved_init with
+        | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+          Error
+            [
+              Diagnostic.error
+                ~code:"E0104"
+                ~span:init_te.span
+                (Printf.sprintf "type mismatch in destructuring: expected '%s', found '%s'"
+                   (Ty.to_string annot_ty)
+                   (Ty.to_string init_te.ty));
+            ]
+        | _ ->
+          let final_ty, final_init =
+            match resolved_annot, resolved_init with
+            | Some annot_ty, Some init_te -> (annot_ty, init_te)
+            | None, Some init_te -> (init_te.ty, init_te)
+            | Some annot_ty, None -> (annot_ty, default_expr_for_type annot_ty s.span)
+            | None, None -> (Ty.Int, default_expr_for_type Ty.Int s.span)
+          in
+          let elem_tys_opt =
+            match final_ty with
+            | Ty.Tuple tys -> Some tys
+            | Ty.Array (elem_ty, n) -> Some (List.init n (fun _ -> elem_ty))
+            | _ -> None
+          in
+          (match elem_tys_opt with
+           | None ->
+             Error
+               [
+                 Diagnostic.error
+                   ~hint:"destructuring requires a tuple '(a, b)' or array '[a, b]' on the right-hand side"
+                   ~code:"E0104"
+                   ~span:final_init.span
+                   (Printf.sprintf "cannot destructure value of type '%s' (expected a tuple or array)"
+                      (Ty.to_string final_ty));
+               ]
+           | Some elem_tys ->
+             let pat_len = List.length d.names in
+             let val_len = List.length elem_tys in
+             if pat_len <> val_len then
+               Error
+                 [
+                   Diagnostic.error
+                     ~hint:(Printf.sprintf "provide %d binding(s) in the pattern (use '_' to ignore elements)" val_len)
+                     ~code:"E0104"
+                     ~span:s.span
+                     (Printf.sprintf "destructuring arity mismatch: pattern has %d elements, but '%s' has %d elements"
+                        pat_len (Ty.to_string final_ty) val_len);
+                 ]
+             else
+               let bindings =
+                 List.map2
+                   (fun (name, name_span) elem_ty ->
+                     if name = "_" then
+                       { Typed_ast.name = None; name_span; ty = elem_ty }
+                     else begin
+                       Hashtbl.replace env name
+                         { ty = elem_ty; decl_span = name_span; is_const = d.is_const; const_int = None };
+                       scope_vars := name :: !scope_vars;
+                       { Typed_ast.name = Some name; name_span; ty = elem_ty }
+                     end)
+                   d.names elem_tys
+               in
+               Ok
+                 {
+                   Typed_ast.desc =
+                     Typed_ast.TStmtDestruct
+                       { bindings; is_const = d.is_const; ty = final_ty; init = final_init };
+                   span = s.span;
+                 })))
   | Ast.StmtVarDecl v ->
     let errs = ref [] in
     (match Hashtbl.find_opt env v.name with
@@ -640,22 +1110,23 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
           ~span:v.name_span
           (Printf.sprintf "constant '%s' requires an initializing expression" v.name)
         :: !errs;
-    let resolved_annot =
-      match v.ty_annot with
-      | None -> None
-      | Some annot ->
-        (match resolve_type_annot annot with
-         | Ok ty -> Some ty
-         | Error err ->
-           errs := err :: !errs;
-           None)
-    in
     let resolved_init =
       match v.init with
       | None -> None
       | Some init_expr ->
         (match check_expr env init_expr with
          | Ok te -> Some te
+         | Error err ->
+           errs := err :: !errs;
+           None)
+    in
+    let init_ty_opt = Option.map (fun (te : Typed_ast.expr) -> te.ty) resolved_init in
+    let resolved_annot =
+      match v.ty_annot with
+      | None -> None
+      | Some annot ->
+        (match resolve_type_expr annot init_ty_opt with
+         | Ok ty -> Some ty
          | Error err ->
            errs := err :: !errs;
            None)
@@ -694,7 +1165,11 @@ let rec check_stmt (env : env) (scope_vars : string list ref) (s : Ast.stmt)
             | None, None ->
               (Ty.Int, default_expr_for_type Ty.Int v.name_span, true)
           in
-          Hashtbl.replace env v.name { ty = final_ty; decl_span = v.name_span; is_const = v.is_const };
+          let const_int =
+            if v.is_const && final_ty = Ty.Int then eval_const_int env final_init else None
+          in
+          Hashtbl.replace env v.name
+            { ty = final_ty; decl_span = v.name_span; is_const = v.is_const; const_int };
           scope_vars := v.name :: !scope_vars;
           let tdecl =
             {
