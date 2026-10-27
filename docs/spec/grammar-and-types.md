@@ -20,7 +20,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
   - `decimal` (128 bits Base-10 Exato até 38 dígitos): literais com sufixo `m` (`10m`, `10.9m`, `123_456.789_012_345_678_901_234_567_89m`).
 - **Literais de Caractere (`char`):** Aspas simples `'...'`, contendo **1 code point Unicode UTF-8** (`'A'`, `'ç'`, `'Σ'`, `'🚀'`) ou escape (`\n`, `\r`, `\t`, `\\`, `\'`, `\"`, `\0`, `\$`).
 - **Literais de Texto (`string` e Interpolação):** Aspas duplas `"..."`, suportando UTF-8, escapes e interpolação de expressões arbitrárias `${expr}`.
-- **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `{`, `}`, `,`, `;`
+- **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `..`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `[`, `]`, `{`, `}`, `,`, `;`
 
 ---
 
@@ -33,28 +33,39 @@ stmt          ::= decl_stmt ";"
                 | non_decl_stmt ;
 
 decl_stmt     ::= var_decl
-                | const_decl ;
+                | const_decl
+                | destruct_decl ;
 
 non_decl_stmt ::= if_stmt
                 | block_stmt
                 | print_stmt ";"
+                | assert_stmt ";"
                 | expr_stmt ";" ;
 
 if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
 
 block_stmt    ::= "{" stmt* "}" ;
 
-var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
-const_decl    ::= "const" IDENT ( ":" TYPE "=" expr | ":=" expr ) ;
+var_decl      ::= "var" IDENT ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
+const_decl    ::= "const" IDENT ( ":" type_expr "=" expr | ":=" expr ) ;
+destruct_decl ::= ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ")"
+                  ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
+
+type_expr     ::= base_type ( "[" INT? "]" )* ;
+base_type     ::= IDENT
+                | "(" type_expr ( "," type_expr )+ ")" ;
 
 print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
+assert_stmt   ::= "assert" "(" expr ( "," expr ( "," expr )? )? ")"
+                | "assert_error" "(" expr "," expr ( "," expr )? ")" ;
 arg_list      ::= expr ( "," expr )* ;
 
 expr_stmt     ::= expr ;
 
 expr          ::= assignment ;
-assignment    ::= IDENT ASSIGN_OP assignment
+assignment    ::= lvalue ASSIGN_OP assignment
                 | logical_or ;
+lvalue        ::= IDENT ( "[" expr "]" )* ;
 ASSIGN_OP     ::= "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^="
                 | "and=" | "or=" | "xor=" | "<<=" | ">>=" ;
 logical_or    ::= logical_xor ( "or" logical_xor )* ;
@@ -70,18 +81,21 @@ mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
 power         ::= postfix ( "^" unary )? ;
-postfix       ::= primary ( "++" | "--" )* ;
+postfix       ::= primary ( "[" expr "]" | "++" | "--" )* ;
 primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP_STRING
                 | IDENT
-                | "(" expr ")" ;
+                | "(" expr ")"
+                | "(" elem_or_spread ( "," elem_or_spread )+ ")"
+                | "[" ( elem_or_spread ( "," elem_or_spread )* )? "]" ;
+elem_or_spread ::= ".." expr | expr ;
 ```
 
 ### Tabela de Precedência (da maior para a menor)
 
 | Nível | Operadores | Categoria | Associatividade |
 | :---: | :--- | :--- | :--- |
-| **1** | `( expr )`, literais, identificadores | Primário | — |
-| **2** | `x++`, `x--` | Pós-incremento e pós-decremento | Esquerda (retorna valor antigo) |
+| **1** | `( expr )`, `(e1, e2)`, `[e1, e2]`, literais, identificadores | Primário | — |
+| **2** | `x[i]`, `x++`, `x--` | Indexação Pós-fixada, Pós-incremento e Pós-decremento | Esquerda |
 | **3** | `^` | Potenciação | Direita (`2 ^ 3 ^ 2` = `512`) |
 | **4** | `+`, `-`, `++x`, `--x` | Unário Aritmético e Pré-incremento/decremento | Direita (`-2 ^ 2` = `-4`) |
 | **5** | `*`, `/`, `//`, `%` | Multiplicativo | Esquerda |
@@ -133,6 +147,12 @@ primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP
    - Declarações `const x := <expr>;` e `const x : <type> = <expr>;` definem símbolos imutáveis.
    - Toda constante exige obrigatoriamente um valor inicial (`E0106` caso omitido).
    - Qualquer tentativa de reatribuição (`=`, `+=`, etc.) ou incremento/decremento (`++`/`--`) resulta em erro estático `E0107`.
+9. **Tuplas Imutáveis (`(T1, T2, ...)`), Desempacotamento (`var (a, b, _) := ...`) e Arrays de Tamanho Estático (`T[N]` / `T[]`):**
+   - **Tuplas `(e1, e2, ...)`:** Heterogêneas (mínimo de 2 elementos após resolução de spreads `..`), com tipo `(T1, T2, ...)` e zero-initialization recursiva. Seus elementos internos são estaticamente imutáveis (`tuple[0] = 10;` ou `tuple[0]++` produzem `E0107`), permitindo apenas a sobrescrita completa da variável tupla se declarada com `var`. O acesso `tuple[i]` exige um índice `int` constante em tempo de compilação dentro dos limites `0 <= i < aridade` (`E0108`).
+   - **Desempacotamento (`var/const (a, b, _) := ...`):** Desempacota tuplas e arrays estáticos verificando a aridade exata (`E0104`). O identificador `_` atua como curinga (*wildcard*), descartando o elemento sem declarar variável ou disparar `W0001`.
+   - **Arrays de Tamanho Estático (`T[N]` e `T[]`):** Homogêneos de tamanho fixo $N \ge 1$ (`N <= 0` ou `[]` vazio disparam `E0108`). A anotação `T[]` com tamanho omitido é permitida quando acompanhada de inicializador (`var a : int[] = [10, 20];` infere `int[2]`), gerando `E0106` se usada sem inicializador. Elementos de arrays são mutáveis via indexação `arr[i] = val`, `<op>=` e `++`/`--` (mesmo quando a referência ao array é `const`, pois `const` congela apenas a referência da variável).
+   - **Concatenação (`+`), Repetição (`*`) e Spread (`..`):** `T[N] + T[M] -> T[N+M]`; `T[N] * k -> T[N*k]` e `k * T[N] -> T[N*k]` (para constante inteira $k > 0$, ou `E0108` se $k \le 0$). Não há `+=` ou `*=` para arrays pois alterariam o tamanho estático $N$ (`E0104`). O operador de espalhamento `..expr` pode ser usado dentro de literais de array `[..t, ..l, 50]` e de tupla `(..t, 50)`.
+   - **Semântica de Objetos por Referência (*Heap Reference Semantics*):** Tuplas e arrays são objetos alocados no heap e passados/armazenados por referência. `var l := [10, 20]; var ll := [[l]]; l[0] = 50;` faz `ll == [[[50, 20]]]`. Operações `+` e `*` alocam um novo array copiando os elementos de 1º nível (valores primitivos são copiados; referências a sub-arrays/tuplas continuam apontando para os mesmos objetos). Igualdade `==` e `!=` é estrutural profunda.
 
 ---
 
@@ -145,9 +165,10 @@ primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP
 | `E0003` | Parser | Erro | Ausência de ponto-e-vírgula `;` obrigatório ao final da instrução. |
 | `E0101` | Sema | Erro | Tipo desconhecido ou ainda não suportado. |
 | `E0102` | Sema | Erro | Uso de variável não declarada no escopo. |
-| `E0103` | Sema | Erro | Redeclaração de variável já existente no mesmo escopo. |
-| `E0104` | Sema | Erro | Incompatibilidade de tipos em atribuição ou operação unária/binária/relacional. |
+| `E0103` | Sema | Erro | Redeclaração de variável já existente no mesmo escopo ou duplicata em padrão de desempacotamento. |
+| `E0104` | Sema | Erro | Incompatibilidade de tipos em atribuição, operação unária/binária/relacional, elementos de array ou aridade de desempacotamento. |
 | `E0105` | Sema | Erro | Divisão ou módulo por zero detectado em tempo de compilação. |
-| `E0106` | Sema/Parser | Erro | Declaração de constante sem expressão de inicialização. |
-| `E0107` | Sema | Erro | Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável. |
+| `E0106` | Sema/Parser | Erro | Declaração de constante sem inicializador ou tipo de array `T[]` com tamanho omitido sem expressão inicializadora. |
+| `E0107` | Sema | Erro | Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável ou elemento de tupla. |
+| `E0108` | Sema | Erro | Índice constante fora dos limites, índice de tupla não-constante, tamanho de array `<= 0` ou repetição de array por fator `<= 0`. |
 | `W0001` | Linter | Aviso | Variável declarada e nunca utilizada (suprimido se o nome iniciar com `_`). |

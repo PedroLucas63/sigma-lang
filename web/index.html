@@ -190,16 +190,17 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="if_else_blocks">1. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
-            <option value="const_decl">2. Constantes Imutáveis (const) e Segurança Estática</option>
-            <option value="assign_incdec">3. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
-            <option value="arithmetic">4. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">5. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">6. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">7. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">8. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="assert_tests">9. Testes Integrados (assert, assert_error) e Test Runner</option>
-            <option value="typeerror">10. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="tuples_arrays">1. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
+            <option value="if_else_blocks">2. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
+            <option value="const_decl">3. Constantes Imutáveis (const) e Segurança Estática</option>
+            <option value="assign_incdec">4. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">5. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">6. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">7. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">8. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">9. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="assert_tests">10. Testes Integrados (assert, assert_error) e Test Runner</option>
+            <option value="typeerror">11. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -223,6 +224,7 @@
       <a href="../docs/guide/02-operators-and-expressions.md">📙 Guia 02: Operadores &amp; Expressões (docs/guide/)</a>
       <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais (if/else) &amp; Blocos (docs/guide/)</a>
       <a href="../docs/guide/04-testing-and-project-management.md">🧪 Guia 04: Testes &amp; Projetos (docs/guide/)</a>
+      <a href="../docs/guide/05-tuples-and-arrays.md">📦 Guia 05: Tuplas, Arrays, Spread &amp; Referências (docs/guide/)</a>
       <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
       <a href="../operations.csv">📊 Matriz Completa (operations.csv)</a>
     </div>
@@ -351,6 +353,18 @@ var c : int;                    # zero-init -> 0</pre>
           <li><strong>Gerenciamento de Projetos:</strong> <code>sigma pkg init</code> cria a estrutura padronizada (<code>sigma.toml</code>, <code>src/main.sgm</code>, <code>tests/main_test.sgm</code>) com suporte a scripts (<code>sigma run &lt;script&gt;</code>).</li>
         </ul>
       </article>
+
+      <article class="card">
+        <h3>11. Tuplas Imutáveis (<code>(T1, T2)</code>), Desempacotamento (<code>var (a, b, _)</code>), Arrays Estáticos (<code>T[N]</code> / <code>T[]</code>), Spread (<code>..</code>) e Referências</h3>
+        <p>Estruturas de dados de primeira classe com semântica de objetos referenciados no heap e paridade VM/C99:</p>
+        <ul>
+          <li><strong>Tuplas Heterogêneas (<code>(e1, e2, ...)</code>):</strong> Tipo <code>(T1, T2, ...)</code> com <em>zero-initialization</em> recursiva (<code>var t : (int, int);</code> &rarr; <code>(0, 0)</code>) e indexação por constante inteira <code>tuple[0]</code>. Seus elementos são imutáveis (<code>tuple[0] = 10;</code> gera <code>E0107</code>), permitindo apenas sobrescrever a tupla inteira (<code>t = (20, 30);</code>).</li>
+          <li><strong>Desempacotamento (<em>Destructuring</em>):</strong> <code>var (a, b, _) := tuple;</code> ou <code>const (x, _, z) := arr;</code> desempacota tuplas e arrays estáticos, descartando posições com o curinga <code>_</code> sem aviso de linter.</li>
+          <li><strong>Arrays de Tamanho Estático (<code>T[N]</code> e <code>T[]</code>):</strong> Homogêneos de tamanho fixo <code>int[3]</code> (ou tamanho inferido <code>var a : int[] = [10, 20];</code> &rarr; <code>int[2]</code>; sem inicializador gera <code>E0106</code>). Suportam mutação por índice <code>arr[i] = v</code>, concatenação <code>[10, 10] + [10] == [10, 10, 10]</code> e repetição <code>arr * 3</code> / <code>3 * arr</code>.</li>
+          <li><strong>Operador Spread (<code>..</code>):</strong> Desempacota tuplas e arrays dentro de outros literais: <code>var m := [..t, ..l, 50];</code>.</li>
+          <li><strong>Semântica de Objetos por Referência:</strong> Arrays e tuplas são objetos no heap. Em <code>var l := [10, 20]; var ll := [[l]]; l[0] = 50;</code>, temos <code>ll == [[[50, 20]]]</code>. Já <code>l * 3</code> cria um novo array copiando os elementos de 1º nível.</li>
+        </ul>
+      </article>
     </div>
 
     <!-- TABELA DE PRECEDÊNCIA -->
@@ -366,8 +380,8 @@ var c : int;                    # zero-init -> 0</pre>
           </tr>
         </thead>
         <tbody>
-          <tr><td>1 (Maior)</td><td><code>( expr )</code>, literais, identificadores</td><td>Agrupamento e átomos</td><td>—</td></tr>
-          <tr><td>2</td><td><code>x++</code>, <code>x--</code></td><td>Pós-incremento e pós-decremento (retornam valor antigo)</td><td>Esquerda</td></tr>
+          <tr><td>1 (Maior)</td><td><code>( expr )</code>, <code>(e1, e2)</code>, <code>[e1, e2]</code>, literais, identificadores</td><td>Agrupamento, tuplas, arrays e átomos</td><td>—</td></tr>
+          <tr><td>2</td><td><code>x[i]</code>, <code>x++</code>, <code>x--</code></td><td>Indexação pós-fixada, pós-incremento e pós-decremento</td><td>Esquerda</td></tr>
           <tr><td>3</td><td><code>^</code></td><td>Potenciação</td><td>Direita (<code>2 ^ 3 ^ 2 == 512</code>)</td></tr>
           <tr><td>4</td><td><code>+</code>, <code>-</code>, <code>++x</code>, <code>--x</code></td><td>Sinal unário e pré-incremento/decremento (retornam novo valor)</td><td>Direita (<code>-2 ^ 2 == -4</code>)</td></tr>
           <tr><td>5</td><td><code>*</code>, <code>/</code>, <code>//</code>, <code>%</code></td><td>Multiplicação, divisão real, divisão inteira e módulo euclidiano</td><td>Esquerda</td></tr>
@@ -402,6 +416,35 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      tuples_arrays: {
+        code: `# Tuplas (Imutáveis), Desempacotamento, Arrays Estáticos, Spread (..) e Referências
+var tuple := (10, 10., "10");
+var t : (int, int);                # zero-init -> (0, 0)
+t = (25, 75);                      # sobrescrita completa permitida
+var (a, b, _) := tuple;            # desempacotamento com curinga '_'
+println("Tupla:", tuple, "| t:", t, "| a:", a, "| b:", b);
+
+# Arrays estáticos com concatenação (+), repetição (*) e spread (..)
+var arr_sum := [10, 10] + [10];
+var tp := (10, 20);
+var ls := [30, 40];
+var m := [..tp, ..ls, 50];
+println("Concat:", arr_sum, "| Spread:", m);
+
+# Semântica de Objetos por Referência (Heap Reference Semantics)
+var l := [10, 20];
+var ll := [[l]];
+var x := l * 3;
+var y := [l * 3];
+var z := [l] * 3;
+l[0] = 30;
+
+println("ll ->", ll);
+println("x  ->", x);
+println("y  ->", y);
+println("z  ->", z);`,
+        out: `Tupla: (10, 10, 10) | t: (25, 75) | a: 10 | b: 10\nConcat: [10, 10, 10] | Spread: [10, 20, 30, 40, 50]\nll -> [[[30, 20]]]\nx  -> [10, 20, 10, 20, 10, 20]\ny  -> [[10, 20, 10, 20, 10, 20]]\nz  -> [[30, 20], [30, 20], [30, 20]]`
+      },
       if_else_blocks: {
         code: `# Condicionais (if / else / else if) e Blocos de Escopo Léxico ({ ... })
 var x := 12;
@@ -583,7 +626,7 @@ var invalido := 0.1f + 0.2m;`,
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('if_else_blocks');
+    loadExample('tuples_arrays');
   </script>
 </body>
 </html>

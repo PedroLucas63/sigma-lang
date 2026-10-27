@@ -154,6 +154,10 @@
     "operators": {
       "patterns": [
         {
+          "name": "keyword.operator.spread.sigma",
+          "match": "\\.\\."
+        },
+        {
           "name": "keyword.operator.increment-decrement.sigma",
           "match": "\\+\\+|\\-\\-"
         },
@@ -192,6 +196,10 @@
         {
           "name": "punctuation.parens.sigma",
           "match": "[()]"
+        },
+        {
+          "name": "punctuation.brackets.sigma",
+          "match": "[\\[\\]]"
         },
         {
           "name": "punctuation.braces.sigma",

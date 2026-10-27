@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M1 — Operações Aritméticas, Relacionais, Lógicas, Bitwise e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (`feature/if-else-and-blocks` e `feature/ecosystem-sync-if-blocks` finalizadas e mescladas).
+- **Milestone:** `M2 — Estruturas de Dados, Controle de Fluxo e Ecossistema Sincronizado`
+- **Git Flow:** Branch base `develop` (`feature/tuples-and-arrays` finalizada e mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -21,16 +21,17 @@
 - [x] Saída padrão explícita com `print(e1, e2, ...)` (sem `\n`) e `println(e1, e2, ...)` (com `\n`), aceitando 0 ou mais argumentos separados por vírgula; `<expr>;` avalia efeitos colaterais silenciosamente (`OP_POP`).
 - [x] Estruturas condicionais `if (<expr-bool>) <stmt> [else <stmt>]` (com ou sem chaves, incluindo `else if`) e blocos de escopo léxico `{ <stmt>* }` em qualquer ponto do código (sem *shadowing* `E0103` e com descarte de variáveis locais ao sair das chaves `E0102`).
 - [x] Declaração de constantes imutáveis `const` com inferência `:=` e tipo explícito `: <ty> =`, exigindo inicializador obrigatório (`E0106`) e proibindo estaticamente reatribuição ou incremento/decremento (`E0107`).
+- [x] Tuplas heterogêneas com elementos imutáveis `(e1, e2, ...)` e tipo `(T1, T2, ...)` (zero-init recursivo, indexação constante `tuple[0]` e proibição de mutação posicional `E0107`), desempacotamento `var/const (a, b, _) := ...` com curinga `_`, arrays estáticos `T[N]` e tamanho inferido `T[]` (com mutação por índice, concatenação `+`, repetição `*`), operador spread `..` em literais de tupla/array e semântica de objetos por referência no heap (`E0108`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 126 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 170 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
-- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else`, blocos de escopo léxico `{ ... }`, atribuições, `++`/`--`, `print`/`println`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo tuplas, desempacotamento, arrays estáticos, spread `..`, semântica de referência, `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else`, blocos `{ ... }`, seção de documentação integrada na página web e links diretos para os Markdowns em `docs/`).
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Implementar laços de repetição (`while`, `for`), funções definidas pelo usuário, leitura de entrada (`input`) ou tuplas `(T1, T2)`.
+- [ ] Implementar laços de repetição (`while`, `for`), funções definidas pelo usuário ou leitura de entrada (`input`).
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2 e identidade **Sigma (`.sgm`)**.
@@ -41,3 +42,4 @@
 - **2026-10-20:** Atualização da skill `ecosystem-sync` para exigir documentação integrada em `web/index.html` com links para `docs/`, e sincronização completa de `editors/vscode/`, `docs/` e `web/` com todas as funcionalidades do Milestone M1 (`feature/ecosystem-sync-m1`).
 - **2026-10-21:** Implementação de atribuições (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos de escopo léxico `{ ... }` (`ADR-018` a `ADR-020`), com sincronização completa do ecossistema (`feature/ecosystem-sync-if-blocks`).
 - **2026-10-24:** Implementação de constantes imutáveis (`const`) e testes integrados (`assert`, `assert_error`), test runner `sigma test` (--native, --parity), `sigma.toml` e suíte modular `.sgm` (`feature/test-runner-and-pkg-manager`, `ADR-021` e `ADR-022`).
+- **2026-10-27:** Implementação de tuplas imutáveis `(T1, T2)`, desempacotamento `var/const (a, b, _) := ...`, arrays estáticos `T[N]` / `T[]` (`+`, `*`), operador spread `..`, semântica de objetos por referência no heap e sincronização completa do ecossistema (`feature/tuples-and-arrays`, `ADR-024`).

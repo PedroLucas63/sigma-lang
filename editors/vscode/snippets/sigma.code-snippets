@@ -95,5 +95,26 @@
       "assert_error(\"${1:E0106}\", \"${2:const X : int;}\", \"${3:message}\");"
     ],
     "description": "Assert that a snippet produces a specific compile/static error code"
+  },
+  "Tuple Declaration": {
+    "prefix": "tuple",
+    "body": [
+      "var ${1:tup} := (${2:a}, ${3:b});"
+    ],
+    "description": "Declare an immutable-element tuple"
+  },
+  "Destructuring Declaration": {
+    "prefix": "destruct",
+    "body": [
+      "var (${1:a}, ${2:b}, _) := ${3:collection};"
+    ],
+    "description": "Destructure a tuple or static array into variables with optional '_' wildcards"
+  },
+  "Static Array Declaration": {
+    "prefix": "arr",
+    "body": [
+      "var ${1:arr}: ${2|int,float,double,decimal,bool,char,string|}[${3:3}] = [${4:10, 20, 30}];"
+    ],
+    "description": "Declare a static-size array T[N] or T[]"
   }
 }
