@@ -63,6 +63,9 @@
 | Delimitador | `RPAREN` | `)` |
 | Delimitador | `LBRACE` | `{` |
 | Delimitador | `RBRACE` | `}` |
+| Delimitador | `LBRACKET` | `[` |
+| Delimitador | `RBRACKET` | `]` |
+| Operador | `DOT_DOT` | `..` |
 | Delimitador | `COMMA` | `,` |
 | Delimitador | `SEMI` | `;` |
 | Controle | `EOF` | Fim de arquivo |
@@ -78,7 +81,8 @@ stmt          ::= decl_stmt ";"
                 | non_decl_stmt ;
 
 decl_stmt     ::= var_decl
-                | const_decl ;
+                | const_decl
+                | destruct_decl ;
 
 non_decl_stmt ::= if_stmt
                 | block_stmt
@@ -90,8 +94,14 @@ if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
 
 block_stmt    ::= "{" stmt* "}" ;
 
-var_decl      ::= "var" IDENT ( ":" TYPE ( "=" expr )? | ":=" expr ) ;
-const_decl    ::= "const" IDENT ( ":" TYPE "=" expr | ":=" expr ) ;
+var_decl      ::= "var" IDENT ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
+const_decl    ::= "const" IDENT ( ":" type_expr "=" expr | ":=" expr ) ;
+destruct_decl ::= ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ","? ")"
+                  ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
+
+type_expr     ::= base_type ( "[" INT? "]" )* ;
+base_type     ::= IDENT
+                | "(" type_expr ( "," type_expr )* ","? ")" ;
 
 print_stmt    ::= ( "print" | "println" ) "(" arg_list? ")" ;
 arg_list      ::= expr ( "," expr )* ;
@@ -102,8 +112,9 @@ assert_stmt   ::= "assert" "(" expr ( "," expr ( "," expr )? )? ")"
 expr_stmt     ::= expr ;
 
 expr          ::= assignment ;
-assignment    ::= IDENT ASSIGN_OP assignment
+assignment    ::= lvalue ASSIGN_OP assignment
                 | logical_or ;
+lvalue        ::= IDENT ( "[" expr "]" )* ;
 ASSIGN_OP     ::= "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^="
                 | "and=" | "or=" | "xor=" | "<<=" | ">>=" ;
 logical_or    ::= logical_xor ( "or" logical_xor )* ;
@@ -119,7 +130,7 @@ mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
 power         ::= postfix ( "^" unary )? ;
-postfix       ::= primary ( "++" | "--" )* ;
+postfix       ::= primary ( "[" expr "]" | "++" | "--" )* ;
 primary       ::= INT
                 | FLOAT
                 | DOUBLE
@@ -129,9 +140,11 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
-                | "(" expr ")" ;
+                | "(" expr ")"
+                | "(" elem_or_spread ( "," elem_or_spread )* ","? ")"
+                | "[" ( elem_or_spread ( "," elem_or_spread )* ","? )? "]" ;
 
-TYPE          ::= IDENT ; (* Validado no Sema: "int", "float", "double", "decimal", "bool", "char", "string" *)
+elem_or_spread ::= ".." expr | expr ;
 
 BOOL          ::= "true" | "false" ;
 CHAR          ::= "'" ( UNICODE_SCALAR | ESCAPE ) "'" ;
@@ -199,7 +212,20 @@ type incdec_op =
   | PostInc
   | PostDec
 
-type expr_desc =
+type type_expr =
+  | TypeNamed of string * Sigma_common.Span.t
+  | TypeTuple of type_expr list * Sigma_common.Span.t
+  | TypeArray of type_expr * int option * Sigma_common.Span.t
+
+type collection_item =
+  | ItemExpr of expr
+  | ItemSpread of expr * Sigma_common.Span.t
+
+and lvalue =
+  | LValIdent of string * Sigma_common.Span.t
+  | LValIndex of expr * expr * Sigma_common.Span.t
+
+and expr_desc =
   | ExprInt of int64
   | ExprFloat of float
   | ExprDouble of float
@@ -209,11 +235,14 @@ type expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprTuple of collection_item list
+  | ExprArray of collection_item list
+  | ExprIndex of expr * expr
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
-  | ExprAssign of string * Span.t * assign_op * expr
-  | ExprIncDec of incdec_op * string * Span.t
+  | ExprAssign of lvalue * assign_op * expr
+  | ExprIncDec of incdec_op * lvalue
 
 and interp_part =
   | InterpLit of string
@@ -228,12 +257,20 @@ type var_decl = {
   name : string;
   name_span : Sigma_common.Span.t;
   is_const : bool;
-  ty_annot : (string * Sigma_common.Span.t) option;
+  ty_annot : type_expr option;
+  init : expr option;
+}
+
+type destruct_decl = {
+  names : (string * Sigma_common.Span.t) list;
+  is_const : bool;
+  ty_annot : type_expr option;
   init : expr option;
 }
 
 type stmt_desc =
   | StmtVarDecl of var_decl
+  | StmtDestruct of destruct_decl
   | StmtBlock of stmt list
   | StmtIf of {
       cond : expr;
@@ -272,13 +309,16 @@ and stmt = {
 - `Ty.Decimal`: Ponto flutuante decimal de alta precisão (`decimal`), *unboxed*. Literais com sufixo `m` (`10.9m`, `10m`).
 - `Ty.Bool`: Booleano (`bool` nativo em OCaml e `<stdbool.h>` em C99), *unboxed*.
 - `Ty.Char`: Caractere Unicode completo (1 code point UTF-8 de 1 a 4 bytes, aceitando qualquer idioma, acento, símbolo ou emoji).
-- `Ty.String`: Texto imutável UTF-8 de tamanho arbitrário, suportando interpolação `${expr}` de qualquer tipo primitivo.
+- `Ty.String`: Texto imutável UTF-8 de tamanho arbitrário, suportando interpolação `${expr}` de qualquer tipo.
+- `Ty.Tuple of t list`: Tupla ordenada heterogênea `(T1, T2, ...)` com elementos imutáveis (`E0107` ao tentar `tuple[0] = val`). Suporta indexação inteira `tuple[i]`, desempacotamento `var (a, b, _) := tuple;` e operador spread `..tuple`.
+- `Ty.Array of t * int`: Array homogêneo de tamanho estático `T[N]` com semântica de referência (objeto mutável *in-place* via `arr[i] = val`) e anotação `T[N]` ou `T[]` (quando acompanhado de inicializador). Suporta concatenação `a + b -> T[N+M]`, repetição por inteiro constante `a * k -> T[N*k]`, igualdade profunda `==`/`!=`, desempacotamento e spread `..arr`.
 - **Operadores Unários (`+x`, `-x`):** Aplicáveis a `int`, `float`, `double`, `decimal`, preservando o tipo.
 - **Operadores Binários (`+`, `-`, `*`, `/`, `//`, `^`, `%`):**
   - Hierarquia IEEE-754: `int < float < double` (exceto `/` onde `int / int -> float`, e `//` onde qualquer combinação resulta em `int` com truncamento em direção a zero).
   - Hierarquia Base-10 Exata: `int` promove para `decimal`; `float` e `double` **nunca** se misturam com `decimal` (`E0104`).
   - Módulo (`%`): Sempre não-negativo (Euclidiano: $0 \le a \bmod |b| < |b|$).
   - Operações com `char` e `string`: `char + char -> string`, `char - char -> int`, `char +/- int -> char`, `char + string -> string`, `string + char -> string`, `string + string -> string`, `char * int -> string`, `string * int -> string`.
+  - Operações com `array`: `T[N] + T[M] -> T[N+M]`, `T[N] * k -> T[N*k]`, `k * T[N] -> T[N*k]`, `T[N] == T[N] -> bool`, `T[N] != T[N] -> bool`.
 
 ## 5. Instruções de IR (`Sigma_ir.Ir`)
 
@@ -291,6 +331,13 @@ type opcode =
   | OP_CONST_BOOL of bool
   | OP_CONST_CHAR of string
   | OP_CONST_STR of string
+  | OP_MAKE_TUPLE of int
+  | OP_MAKE_ARRAY of int
+  | OP_SPREAD
+  | OP_INDEX_GET
+  | OP_INDEX_SET
+  | OP_ARRAY_CONCAT
+  | OP_ARRAY_REPEAT
   | OP_TO_STR
   | OP_CONCAT_STR of int
   | OP_I64_TO_F32
@@ -310,6 +357,7 @@ type opcode =
   | OP_NOT_BOOL | OP_AND_BOOL | OP_OR_BOOL | OP_XOR_BOOL
   | OP_NOT_I64 | OP_AND_I64 | OP_OR_I64 | OP_XOR_I64 | OP_SHL_I64 | OP_SHR_I64
   | OP_EQ_* | OP_NE_* | OP_LT_* | OP_GT_* | OP_LE_* | OP_GE_*
+  | OP_EQ_OBJ | OP_NE_OBJ
   | OP_JUMP of int | OP_JUMP_IF_FALSE of int | OP_JUMP_IF_TRUE of int
   | OP_SET_TEMP of int | OP_GET_TEMP of int
   | OP_DEF_GLOBAL_I64 of string
@@ -319,6 +367,7 @@ type opcode =
   | OP_DEF_GLOBAL_BOOL of string
   | OP_DEF_GLOBAL_CHAR of string
   | OP_DEF_GLOBAL_STR of string
+  | OP_DEF_GLOBAL_OBJ of string
   | OP_GET_GLOBAL_I64 of string
   | OP_GET_GLOBAL_F32 of string
   | OP_GET_GLOBAL_F64 of string
@@ -326,6 +375,7 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_GET_GLOBAL_OBJ of string
   | OP_SET_GLOBAL_I64 of string
   | OP_SET_GLOBAL_F32 of string
   | OP_SET_GLOBAL_F64 of string
@@ -333,6 +383,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
   | OP_PRINT_I64
@@ -342,6 +393,7 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
   | OP_ASSERT_EQ

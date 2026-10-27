@@ -41,6 +41,12 @@ let match_assign_op (k : Token.kind) : Ast.assign_op option =
   | Token.RSHIFT_EQ -> Some Ast.AssignShr
   | _ -> None
 
+let expr_to_lvalue (e : Ast.expr) : Ast.lvalue option =
+  match e.desc with
+  | Ast.ExprIdent name -> Some (Ast.LValIdent (name, e.span))
+  | Ast.ExprIndex (base, idx) -> Some (Ast.LValIndex (base, idx, e.span))
+  | _ -> None
+
 let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
   parse_assignment st
 
@@ -55,18 +61,18 @@ and parse_assignment st : (Ast.expr, Diagnostic.t) result =
        (match parse_assignment st with
         | Error e -> Error e
         | Ok rhs ->
-          (match lhs.desc with
-           | Ast.ExprIdent name ->
+          (match expr_to_lvalue lhs with
+           | Some lval ->
              let span = Span.merge lhs.span rhs.span in
-             Ok { Ast.desc = Ast.ExprAssign (name, lhs.span, op, rhs); span }
-           | _ ->
+             Ok { Ast.desc = Ast.ExprAssign (lval, op, rhs); span }
+           | None ->
              let op_str = Ast.assign_op_to_string op in
              Error
                (Diagnostic.error
-                  ~hint:(Printf.sprintf "assign to a declared variable, e.g. 'x %s <expr>;'" op_str)
+                  ~hint:(Printf.sprintf "assign to a declared variable or array element, e.g. 'x %s <expr>;' or 'arr[0] %s <expr>;'" op_str op_str)
                   ~code:"E0002"
                   ~span:lhs.span
-                  (Printf.sprintf "invalid assignment target: left-hand side of '%s' must be a variable identifier"
+                  (Printf.sprintf "invalid assignment target: left-hand side of '%s' must be a variable or indexed expression"
                      op_str)))))
 
 and parse_logical_or st : (Ast.expr, Diagnostic.t) result =
@@ -278,17 +284,17 @@ and parse_unary st : (Ast.expr, Diagnostic.t) result =
     (match parse_unary st with
      | Error e -> Error e
      | Ok sub ->
-       (match sub.desc with
-        | Ast.ExprIdent name ->
+       (match expr_to_lvalue sub with
+        | Some lval ->
           let span = Span.merge tok.span sub.span in
-          Ok { Ast.desc = Ast.ExprIncDec (inc_op, name, sub.span); span }
-        | _ ->
+          Ok { Ast.desc = Ast.ExprIncDec (inc_op, lval); span }
+        | None ->
           Error
             (Diagnostic.error
-               ~hint:(Printf.sprintf "apply '%s' directly to a variable identifier, e.g. '%sx'" op_str op_str)
+               ~hint:(Printf.sprintf "apply '%s' directly to a variable or array element, e.g. '%sx' or '%sarr[0]'" op_str op_str op_str)
                ~code:"E0002"
                ~span:sub.span
-               (Printf.sprintf "operand of prefix '%s' must be a variable identifier"
+               (Printf.sprintf "operand of prefix '%s' must be a variable or indexed expression"
                   op_str))))
   | _ -> parse_power st
 
@@ -314,27 +320,86 @@ and parse_postfix st : (Ast.expr, Diagnostic.t) result =
     let rec loop (acc : Ast.expr) : (Ast.expr, Diagnostic.t) result =
       let tok = cur st in
       match tok.kind with
+      | Token.LBRACKET ->
+        bump st;
+        (match parse_expr st with
+         | Error e -> Error e
+         | Ok idx_expr ->
+           let close_tok = cur st in
+           (match close_tok.kind with
+            | Token.RBRACKET ->
+              bump st;
+              let span = Span.merge acc.span close_tok.span in
+              loop { Ast.desc = Ast.ExprIndex (acc, idx_expr); span }
+            | _ ->
+              Error
+                (Diagnostic.error
+                   ~hint:"close index access with ']', e.g. 'arr[0]'"
+                   ~code:"E0002"
+                   ~span:close_tok.span
+                   (Printf.sprintf "expected ']' after index expression, found %s"
+                      (Token.kind_to_string close_tok.kind)))))
       | Token.PLUS_PLUS | Token.MINUS_MINUS ->
         let inc_op =
           if tok.kind = Token.PLUS_PLUS then Ast.PostInc else Ast.PostDec
         in
         let op_str = Ast.incdec_op_to_string inc_op in
         bump st;
-        (match acc.desc with
-         | Ast.ExprIdent name ->
+        (match expr_to_lvalue acc with
+         | Some lval ->
            let span = Span.merge acc.span tok.span in
-           loop { Ast.desc = Ast.ExprIncDec (inc_op, name, acc.span); span }
-         | _ ->
+           loop { Ast.desc = Ast.ExprIncDec (inc_op, lval); span }
+         | None ->
            Error
              (Diagnostic.error
-                ~hint:(Printf.sprintf "apply '%s' directly to a variable identifier, e.g. 'x%s'" op_str op_str)
+                ~hint:(Printf.sprintf "apply '%s' directly to a variable or array element, e.g. 'x%s' or 'arr[0]%s'" op_str op_str op_str)
                 ~code:"E0002"
                 ~span:acc.span
-                (Printf.sprintf "operand of postfix '%s' must be a variable identifier"
+                (Printf.sprintf "operand of postfix '%s' must be a variable or indexed expression"
                    op_str)))
       | _ -> Ok acc
     in
     loop lhs
+
+and parse_collection_item st : (Ast.collection_item, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.DOT_DOT ->
+    bump st;
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok sub ->
+       Ok (Ast.ItemSpread (sub, Span.merge tok.span sub.span)))
+  | _ ->
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok sub -> Ok (Ast.ItemExpr sub))
+
+and parse_collection_rest st ~close_kind ~close_str (acc : Ast.collection_item list)
+    : (Ast.collection_item list * Span.t, Diagnostic.t) result =
+  let tok = cur st in
+  if tok.kind = close_kind then begin
+    bump st;
+    Ok (List.rev acc, tok.span)
+  end else
+    match parse_collection_item st with
+    | Error e -> Error e
+    | Ok item ->
+      let acc = item :: acc in
+      let next_tok = cur st in
+      if next_tok.kind = Token.COMMA then begin
+        bump st;
+        parse_collection_rest st ~close_kind ~close_str acc
+      end else if next_tok.kind = close_kind then begin
+        bump st;
+        Ok (List.rev acc, next_tok.span)
+      end else
+        Error
+          (Diagnostic.error
+             ~code:"E0002"
+             ~span:next_tok.span
+             (Printf.sprintf "expected '%s' or ',' in collection literal, found %s"
+                close_str (Token.kind_to_string next_tok.kind)))
 
 and parse_primary st : (Ast.expr, Diagnostic.t) result =
   let tok = cur st in
@@ -398,22 +463,92 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
     Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
   | Token.LPAREN ->
     bump st;
-    (match parse_expr st with
-     | Error e -> Error e
-     | Ok inner ->
-       let close_tok = cur st in
-       (match close_tok.kind with
-        | Token.RPAREN ->
+    if (cur st).kind = Token.RPAREN then begin
+      let close_tok = cur st in
+      bump st;
+      Error
+        (Diagnostic.error
+           ~hint:"provide at least one element, e.g. '(10, 20)'"
+           ~code:"E0002"
+           ~span:(Span.merge tok.span close_tok.span)
+           "empty tuple '()' is not supported")
+    end else if (cur st).kind = Token.DOT_DOT then begin
+      match parse_collection_item st with
+      | Error e -> Error e
+      | Ok first_item ->
+        let next_tok = cur st in
+        if next_tok.kind = Token.COMMA then begin
           bump st;
-          let span = Span.merge tok.span close_tok.span in
-          Ok { inner with span }
-        | _ ->
+          match parse_collection_rest st ~close_kind:Token.RPAREN ~close_str:")" [ first_item ] with
+          | Error e -> Error e
+          | Ok (items, close_span) ->
+            let span = Span.merge tok.span close_span in
+            Ok { Ast.desc = Ast.ExprTuple items; span }
+        end else if next_tok.kind = Token.RPAREN then begin
+          bump st;
+          let span = Span.merge tok.span next_tok.span in
+          Ok { Ast.desc = Ast.ExprTuple [ first_item ]; span }
+        end else
           Error
             (Diagnostic.error
                ~code:"E0002"
-               ~span:close_tok.span
-               (Printf.sprintf "expected ')' to close parenthesized expression, found %s"
-                  (Token.kind_to_string close_tok.kind)))))
+               ~span:next_tok.span
+               (Printf.sprintf "expected ')' or ',' in tuple literal, found %s"
+                  (Token.kind_to_string next_tok.kind)))
+    end else
+      (match parse_expr st with
+       | Error e -> Error e
+       | Ok inner ->
+         let next_tok = cur st in
+         (match next_tok.kind with
+          | Token.RPAREN ->
+            bump st;
+            let span = Span.merge tok.span next_tok.span in
+            Ok { inner with span }
+          | Token.COMMA ->
+            bump st;
+            (match parse_collection_rest st ~close_kind:Token.RPAREN ~close_str:")" [ Ast.ItemExpr inner ] with
+             | Error e -> Error e
+             | Ok (items, close_span) ->
+               let span = Span.merge tok.span close_span in
+               Ok { Ast.desc = Ast.ExprTuple items; span })
+          | _ ->
+            Error
+              (Diagnostic.error
+                 ~code:"E0002"
+                 ~span:next_tok.span
+                 (Printf.sprintf "expected ')' to close parenthesized expression or ',' for tuple, found %s"
+                    (Token.kind_to_string next_tok.kind)))))
+  | Token.LBRACKET ->
+    bump st;
+    if (cur st).kind = Token.RBRACKET then begin
+      let close_tok = cur st in
+      bump st;
+      let span = Span.merge tok.span close_tok.span in
+      Ok { Ast.desc = Ast.ExprArray []; span }
+    end else
+      (match parse_collection_item st with
+       | Error e -> Error e
+       | Ok first_item ->
+         let next_tok = cur st in
+         if next_tok.kind = Token.COMMA then begin
+           bump st;
+           match parse_collection_rest st ~close_kind:Token.RBRACKET ~close_str:"]" [ first_item ] with
+           | Error e -> Error e
+           | Ok (items, close_span) ->
+             let span = Span.merge tok.span close_span in
+             Ok { Ast.desc = Ast.ExprArray items; span }
+         end else if next_tok.kind = Token.RBRACKET then begin
+           bump st;
+           let span = Span.merge tok.span next_tok.span in
+           Ok { Ast.desc = Ast.ExprArray [ first_item ]; span }
+         end else
+           Error
+             (Diagnostic.error
+                ~code:"E0002"
+                ~span:next_tok.span
+                (Printf.sprintf "expected ']' or ',' in array literal, found %s"
+                   (Token.kind_to_string next_tok.kind))))
   | Token.KW_PRINT | Token.KW_PRINTLN ->
     let fn_name = if tok.kind = Token.KW_PRINTLN then "println" else "print" in
     Error
@@ -455,11 +590,239 @@ let expect_semi st start_span : (Span.t, Diagnostic.t) result =
          (Printf.sprintf "expected ';' at end of statement, found %s"
             (Token.kind_to_string tok.kind)))
 
+let rec parse_type_expr st : (Ast.type_expr, Diagnostic.t) result =
+  match parse_base_type st with
+  | Error e -> Error e
+  | Ok base ->
+    let base_span = Ast.type_expr_span base in
+    let rec parse_dims acc =
+      let tok = cur st in
+      match tok.kind with
+      | Token.LBRACKET ->
+        bump st;
+        let next_tok = cur st in
+        (match next_tok.kind with
+         | Token.RBRACKET ->
+           bump st;
+           parse_dims ((None, Span.merge tok.span next_tok.span) :: acc)
+         | Token.INT n ->
+           bump st;
+           let close_tok = cur st in
+           if close_tok.kind = Token.RBRACKET then begin
+             bump st;
+             parse_dims ((Some (Int64.to_int n), Span.merge tok.span close_tok.span) :: acc)
+           end else
+             Error
+               (Diagnostic.error
+                  ~code:"E0002"
+                  ~span:close_tok.span
+                  (Printf.sprintf "expected ']' after array size, found %s"
+                     (Token.kind_to_string close_tok.kind)))
+         | Token.MINUS ->
+           bump st;
+           (match (cur st).kind with
+            | Token.INT n ->
+              bump st;
+              let close_tok = cur st in
+              if close_tok.kind = Token.RBRACKET then begin
+                bump st;
+                parse_dims ((Some (- (Int64.to_int n)), Span.merge tok.span close_tok.span) :: acc)
+              end else
+                Error
+                  (Diagnostic.error
+                     ~code:"E0002"
+                     ~span:close_tok.span
+                     (Printf.sprintf "expected ']' after array size, found %s"
+                        (Token.kind_to_string close_tok.kind)))
+            | _ ->
+              Error
+                (Diagnostic.error
+                   ~code:"E0002"
+                   ~span:(cur st).span
+                   "expected integer literal after '-' in array size"))
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:"use an integer size like 'int[3]' or omit size with 'int[]'"
+                ~code:"E0002"
+                ~span:next_tok.span
+                (Printf.sprintf "expected array length integer or ']', found %s"
+                   (Token.kind_to_string next_tok.kind))))
+      | _ -> Ok (List.rev acc)
+    in
+    (match parse_dims [] with
+     | Error e -> Error e
+     | Ok dims ->
+       Ok
+         (List.fold_right
+            (fun (sz_opt, br_span) acc ->
+              Ast.TypeArray (acc, sz_opt, Span.merge base_span br_span))
+            dims base))
+
+and parse_base_type st : (Ast.type_expr, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.IDENT ty_name ->
+    bump st;
+    Ok (Ast.TypeNamed (ty_name, tok.span))
+  | Token.LPAREN ->
+    bump st;
+    let rec parse_tuple_types acc =
+      if (cur st).kind = Token.RPAREN then begin
+        let close_tok = cur st in
+        bump st;
+        Ok (List.rev acc, close_tok.span)
+      end else
+        match parse_type_expr st with
+        | Error e -> Error e
+        | Ok te ->
+          let acc = te :: acc in
+          let next_tok = cur st in
+          if next_tok.kind = Token.COMMA then begin
+            bump st;
+            parse_tuple_types acc
+          end else if next_tok.kind = Token.RPAREN then begin
+            bump st;
+            Ok (List.rev acc, next_tok.span)
+          end else
+            Error
+              (Diagnostic.error
+                 ~code:"E0002"
+                 ~span:next_tok.span
+                 (Printf.sprintf "expected ')' or ',' in tuple type annotation, found %s"
+                    (Token.kind_to_string next_tok.kind)))
+    in
+    (match parse_tuple_types [] with
+     | Error e -> Error e
+     | Ok ([], close_span) ->
+       Error
+         (Diagnostic.error
+            ~code:"E0002"
+            ~span:(Span.merge tok.span close_span)
+            "empty tuple type '()' is not supported")
+     | Ok (tys, close_span) ->
+       Ok (Ast.TypeTuple (tys, Span.merge tok.span close_span)))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "expected type name after ':', found %s"
+            (Token.kind_to_string tok.kind)))
+
+let parse_destruct_names st open_tok : ((string * Span.t) list, Diagnostic.t) result =
+  let rec loop acc =
+    if (cur st).kind = Token.RPAREN then begin
+      bump st;
+      Ok (List.rev acc)
+    end else
+      let tok = cur st in
+      match tok.kind with
+      | Token.IDENT name ->
+        bump st;
+        let acc = (name, tok.span) :: acc in
+        let next_tok = cur st in
+        if next_tok.kind = Token.COMMA then begin
+          bump st;
+          loop acc
+        end else if next_tok.kind = Token.RPAREN then begin
+          bump st;
+          Ok (List.rev acc)
+        end else
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:next_tok.span
+               (Printf.sprintf "expected ')' or ',' in destructuring pattern, found %s"
+                  (Token.kind_to_string next_tok.kind)))
+      | _ ->
+        Error
+          (Diagnostic.error
+             ~hint:"use variable names or '_' inside destructuring, e.g. 'var (a, b, _) := tuple;'"
+             ~code:"E0002"
+             ~span:tok.span
+             (Printf.sprintf "expected variable identifier in destructuring pattern, found %s"
+                (Token.kind_to_string tok.kind)))
+  in
+  match loop [] with
+  | Error e -> Error e
+  | Ok [] ->
+    Error
+      (Diagnostic.error
+         ~code:"E0002"
+         ~span:open_tok.Token.span
+         "destructuring pattern cannot be empty '()'")
+  | Ok names -> Ok names
+
 let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
   let kw_name = if is_const then "const" else "var" in
   let entity_name = if is_const then "constant" else "variable" in
   let name_tok = cur st in
   match name_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    (match parse_destruct_names st name_tok with
+     | Error e -> Error e
+     | Ok names ->
+       let op_tok = cur st in
+       (match op_tok.kind with
+        | Token.COLON_EQUAL ->
+          bump st;
+          (match parse_expr st with
+           | Error e -> Error e
+           | Ok init ->
+             (match expect_semi st kw_tok.Token.span with
+              | Error e -> Error e
+              | Ok full_span ->
+                let decl = { Ast.names; is_const; ty_annot = None; init = Some init } in
+                Ok { Ast.desc = Ast.StmtDestruct decl; span = full_span }))
+        | Token.COLON ->
+          bump st;
+          (match parse_type_expr st with
+           | Error e -> Error e
+           | Ok ty_expr ->
+             let ty_annot = Some ty_expr in
+             let ty_str = Ast.type_expr_to_string ty_expr in
+             let after_ty = cur st in
+             (match after_ty.kind with
+              | Token.EQUAL ->
+                bump st;
+                (match parse_expr st with
+                 | Error e -> Error e
+                 | Ok init ->
+                   (match expect_semi st kw_tok.span with
+                    | Error e -> Error e
+                    | Ok full_span ->
+                      let decl = { Ast.names; is_const; ty_annot; init = Some init } in
+                      Ok { Ast.desc = Ast.StmtDestruct decl; span = full_span }))
+              | Token.SEMI ->
+                bump st;
+                let full_span = Span.merge kw_tok.span after_ty.span in
+                if is_const then
+                  Error
+                    (Diagnostic.error
+                       ~code:"E0106"
+                       ~span:full_span
+                       "constant destructuring declaration requires an initializing expression")
+                else
+                  let decl = { Ast.names; is_const = false; ty_annot; init = None } in
+                  Ok { Ast.desc = Ast.StmtDestruct decl; span = full_span }
+              | _ ->
+                let expected_msg = if is_const then "expected '=' after" else "expected '=' or ';' after" in
+                Error
+                  (Diagnostic.error
+                     ~code:"E0003"
+                     ~span:after_ty.span
+                     (Printf.sprintf "%s type '%s', found %s"
+                        expected_msg ty_str (Token.kind_to_string after_ty.kind)))))
+        | _ ->
+          Error
+            (Diagnostic.error
+               ~hint:(Printf.sprintf "use '%s (a, b) := <tuple>;' or '%s (a, b) : (int, int) = <tuple>;'" kw_name kw_name)
+               ~code:"E0002"
+               ~span:op_tok.span
+               (Printf.sprintf "expected ':' or ':=' after destructuring pattern, found %s"
+                  (Token.kind_to_string op_tok.kind)))))
   | Token.IDENT name ->
     bump st;
     let op_tok = cur st in
@@ -478,11 +841,11 @@ let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
              Ok { Ast.desc = Ast.StmtVarDecl decl; span = full_span }))
      | Token.COLON ->
        bump st;
-       let ty_tok = cur st in
-       (match ty_tok.kind with
-        | Token.IDENT ty_name ->
-          bump st;
-          let ty_annot = Some (ty_name, ty_tok.span) in
+       (match parse_type_expr st with
+        | Error e -> Error e
+        | Ok ty_expr ->
+          let ty_annot = Some ty_expr in
+          let ty_name = Ast.type_expr_to_string ty_expr in
           let after_ty = cur st in
           (match after_ty.kind with
            | Token.EQUAL ->
@@ -526,14 +889,7 @@ let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
                   ~code:"E0003"
                   ~span:after_ty.span
                   (Printf.sprintf "%s type '%s', found %s"
-                     expected_msg ty_name (Token.kind_to_string after_ty.kind))))
-        | _ ->
-          Error
-            (Diagnostic.error
-               ~code:"E0002"
-               ~span:ty_tok.span
-               (Printf.sprintf "expected type name after ':', found %s"
-                  (Token.kind_to_string ty_tok.kind))))
+                     expected_msg ty_name (Token.kind_to_string after_ty.kind)))))
      | Token.EQUAL ->
        Error
          (Diagnostic.error

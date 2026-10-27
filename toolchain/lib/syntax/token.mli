@@ -60,6 +60,9 @@ type kind =
   | RPAREN
   | LBRACE
   | RBRACE
+  | LBRACKET
+  | RBRACKET
+  | DOT_DOT
   | COMMA
   | SEMI
   | EOF

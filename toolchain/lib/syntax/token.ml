@@ -58,6 +58,9 @@ type kind =
   | RPAREN
   | LBRACE
   | RBRACE
+  | LBRACKET
+  | RBRACKET
+  | DOT_DOT
   | COMMA
   | SEMI
   | EOF
@@ -129,6 +132,9 @@ let kind_to_string = function
   | RPAREN -> "')'"
   | LBRACE -> "'{'"
   | RBRACE -> "'}'"
+  | LBRACKET -> "'['"
+  | RBRACKET -> "']'"
+  | DOT_DOT -> "'..'"
   | COMMA -> "','"
   | SEMI -> "';'"
   | EOF -> "end of file"

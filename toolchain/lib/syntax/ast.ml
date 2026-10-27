@@ -46,7 +46,20 @@ type incdec_op =
   | PostInc
   | PostDec
 
-type expr_desc =
+type type_expr =
+  | TypeNamed of string * Span.t
+  | TypeTuple of type_expr list * Span.t
+  | TypeArray of type_expr * int option * Span.t
+
+type collection_item =
+  | ItemExpr of expr
+  | ItemSpread of expr * Span.t
+
+and lvalue =
+  | LValIdent of string * Span.t
+  | LValIndex of expr * expr * Span.t
+
+and expr_desc =
   | ExprInt of int64
   | ExprFloat of float
   | ExprDouble of float
@@ -56,11 +69,14 @@ type expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprTuple of collection_item list
+  | ExprArray of collection_item list
+  | ExprIndex of expr * expr
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
-  | ExprAssign of string * Span.t * assign_op * expr
-  | ExprIncDec of incdec_op * string * Span.t
+  | ExprAssign of lvalue * assign_op * expr
+  | ExprIncDec of incdec_op * lvalue
 
 and interp_part =
   | InterpLit of string
@@ -75,12 +91,20 @@ type var_decl = {
   name : string;
   name_span : Span.t;
   is_const : bool;
-  ty_annot : (string * Span.t) option;
+  ty_annot : type_expr option;
+  init : expr option;
+}
+
+type destruct_decl = {
+  names : (string * Span.t) list;
+  is_const : bool;
+  ty_annot : type_expr option;
   init : expr option;
 }
 
 type stmt_desc =
   | StmtVarDecl of var_decl
+  | StmtDestruct of destruct_decl
   | StmtBlock of stmt list
   | StmtIf of {
       cond : expr;
@@ -111,6 +135,27 @@ and stmt = {
 }
 
 type program = stmt list
+
+let type_expr_span = function
+  | TypeNamed (_, sp) | TypeTuple (_, sp) | TypeArray (_, _, sp) -> sp
+
+let rec type_expr_to_string = function
+  | TypeNamed (name, _) -> name
+  | TypeTuple (tys, _) ->
+    "(" ^ String.concat ", " (List.map type_expr_to_string tys) ^ ")"
+  | TypeArray _ as arr ->
+    let rec collect_dims acc = function
+      | TypeArray (inner, Some n, _) ->
+        collect_dims (Printf.sprintf "[%d]" n :: acc) inner
+      | TypeArray (inner, None, _) ->
+        collect_dims ("[]" :: acc) inner
+      | base -> (type_expr_to_string base, List.rev acc)
+    in
+    let base_s, dims = collect_dims [] arr in
+    base_s ^ String.concat "" dims
+
+let lvalue_span = function
+  | LValIdent (_, sp) | LValIndex (_, _, sp) -> sp
 
 let unop_to_string = function
   | UnPos -> "+"
@@ -156,7 +201,15 @@ let incdec_op_to_string = function
   | PreInc | PostInc -> "++"
   | PreDec | PostDec -> "--"
 
-let rec pp_expr fmt (e : expr) =
+let rec pp_collection_item fmt = function
+  | ItemExpr e -> pp_expr fmt e
+  | ItemSpread (e, _) -> Format.fprintf fmt "..%a" pp_expr e
+
+and pp_lvalue fmt = function
+  | LValIdent (name, _) -> Format.fprintf fmt "%s" name
+  | LValIndex (base, idx, _) -> Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
+
+and pp_expr fmt (e : expr) =
   match e.desc with
   | ExprInt n -> Format.fprintf fmt "%Ld" n
   | ExprFloat f -> Format.fprintf fmt "%.6g" f
@@ -174,6 +227,16 @@ let rec pp_expr fmt (e : expr) =
       parts;
     Format.fprintf fmt "\""
   | ExprIdent id -> Format.fprintf fmt "%s" id
+  | ExprTuple items ->
+    Format.fprintf fmt "(%a)"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_collection_item)
+      items
+  | ExprArray items ->
+    Format.fprintf fmt "[%a]"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_collection_item)
+      items
+  | ExprIndex (base, idx) ->
+    Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
   | ExprUnary (op, sub) ->
     Format.fprintf fmt "(%s %a)" (unop_to_string op) pp_expr sub
   | ExprBinary (op, lhs, rhs) ->
@@ -183,16 +246,16 @@ let rec pp_expr fmt (e : expr) =
       pp_expr e1 (binop_to_string op1)
       pp_expr e2 (binop_to_string op2)
       pp_expr e3
-  | ExprAssign (name, _, op, rhs) ->
-    Format.fprintf fmt "(%s %s %a)" name (assign_op_to_string op) pp_expr rhs
-  | ExprIncDec (PreInc, name, _) ->
-    Format.fprintf fmt "(++%s)" name
-  | ExprIncDec (PreDec, name, _) ->
-    Format.fprintf fmt "(--%s)" name
-  | ExprIncDec (PostInc, name, _) ->
-    Format.fprintf fmt "(%s++)" name
-  | ExprIncDec (PostDec, name, _) ->
-    Format.fprintf fmt "(%s--)" name
+  | ExprAssign (lval, op, rhs) ->
+    Format.fprintf fmt "(%a %s %a)" pp_lvalue lval (assign_op_to_string op) pp_expr rhs
+  | ExprIncDec (PreInc, lval) ->
+    Format.fprintf fmt "(++%a)" pp_lvalue lval
+  | ExprIncDec (PreDec, lval) ->
+    Format.fprintf fmt "(--%a)" pp_lvalue lval
+  | ExprIncDec (PostInc, lval) ->
+    Format.fprintf fmt "(%a++)" pp_lvalue lval
+  | ExprIncDec (PostDec, lval) ->
+    Format.fprintf fmt "(%a--)" pp_lvalue lval
 
 let rec pp_stmt fmt (s : stmt) =
   match s.desc with
@@ -201,7 +264,7 @@ let rec pp_stmt fmt (s : stmt) =
     let ty_s =
       match v.ty_annot with
       | None -> ""
-      | Some (t, _) -> ": " ^ t
+      | Some te -> ": " ^ type_expr_to_string te
     in
     (match v.init, v.ty_annot with
      | Some init, None ->
@@ -210,6 +273,21 @@ let rec pp_stmt fmt (s : stmt) =
        Format.fprintf fmt "%s %s%s = %a;" kw v.name ty_s pp_expr init
      | None, _ ->
        Format.fprintf fmt "%s %s%s;" kw v.name ty_s)
+  | StmtDestruct d ->
+    let kw = if d.is_const then "const" else "var" in
+    let names_s = String.concat ", " (List.map fst d.names) in
+    let ty_s =
+      match d.ty_annot with
+      | None -> ""
+      | Some te -> ": " ^ type_expr_to_string te
+    in
+    (match d.init, d.ty_annot with
+     | Some init, None ->
+       Format.fprintf fmt "%s (%s) := %a;" kw names_s pp_expr init
+     | Some init, Some _ ->
+       Format.fprintf fmt "%s (%s)%s = %a;" kw names_s ty_s pp_expr init
+     | None, _ ->
+       Format.fprintf fmt "%s (%s)%s;" kw names_s ty_s)
   | StmtBlock stmts ->
     Format.fprintf fmt "{ %a }"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
