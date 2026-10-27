@@ -9,11 +9,13 @@ type value =
   | VBool of bool
   | VChar of string
   | VString of string
+  | VTuple of value array
+  | VArray of value array
 
 let round_f32 (f : float) : float =
   Int32.float_of_bits (Int32.bits_of_float f)
 
-let value_to_string = function
+let rec value_to_string = function
   | VInt n -> Int64.to_string n
   | VFloat f -> Printf.sprintf "%.6g" f
   | VDouble d -> Printf.sprintf "%.15g" d
@@ -21,6 +23,10 @@ let value_to_string = function
   | VBool b -> if b then "true" else "false"
   | VChar c -> c
   | VString s -> s
+  | VTuple arr ->
+    "(" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ ")"
+  | VArray arr ->
+    "[" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ "]"
 
 let decode_utf8 (s : string) : int =
   let len = String.length s in
@@ -112,7 +118,7 @@ type test_report = {
   assertions : assertion_result list;
 }
 
-let value_equal (a : value) (b : value) : bool =
+let rec value_equal (a : value) (b : value) : bool =
   match a, b with
   | VInt x, VInt y -> x = y
   | VFloat x, VFloat y -> x = y
@@ -121,6 +127,16 @@ let value_equal (a : value) (b : value) : bool =
   | VBool x, VBool y -> x = y
   | VChar x, VChar y -> decode_utf8 x = decode_utf8 y
   | VString x, VString y -> String.equal x y
+  | VTuple xs, VTuple ys | VArray xs, VArray ys ->
+    let len = Array.length xs in
+    if len <> Array.length ys then false
+    else
+      let rec loop i =
+        if i >= len then true
+        else if value_equal xs.(i) ys.(i) then loop (i + 1)
+        else false
+      in
+      loop 0
   | _ -> false
 
 type state = {
@@ -171,6 +187,84 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_CONST_STR s ->
       st.stack <- VString s :: st.stack;
       Ok ()
+    | Ir.OP_MAKE_TUPLE count ->
+      let rec pop_n n acc stack =
+        if n <= 0 then Some (acc, stack)
+        else
+          match stack with
+          | v :: rest -> pop_n (n - 1) (v :: acc) rest
+          | [] -> None
+      in
+      (match pop_n count [] st.stack with
+       | Some (items, rest) ->
+         st.stack <- VTuple (Array.of_list items) :: rest;
+         Ok ()
+       | None -> Error "VM stack underflow on OP_MAKE_TUPLE")
+    | Ir.OP_MAKE_ARRAY count ->
+      let rec pop_n n acc stack =
+        if n <= 0 then Some (acc, stack)
+        else
+          match stack with
+          | v :: rest -> pop_n (n - 1) (v :: acc) rest
+          | [] -> None
+      in
+      (match pop_n count [] st.stack with
+       | Some (items, rest) ->
+         st.stack <- VArray (Array.of_list items) :: rest;
+         Ok ()
+       | None -> Error "VM stack underflow on OP_MAKE_ARRAY")
+    | Ir.OP_SPREAD ->
+      (match st.stack with
+       | (VTuple arr | VArray arr) :: rest ->
+         st.stack <- rest;
+         Array.iter (fun item -> st.stack <- item :: st.stack) arr;
+         Ok ()
+       | _ -> Error "VM type error or stack underflow on OP_SPREAD")
+    | Ir.OP_INDEX_GET ->
+      (match st.stack with
+       | VInt idx :: (VTuple arr | VArray arr) :: rest ->
+         let len = Array.length arr in
+         if idx < 0L || idx >= Int64.of_int len then
+           Error
+             (Printf.sprintf "Runtime error: index %Ld out of bounds (length %d)" idx len)
+         else begin
+           st.stack <- arr.(Int64.to_int idx) :: rest;
+           Ok ()
+         end
+       | _ -> Error "VM type error or stack underflow on OP_INDEX_GET")
+    | Ir.OP_INDEX_SET ->
+      (match st.stack with
+       | v :: VInt idx :: VArray arr :: rest ->
+         let len = Array.length arr in
+         if idx < 0L || idx >= Int64.of_int len then
+           Error
+             (Printf.sprintf "Runtime error: index %Ld out of bounds (length %d)" idx len)
+         else begin
+           arr.(Int64.to_int idx) <- v;
+           st.stack <- v :: rest;
+           Ok ()
+         end
+       | _ -> Error "VM type error or stack underflow on OP_INDEX_SET")
+    | Ir.OP_ARRAY_CONCAT ->
+      (match st.stack with
+       | VArray b :: VArray a :: rest ->
+         st.stack <- VArray (Array.append a b) :: rest;
+         Ok ()
+       | _ -> Error "VM type error on OP_ARRAY_CONCAT")
+    | Ir.OP_ARRAY_REPEAT ->
+      (match st.stack with
+       | VInt count :: VArray a :: rest ->
+         let n = Int64.to_int count in
+         let len = Array.length a in
+         if n <= 0 || len = 0 then begin
+           st.stack <- VArray [||] :: rest;
+           Ok ()
+         end else begin
+           let out = Array.init (len * n) (fun i -> a.(i mod len)) in
+           st.stack <- VArray out :: rest;
+           Ok ()
+         end
+       | _ -> Error "VM type error on OP_ARRAY_REPEAT")
     | Ir.OP_TO_STR ->
       (match st.stack with
        | v :: rest ->
@@ -573,6 +667,10 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VString b :: VString a :: rest -> st.stack <- VBool (String.equal a b) :: rest; Ok ()
        | _ -> Error "VM type error on OP_EQ_STR")
+    | Ir.OP_EQ_OBJ ->
+      (match st.stack with
+       | b :: a :: rest -> st.stack <- VBool (value_equal a b) :: rest; Ok ()
+       | _ -> Error "VM stack underflow on OP_EQ_OBJ")
     | Ir.OP_NE_I64 ->
       (match st.stack with
        | VInt b :: VInt a :: rest -> st.stack <- VBool (a <> b) :: rest; Ok ()
@@ -601,6 +699,10 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | VString b :: VString a :: rest -> st.stack <- VBool (not (String.equal a b)) :: rest; Ok ()
        | _ -> Error "VM type error on OP_NE_STR")
+    | Ir.OP_NE_OBJ ->
+      (match st.stack with
+       | b :: a :: rest -> st.stack <- VBool (not (value_equal a b)) :: rest; Ok ()
+       | _ -> Error "VM stack underflow on OP_NE_OBJ")
     | Ir.OP_LT_I64 ->
       (match st.stack with
        | VInt b :: VInt a :: rest -> st.stack <- VBool (a < b) :: rest; Ok ()
@@ -718,13 +820,15 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_DEF_GLOBAL_BOOL name
     | Ir.OP_DEF_GLOBAL_CHAR name
     | Ir.OP_DEF_GLOBAL_STR name
+    | Ir.OP_DEF_GLOBAL_OBJ name
     | Ir.OP_SET_GLOBAL_I64 name
     | Ir.OP_SET_GLOBAL_F32 name
     | Ir.OP_SET_GLOBAL_F64 name
     | Ir.OP_SET_GLOBAL_DEC name
     | Ir.OP_SET_GLOBAL_BOOL name
     | Ir.OP_SET_GLOBAL_CHAR name
-    | Ir.OP_SET_GLOBAL_STR name ->
+    | Ir.OP_SET_GLOBAL_STR name
+    | Ir.OP_SET_GLOBAL_OBJ name ->
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
@@ -737,7 +841,8 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_GET_GLOBAL_DEC name
     | Ir.OP_GET_GLOBAL_BOOL name
     | Ir.OP_GET_GLOBAL_CHAR name
-    | Ir.OP_GET_GLOBAL_STR name ->
+    | Ir.OP_GET_GLOBAL_STR name
+    | Ir.OP_GET_GLOBAL_OBJ name ->
       (match Hashtbl.find_opt st.globals name with
        | Some v ->
          st.stack <- v :: st.stack;
@@ -808,6 +913,14 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          Ok ()
        | _ :: _ -> Error "VM type error on OP_PRINT_STR"
        | [] -> Error "VM stack underflow on OP_PRINT_STR")
+    | Ir.OP_PRINT_OBJ ->
+      (match st.stack with
+       | ((VTuple _ | VArray _) as v) :: rest ->
+         st.stack <- rest;
+         Buffer.add_string out_buf (value_to_string v);
+         Ok ()
+       | _ :: _ -> Error "VM type error on OP_PRINT_OBJ"
+       | [] -> Error "VM stack underflow on OP_PRINT_OBJ")
     | Ir.OP_PRINT_SPACE ->
       Buffer.add_char out_buf ' ';
       Ok ()

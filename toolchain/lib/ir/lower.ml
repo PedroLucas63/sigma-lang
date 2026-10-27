@@ -63,6 +63,7 @@ let cmp_opcode (op : Ast.binop) (ty : Ty.t) : Ir.opcode =
   | Ast.BinEq, Ty.Bool -> Ir.OP_EQ_BOOL
   | Ast.BinEq, Ty.Char -> Ir.OP_EQ_CHAR
   | Ast.BinEq, Ty.String -> Ir.OP_EQ_STR
+  | Ast.BinEq, (Ty.Tuple _ | Ty.Array _) -> Ir.OP_EQ_OBJ
   | Ast.BinNe, Ty.Int -> Ir.OP_NE_I64
   | Ast.BinNe, Ty.Float -> Ir.OP_NE_F32
   | Ast.BinNe, Ty.Double -> Ir.OP_NE_F64
@@ -70,6 +71,7 @@ let cmp_opcode (op : Ast.binop) (ty : Ty.t) : Ir.opcode =
   | Ast.BinNe, Ty.Bool -> Ir.OP_NE_BOOL
   | Ast.BinNe, Ty.Char -> Ir.OP_NE_CHAR
   | Ast.BinNe, Ty.String -> Ir.OP_NE_STR
+  | Ast.BinNe, (Ty.Tuple _ | Ty.Array _) -> Ir.OP_NE_OBJ
   | Ast.BinLt, Ty.Int -> Ir.OP_LT_I64
   | Ast.BinLt, Ty.Float -> Ir.OP_LT_F32
   | Ast.BinLt, Ty.Double -> Ir.OP_LT_F64
@@ -96,6 +98,17 @@ let is_rel_op = function
   | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
   | _ -> false
 
+let def_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
+  match ty with
+  | Ty.Int -> Ir.OP_DEF_GLOBAL_I64 name
+  | Ty.Float -> Ir.OP_DEF_GLOBAL_F32 name
+  | Ty.Double -> Ir.OP_DEF_GLOBAL_F64 name
+  | Ty.Decimal -> Ir.OP_DEF_GLOBAL_DEC name
+  | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL name
+  | Ty.Char -> Ir.OP_DEF_GLOBAL_CHAR name
+  | Ty.String -> Ir.OP_DEF_GLOBAL_STR name
+  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_DEF_GLOBAL_OBJ name
+
 let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
   | Ty.Int -> Ir.OP_GET_GLOBAL_I64 name
@@ -105,6 +118,7 @@ let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_GET_GLOBAL_STR name
+  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_GET_GLOBAL_OBJ name
 
 let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
@@ -115,6 +129,7 @@ let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_SET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_SET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_SET_GLOBAL_STR name
+  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_SET_GLOBAL_OBJ name
 
 let binop_of_assign_op = function
   | Ast.AssignEq -> None
@@ -159,17 +174,39 @@ let rec lower_expr b (e : Typed_ast.expr) =
       parts;
     ignore (emit b (Ir.OP_CONCAT_STR (List.length parts)) e.span)
   | Typed_ast.TExprIdent name ->
-    let op =
+    ignore (emit b (get_global_opcode e.ty name) e.span)
+  | Typed_ast.TExprTuple items ->
+    List.iter
+      (function
+        | Typed_ast.TItemExpr sub -> lower_expr b sub
+        | Typed_ast.TItemSpread sub ->
+          lower_expr b sub;
+          ignore (emit b Ir.OP_SPREAD sub.span))
+      items;
+    let total_len =
       match e.ty with
-      | Ty.Int -> Ir.OP_GET_GLOBAL_I64 name
-      | Ty.Float -> Ir.OP_GET_GLOBAL_F32 name
-      | Ty.Double -> Ir.OP_GET_GLOBAL_F64 name
-      | Ty.Decimal -> Ir.OP_GET_GLOBAL_DEC name
-      | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
-      | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
-      | Ty.String -> Ir.OP_GET_GLOBAL_STR name
+      | Ty.Tuple tys -> List.length tys
+      | _ -> List.length items
     in
-    ignore (emit b op e.span)
+    ignore (emit b (Ir.OP_MAKE_TUPLE total_len) e.span)
+  | Typed_ast.TExprArray items ->
+    List.iter
+      (function
+        | Typed_ast.TItemExpr sub -> lower_expr b sub
+        | Typed_ast.TItemSpread sub ->
+          lower_expr b sub;
+          ignore (emit b Ir.OP_SPREAD sub.span))
+      items;
+    let total_len =
+      match e.ty with
+      | Ty.Array (_, n) -> n
+      | _ -> List.length items
+    in
+    ignore (emit b (Ir.OP_MAKE_ARRAY total_len) e.span)
+  | Typed_ast.TExprIndex (target, idx) ->
+    lower_expr b target;
+    lower_expr b idx;
+    ignore (emit b Ir.OP_INDEX_GET e.span)
   | Typed_ast.TExprUnary (unop, sub) ->
     lower_expr b sub;
     (match unop with
@@ -261,6 +298,21 @@ let rec lower_expr b (e : Typed_ast.expr) =
        emit_promote b lhs.ty Ty.String lhs.span;
        lower_expr b rhs;
        ignore (emit b Ir.OP_REPEAT_STR e.span)
+     | Ty.Array _, Ty.Array _, Ast.BinAdd ->
+       lower_expr b lhs;
+       lower_expr b rhs;
+       ignore (emit b Ir.OP_ARRAY_CONCAT e.span)
+     | Ty.Array _, Ty.Int, Ast.BinMul ->
+       lower_expr b lhs;
+       lower_expr b rhs;
+       ignore (emit b Ir.OP_ARRAY_REPEAT e.span)
+     | Ty.Int, Ty.Array _, Ast.BinMul ->
+       let tid = fresh_temp b in
+       lower_expr b lhs;
+       ignore (emit b (Ir.OP_SET_TEMP tid) lhs.span);
+       lower_expr b rhs;
+       ignore (emit b (Ir.OP_GET_TEMP tid) lhs.span);
+       ignore (emit b Ir.OP_ARRAY_REPEAT e.span)
      | _ ->
        let common_ty =
          if lhs.ty = Ty.Decimal || rhs.ty = Ty.Decimal then Ty.Decimal
@@ -325,46 +377,123 @@ let rec lower_expr b (e : Typed_ast.expr) =
     patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
     ignore (emit b (Ir.OP_CONST_BOOL false) e.span);
     patch b j_end (Ir.OP_JUMP (cur_ip b))
-  | Typed_ast.TExprAssign (name, op, rhs) ->
-    (match op, e.ty with
-     | Ast.AssignEq, _ ->
-       lower_expr b rhs;
-       ignore (emit b (set_global_opcode e.ty name) e.span);
-       ignore (emit b (get_global_opcode e.ty name) e.span)
-     | Ast.AssignAnd, Ty.Bool ->
-       (* Short-circuit boolean and= *)
-       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
-       let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) e.span in
-       lower_expr b rhs;
-       ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
-       patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
-       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
-     | Ast.AssignOr, Ty.Bool ->
-       (* Short-circuit boolean or= *)
-       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
-       let j_true = emit b (Ir.OP_JUMP_IF_TRUE 0) e.span in
-       lower_expr b rhs;
-       ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
-       patch b j_true (Ir.OP_JUMP_IF_TRUE (cur_ip b));
-       ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
-     | _, _ ->
-       (match binop_of_assign_op op with
-        | None -> ()
-        | Some binop ->
-          let lhs_ident =
-            { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
-          in
-          let bin_expr =
-            {
-              Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
-              ty = e.ty;
-              span = e.span;
-            }
-          in
-          lower_expr b bin_expr;
+  | Typed_ast.TExprAssign (lval, op, rhs) ->
+    (match lval with
+     | Typed_ast.TLValIdent name ->
+       (match op, e.ty with
+        | Ast.AssignEq, _ ->
+          lower_expr b rhs;
           ignore (emit b (set_global_opcode e.ty name) e.span);
-          ignore (emit b (get_global_opcode e.ty name) e.span)))
-  | Typed_ast.TExprIncDec (inc_op, name) ->
+          ignore (emit b (get_global_opcode e.ty name) e.span)
+        | Ast.AssignAnd, Ty.Bool ->
+          (* Short-circuit boolean and= *)
+          ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
+          let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) e.span in
+          lower_expr b rhs;
+          ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
+          patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
+          ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
+        | Ast.AssignOr, Ty.Bool ->
+          (* Short-circuit boolean or= *)
+          ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span);
+          let j_true = emit b (Ir.OP_JUMP_IF_TRUE 0) e.span in
+          lower_expr b rhs;
+          ignore (emit b (Ir.OP_SET_GLOBAL_BOOL name) e.span);
+          patch b j_true (Ir.OP_JUMP_IF_TRUE (cur_ip b));
+          ignore (emit b (Ir.OP_GET_GLOBAL_BOOL name) e.span)
+        | _, _ ->
+          (match binop_of_assign_op op with
+           | None -> ()
+           | Some binop ->
+             let lhs_ident =
+               { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
+             in
+             let bin_expr =
+               {
+                 Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+                 ty = e.ty;
+                 span = e.span;
+               }
+             in
+             lower_expr b bin_expr;
+             ignore (emit b (set_global_opcode e.ty name) e.span);
+             ignore (emit b (get_global_opcode e.ty name) e.span)))
+     | Typed_ast.TLValIndex (target, idx) ->
+       (match op, e.ty with
+        | Ast.AssignEq, _ ->
+          lower_expr b target;
+          lower_expr b idx;
+          lower_expr b rhs;
+          ignore (emit b Ir.OP_INDEX_SET e.span)
+        | Ast.AssignAnd, Ty.Bool ->
+          let t_arr = fresh_temp b in
+          let t_idx = fresh_temp b in
+          lower_expr b target;
+          ignore (emit b (Ir.OP_SET_TEMP t_arr) target.span);
+          lower_expr b idx;
+          ignore (emit b (Ir.OP_SET_TEMP t_idx) idx.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+          ignore (emit b Ir.OP_INDEX_GET e.span);
+          let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) e.span in
+          ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+          lower_expr b rhs;
+          ignore (emit b Ir.OP_INDEX_SET e.span);
+          let j_end = emit b (Ir.OP_JUMP 0) e.span in
+          patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
+          ignore (emit b (Ir.OP_CONST_BOOL false) e.span);
+          patch b j_end (Ir.OP_JUMP (cur_ip b))
+        | Ast.AssignOr, Ty.Bool ->
+          let t_arr = fresh_temp b in
+          let t_idx = fresh_temp b in
+          lower_expr b target;
+          ignore (emit b (Ir.OP_SET_TEMP t_arr) target.span);
+          lower_expr b idx;
+          ignore (emit b (Ir.OP_SET_TEMP t_idx) idx.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+          ignore (emit b Ir.OP_INDEX_GET e.span);
+          let j_true = emit b (Ir.OP_JUMP_IF_TRUE 0) e.span in
+          ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+          ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+          lower_expr b rhs;
+          ignore (emit b Ir.OP_INDEX_SET e.span);
+          let j_end = emit b (Ir.OP_JUMP 0) e.span in
+          patch b j_true (Ir.OP_JUMP_IF_TRUE (cur_ip b));
+          ignore (emit b (Ir.OP_CONST_BOOL true) e.span);
+          patch b j_end (Ir.OP_JUMP (cur_ip b))
+        | _, _ ->
+          (match binop_of_assign_op op with
+           | None -> ()
+           | Some binop ->
+             let t_arr = fresh_temp b in
+             let t_idx = fresh_temp b in
+             let t_cur = fresh_temp b in
+             let cur_name = Printf.sprintf "$tmp_%d" t_cur in
+             lower_expr b target;
+             ignore (emit b (Ir.OP_SET_TEMP t_arr) target.span);
+             lower_expr b idx;
+             ignore (emit b (Ir.OP_SET_TEMP t_idx) idx.span);
+             ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+             ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+             ignore (emit b Ir.OP_INDEX_GET e.span);
+             ignore (emit b (set_global_opcode e.ty cur_name) e.span);
+             ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+             ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+             let lhs_ident =
+               { Typed_ast.desc = Typed_ast.TExprIdent cur_name; ty = e.ty; span = e.span }
+             in
+             let bin_expr =
+               {
+                 Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+                 ty = e.ty;
+                 span = e.span;
+               }
+             in
+             lower_expr b bin_expr;
+             ignore (emit b Ir.OP_INDEX_SET e.span))))
+  | Typed_ast.TExprIncDec (inc_op, lval) ->
     let emit_step is_inc =
       match e.ty with
       | Ty.Int ->
@@ -384,35 +513,63 @@ let rec lower_expr b (e : Typed_ast.expr) =
         ignore (emit b (if is_inc then Ir.OP_CHAR_ADD_I64 else Ir.OP_CHAR_SUB_I64) e.span)
       | _ -> ()
     in
-    (match inc_op with
-     | Ast.PreInc | Ast.PreDec ->
-       let is_inc = inc_op = Ast.PreInc in
-       ignore (emit b (get_global_opcode e.ty name) e.span);
+    (match lval with
+     | Typed_ast.TLValIdent name ->
+       (match inc_op with
+        | Ast.PreInc | Ast.PreDec ->
+          let is_inc = inc_op = Ast.PreInc in
+          ignore (emit b (get_global_opcode e.ty name) e.span);
+          emit_step is_inc;
+          ignore (emit b (set_global_opcode e.ty name) e.span);
+          ignore (emit b (get_global_opcode e.ty name) e.span)
+        | Ast.PostInc | Ast.PostDec ->
+          let is_inc = inc_op = Ast.PostInc in
+          ignore (emit b (get_global_opcode e.ty name) e.span);
+          ignore (emit b (get_global_opcode e.ty name) e.span);
+          emit_step is_inc;
+          ignore (emit b (set_global_opcode e.ty name) e.span))
+     | Typed_ast.TLValIndex (target, idx) ->
+       let t_arr = fresh_temp b in
+       let t_idx = fresh_temp b in
+       let t_old = fresh_temp b in
+       lower_expr b target;
+       ignore (emit b (Ir.OP_SET_TEMP t_arr) target.span);
+       lower_expr b idx;
+       ignore (emit b (Ir.OP_SET_TEMP t_idx) idx.span);
+       ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+       ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+       ignore (emit b Ir.OP_INDEX_GET e.span);
+       ignore (emit b (Ir.OP_SET_TEMP t_old) e.span);
+       ignore (emit b (Ir.OP_GET_TEMP t_arr) e.span);
+       ignore (emit b (Ir.OP_GET_TEMP t_idx) e.span);
+       ignore (emit b (Ir.OP_GET_TEMP t_old) e.span);
+       let is_inc = inc_op = Ast.PreInc || inc_op = Ast.PostInc in
        emit_step is_inc;
-       ignore (emit b (set_global_opcode e.ty name) e.span);
-       ignore (emit b (get_global_opcode e.ty name) e.span)
-     | Ast.PostInc | Ast.PostDec ->
-       let is_inc = inc_op = Ast.PostInc in
-       ignore (emit b (get_global_opcode e.ty name) e.span);
-       ignore (emit b (get_global_opcode e.ty name) e.span);
-       emit_step is_inc;
-       ignore (emit b (set_global_opcode e.ty name) e.span))
+       ignore (emit b Ir.OP_INDEX_SET e.span);
+       if inc_op = Ast.PostInc || inc_op = Ast.PostDec then begin
+         ignore (emit b Ir.OP_POP e.span);
+         ignore (emit b (Ir.OP_GET_TEMP t_old) e.span)
+       end)
 
 let rec lower_stmt b (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     lower_expr b v.init;
-    let op =
-      match v.ty with
-      | Ty.Int -> Ir.OP_DEF_GLOBAL_I64 v.name
-      | Ty.Float -> Ir.OP_DEF_GLOBAL_F32 v.name
-      | Ty.Double -> Ir.OP_DEF_GLOBAL_F64 v.name
-      | Ty.Decimal -> Ir.OP_DEF_GLOBAL_DEC v.name
-      | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL v.name
-      | Ty.Char -> Ir.OP_DEF_GLOBAL_CHAR v.name
-      | Ty.String -> Ir.OP_DEF_GLOBAL_STR v.name
-    in
-    ignore (emit b op s.span)
+    ignore (emit b (def_global_opcode v.ty v.name) s.span)
+  | Typed_ast.TStmtDestruct d ->
+    let tid = fresh_temp b in
+    lower_expr b d.init;
+    ignore (emit b (Ir.OP_SET_TEMP tid) s.span);
+    List.iteri
+      (fun i (bind : Typed_ast.destruct_binding) ->
+        match bind.name with
+        | None -> ()
+        | Some name ->
+          ignore (emit b (Ir.OP_GET_TEMP tid) bind.name_span);
+          ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int i)) bind.name_span);
+          ignore (emit b Ir.OP_INDEX_GET bind.name_span);
+          ignore (emit b (def_global_opcode bind.ty name) bind.name_span))
+      d.bindings
   | Typed_ast.TStmtBlock stmts ->
     List.iter (lower_stmt b) stmts;
     List.iter
@@ -420,6 +577,13 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
         match sub.desc with
         | Typed_ast.TStmtVarDecl v ->
           ignore (emit b (Ir.OP_UNDEF_GLOBAL v.name) s.span)
+        | Typed_ast.TStmtDestruct d ->
+          List.iter
+            (fun (bind : Typed_ast.destruct_binding) ->
+              match bind.name with
+              | Some name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) s.span)
+              | None -> ())
+            d.bindings
         | _ -> ())
       stmts
   | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
@@ -448,6 +612,7 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
+          | Ty.Tuple _ | Ty.Array _ -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;

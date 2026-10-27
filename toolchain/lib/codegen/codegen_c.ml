@@ -39,6 +39,27 @@ let c_type_of_ty = function
   | Ty.Decimal -> "sgm_decimal_t"
   | Ty.Bool -> "bool"
   | Ty.Char | Ty.String -> "const char*"
+  | Ty.Tuple _ | Ty.Array _ -> "sgm_obj_t*"
+
+let c_val_union_field = function
+  | Ty.Int -> "i64"
+  | Ty.Float -> "f32"
+  | Ty.Double -> "f64"
+  | Ty.Decimal -> "dec"
+  | Ty.Bool -> "b"
+  | Ty.Char | Ty.String -> "str"
+  | Ty.Tuple _ | Ty.Array _ -> "obj"
+
+let emit_box_val (ty : Ty.t) (c_expr : string) : string =
+  match ty with
+  | Ty.Int -> Printf.sprintf "sgm_val_i64(%s)" c_expr
+  | Ty.Float -> Printf.sprintf "sgm_val_f32(%s)" c_expr
+  | Ty.Double -> Printf.sprintf "sgm_val_f64(%s)" c_expr
+  | Ty.Decimal -> Printf.sprintf "sgm_val_dec(%s)" c_expr
+  | Ty.Bool -> Printf.sprintf "sgm_val_bool(%s)" c_expr
+  | Ty.Char -> Printf.sprintf "sgm_val_char(%s)" c_expr
+  | Ty.String -> Printf.sprintf "sgm_val_str(%s)" c_expr
+  | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_val_obj(%s)" c_expr
 
 let is_rel_op = function
   | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
@@ -85,6 +106,9 @@ let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (c
     Printf.sprintf "(strcmp(%s, %s) %s 0)" cl cr c_op
   | Ty.Char ->
     Printf.sprintf "(sgm_decode_utf8(%s) %s sgm_decode_utf8(%s))" cl c_op cr
+  | Ty.Tuple _ | Ty.Array _ ->
+    if op = Ast.BinEq then Printf.sprintf "sgm_obj_eq(%s, %s)" cl cr
+    else Printf.sprintf "(!sgm_obj_eq(%s, %s))" cl cr
   | _ ->
     Printf.sprintf "((%s) %s (%s))" cl c_op cr
 
@@ -98,6 +122,7 @@ let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   | Ty.Decimal -> Printf.sprintf "sgm_fmt_dec(%s)" c_val
   | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" c_val
   | Ty.Char | Ty.String -> c_val
+  | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_fmt_obj(%s)" c_val
 
 let rec emit_expr (e : Typed_ast.expr) : string =
   match e.desc with
@@ -124,14 +149,7 @@ let rec emit_expr (e : Typed_ast.expr) : string =
         (function
           | Typed_ast.TInterpLit s -> escape_c_string s
           | Typed_ast.TInterpExpr ie ->
-            let inner = emit_expr ie in
-            (match ie.ty with
-             | Ty.Int -> Printf.sprintf "sgm_fmt_i64(%s)" inner
-             | Ty.Float -> Printf.sprintf "sgm_fmt_f32(%s)" inner
-             | Ty.Double -> Printf.sprintf "sgm_fmt_f64(%s)" inner
-             | Ty.Decimal -> Printf.sprintf "sgm_fmt_dec(%s)" inner
-             | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" inner
-             | Ty.Char | Ty.String -> inner))
+            emit_fmt_c_val ie.ty (emit_expr ie))
         parts
     in
     Printf.sprintf
@@ -139,6 +157,55 @@ let rec emit_expr (e : Typed_ast.expr) : string =
       (List.length c_parts)
       (String.concat ", " c_parts)
   | Typed_ast.TExprIdent name -> mangle_ident name
+  | Typed_ast.TExprTuple items ->
+    incr chain_counter;
+    let id = !chain_counter in
+    let obj_var = Printf.sprintf "_sgm_tup_%d" id in
+    let idx_var = Printf.sprintf "_sgm_k_%d" id in
+    let total_len =
+      match e.ty with
+      | Ty.Tuple tys -> List.length tys
+      | _ -> List.length items
+    in
+    let item_stmts =
+      items
+      |> List.map (function
+           | Typed_ast.TItemExpr sub ->
+             Printf.sprintf "%s->items[%s++] = %s;" obj_var idx_var (emit_box_val sub.ty (emit_expr sub))
+           | Typed_ast.TItemSpread sub ->
+             Printf.sprintf "sgm_obj_spread(%s, &%s, %s);" obj_var idx_var (emit_expr sub))
+      |> String.concat " "
+    in
+    Printf.sprintf
+      "__extension__ ({ sgm_obj_t *%s = sgm_obj_alloc(true, INT64_C(%d)); int64_t %s = 0; (void)%s; %s %s; })"
+      obj_var total_len idx_var idx_var item_stmts obj_var
+  | Typed_ast.TExprArray items ->
+    incr chain_counter;
+    let id = !chain_counter in
+    let obj_var = Printf.sprintf "_sgm_arr_%d" id in
+    let idx_var = Printf.sprintf "_sgm_k_%d" id in
+    let total_len =
+      match e.ty with
+      | Ty.Array (_, n) -> n
+      | _ -> List.length items
+    in
+    let item_stmts =
+      items
+      |> List.map (function
+           | Typed_ast.TItemExpr sub ->
+             Printf.sprintf "%s->items[%s++] = %s;" obj_var idx_var (emit_box_val sub.ty (emit_expr sub))
+           | Typed_ast.TItemSpread sub ->
+             Printf.sprintf "sgm_obj_spread(%s, &%s, %s);" obj_var idx_var (emit_expr sub))
+      |> String.concat " "
+    in
+    Printf.sprintf
+      "__extension__ ({ sgm_obj_t *%s = sgm_obj_alloc(false, INT64_C(%d)); int64_t %s = 0; (void)%s; %s %s; })"
+      obj_var total_len idx_var idx_var item_stmts obj_var
+  | Typed_ast.TExprIndex (target, idx) ->
+    Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s)"
+      (emit_expr target)
+      (emit_expr idx)
+      (c_val_union_field e.ty)
   | Typed_ast.TExprUnary (unop, sub) ->
     let c_sub = emit_expr sub in
     (match unop, e.ty with
@@ -181,6 +248,16 @@ let rec emit_expr (e : Typed_ast.expr) : string =
        Printf.sprintf "sgm_char_sub(%s, %s)" (emit_expr lhs) (emit_expr rhs)
      | (Ty.Char | Ty.String), Ty.Int, Ast.BinMul ->
        Printf.sprintf "sgm_repeat_str(%s, %s)" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Array _, Ty.Array _, Ast.BinAdd ->
+       Printf.sprintf "sgm_array_concat(%s, %s)" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Array _, Ty.Int, Ast.BinMul ->
+       Printf.sprintf "sgm_array_repeat(%s, %s)" (emit_expr lhs) (emit_expr rhs)
+     | Ty.Int, Ty.Array _, Ast.BinMul ->
+       incr chain_counter;
+       let id = !chain_counter in
+       let tn = Printf.sprintf "_sgm_rep_%d" id in
+       Printf.sprintf "__extension__ ({ int64_t %s = (%s); sgm_array_repeat(%s, %s); })"
+         tn (emit_expr lhs) (emit_expr rhs) tn
      | _ ->
        let common_ty =
          if lhs.ty = Ty.Decimal || rhs.ty = Ty.Decimal then Ty.Decimal
@@ -231,74 +308,133 @@ let rec emit_expr (e : Typed_ast.expr) : string =
       (c_type_of_ty e1.ty) t1_name (emit_expr e1)
       (c_type_of_ty e2.ty) t2_name (emit_expr e2)
       cmp1 cmp2
-  | Typed_ast.TExprAssign (name, op, rhs) ->
-    let vname = mangle_ident name in
-    (match op, e.ty with
-     | Ast.AssignEq, _ ->
-       Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
-     | Ast.AssignAnd, Ty.Bool ->
-       Printf.sprintf "(%s = (%s && (%s)))" vname vname (emit_expr rhs)
-     | Ast.AssignOr, Ty.Bool ->
-       Printf.sprintf "(%s = (%s || (%s)))" vname vname (emit_expr rhs)
-     | _, _ ->
-       (match binop_of_assign_op op with
-        | None -> Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
-        | Some binop ->
-          let lhs_ident =
-            { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
-          in
-          let bin_expr =
-            {
-              Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
-              ty = e.ty;
-              span = e.span;
-            }
-          in
-          Printf.sprintf "(%s = %s)" vname (emit_expr bin_expr)))
-  | Typed_ast.TExprIncDec (inc_op, name) ->
-    let vname = mangle_ident name in
-    (match e.ty, inc_op with
-     | (Ty.Int | Ty.Float | Ty.Double), Ast.PreInc ->
-       Printf.sprintf "(++%s)" vname
-     | (Ty.Int | Ty.Float | Ty.Double), Ast.PreDec ->
-       Printf.sprintf "(--%s)" vname
-     | (Ty.Int | Ty.Float | Ty.Double), Ast.PostInc ->
-       Printf.sprintf "(%s++)" vname
-     | (Ty.Int | Ty.Float | Ty.Double), Ast.PostDec ->
-       Printf.sprintf "(%s--)" vname
-     | Ty.Decimal, Ast.PreInc ->
-       Printf.sprintf "(%s = sgm_dec_add(%s, sgm_dec_of_i64(1)))" vname vname
-     | Ty.Decimal, Ast.PreDec ->
-       Printf.sprintf "(%s = sgm_dec_sub(%s, sgm_dec_of_i64(1)))" vname vname
-     | Ty.Decimal, Ast.PostInc ->
-       incr chain_counter;
-       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
-       Printf.sprintf
-         "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_add(%s, sgm_dec_of_i64(1)); %s; })"
-         tmp vname vname vname tmp
-     | Ty.Decimal, Ast.PostDec ->
-       incr chain_counter;
-       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
-       Printf.sprintf
-         "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_sub(%s, sgm_dec_of_i64(1)); %s; })"
-         tmp vname vname vname tmp
-     | Ty.Char, Ast.PreInc ->
-       Printf.sprintf "(%s = sgm_char_add(%s, 1))" vname vname
-     | Ty.Char, Ast.PreDec ->
-       Printf.sprintf "(%s = sgm_char_sub(%s, 1))" vname vname
-     | Ty.Char, Ast.PostInc ->
-       incr chain_counter;
-       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
-       Printf.sprintf
-         "__extension__ ({ const char* %s = %s; %s = sgm_char_add(%s, 1); %s; })"
-         tmp vname vname vname tmp
-     | Ty.Char, Ast.PostDec ->
-       incr chain_counter;
-       let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
-       Printf.sprintf
-         "__extension__ ({ const char* %s = %s; %s = sgm_char_sub(%s, 1); %s; })"
-         tmp vname vname vname tmp
-     | _, _ -> vname)
+  | Typed_ast.TExprAssign (lval, op, rhs) ->
+    (match lval with
+     | Typed_ast.TLValIdent name ->
+       let vname = mangle_ident name in
+       (match op, e.ty with
+        | Ast.AssignEq, _ ->
+          Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
+        | Ast.AssignAnd, Ty.Bool ->
+          Printf.sprintf "(%s = (%s && (%s)))" vname vname (emit_expr rhs)
+        | Ast.AssignOr, Ty.Bool ->
+          Printf.sprintf "(%s = (%s || (%s)))" vname vname (emit_expr rhs)
+        | _, _ ->
+          (match binop_of_assign_op op with
+           | None -> Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
+           | Some binop ->
+             let lhs_ident =
+               { Typed_ast.desc = Typed_ast.TExprIdent name; ty = e.ty; span = e.span }
+             in
+             let bin_expr =
+               {
+                 Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+                 ty = e.ty;
+                 span = e.span;
+               }
+             in
+             Printf.sprintf "(%s = %s)" vname (emit_expr bin_expr)))
+     | Typed_ast.TLValIndex (target, idx) ->
+       let field = c_val_union_field e.ty in
+       (match op, e.ty with
+        | Ast.AssignEq, _ ->
+          Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s = (%s))"
+            (emit_expr target) (emit_expr idx) field (emit_expr rhs)
+        | Ast.AssignAnd, Ty.Bool ->
+          incr chain_counter;
+          let slot = Printf.sprintf "_sgm_slot_%d" !chain_counter in
+          Printf.sprintf
+            "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); %s->u.b = (%s->u.b && (%s)); })"
+            slot (emit_expr target) (emit_expr idx) slot slot (emit_expr rhs)
+        | Ast.AssignOr, Ty.Bool ->
+          incr chain_counter;
+          let slot = Printf.sprintf "_sgm_slot_%d" !chain_counter in
+          Printf.sprintf
+            "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); %s->u.b = (%s->u.b || (%s)); })"
+            slot (emit_expr target) (emit_expr idx) slot slot (emit_expr rhs)
+        | _, _ ->
+          (match binop_of_assign_op op with
+           | None ->
+             Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s = (%s))"
+               (emit_expr target) (emit_expr idx) field (emit_expr rhs)
+           | Some binop ->
+             incr chain_counter;
+             let id = !chain_counter in
+             let slot = Printf.sprintf "_sgm_slot_%d" id in
+             let tmp_ident = Printf.sprintf "_tmp_idx_%d" id in
+             let tmp_c_var = mangle_ident tmp_ident in
+             let lhs_ident =
+               { Typed_ast.desc = Typed_ast.TExprIdent tmp_ident; ty = e.ty; span = e.span }
+             in
+             let bin_expr =
+               {
+                 Typed_ast.desc = Typed_ast.TExprBinary (binop, lhs_ident, rhs);
+                 ty = e.ty;
+                 span = e.span;
+               }
+             in
+             Printf.sprintf
+               "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); %s %s = %s->u.%s; %s->u.%s = (%s); })"
+               slot (emit_expr target) (emit_expr idx)
+               (c_type_of_ty e.ty) tmp_c_var slot field
+               slot field (emit_expr bin_expr))))
+  | Typed_ast.TExprIncDec (inc_op, lval) ->
+    let vname_raw, slot_prefix, slot_suffix =
+      match lval with
+      | Typed_ast.TLValIdent name -> (mangle_ident name, "", "")
+      | Typed_ast.TLValIndex (target, idx) ->
+        incr chain_counter;
+        let slot = Printf.sprintf "_sgm_islot_%d" !chain_counter in
+        let field = c_val_union_field e.ty in
+        ( Printf.sprintf "(%s->u.%s)" slot field,
+          Printf.sprintf "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); " slot (emit_expr target) (emit_expr idx),
+          "; })" )
+    in
+    let body =
+      match e.ty, inc_op with
+      | (Ty.Int | Ty.Float | Ty.Double), Ast.PreInc ->
+        Printf.sprintf "(++%s)" vname_raw
+      | (Ty.Int | Ty.Float | Ty.Double), Ast.PreDec ->
+        Printf.sprintf "(--%s)" vname_raw
+      | (Ty.Int | Ty.Float | Ty.Double), Ast.PostInc ->
+        Printf.sprintf "(%s++)" vname_raw
+      | (Ty.Int | Ty.Float | Ty.Double), Ast.PostDec ->
+        Printf.sprintf "(%s--)" vname_raw
+      | Ty.Decimal, Ast.PreInc ->
+        Printf.sprintf "(%s = sgm_dec_add(%s, sgm_dec_of_i64(1)))" vname_raw vname_raw
+      | Ty.Decimal, Ast.PreDec ->
+        Printf.sprintf "(%s = sgm_dec_sub(%s, sgm_dec_of_i64(1)))" vname_raw vname_raw
+      | Ty.Decimal, Ast.PostInc ->
+        incr chain_counter;
+        let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+        Printf.sprintf
+          "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_add(%s, sgm_dec_of_i64(1)); %s; })"
+          tmp vname_raw vname_raw vname_raw tmp
+      | Ty.Decimal, Ast.PostDec ->
+        incr chain_counter;
+        let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+        Printf.sprintf
+          "__extension__ ({ sgm_decimal_t %s = %s; %s = sgm_dec_sub(%s, sgm_dec_of_i64(1)); %s; })"
+          tmp vname_raw vname_raw vname_raw tmp
+      | Ty.Char, Ast.PreInc ->
+        Printf.sprintf "(%s = sgm_char_add(%s, 1))" vname_raw vname_raw
+      | Ty.Char, Ast.PreDec ->
+        Printf.sprintf "(%s = sgm_char_sub(%s, 1))" vname_raw vname_raw
+      | Ty.Char, Ast.PostInc ->
+        incr chain_counter;
+        let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+        Printf.sprintf
+          "__extension__ ({ const char* %s = %s; %s = sgm_char_add(%s, 1); %s; })"
+          tmp vname_raw vname_raw vname_raw tmp
+      | Ty.Char, Ast.PostDec ->
+        incr chain_counter;
+        let tmp = Printf.sprintf "_sgm_old_%d" !chain_counter in
+        Printf.sprintf
+          "__extension__ ({ const char* %s = %s; %s = sgm_char_sub(%s, 1); %s; })"
+          tmp vname_raw vname_raw vname_raw tmp
+      | _, _ -> vname_raw
+    in
+    slot_prefix ^ body ^ slot_suffix
 
 let c_decimal_runtime =
   {|#include <stdlib.h>
@@ -668,19 +804,172 @@ __attribute__((unused)) static const char* sgm_concat(int n, const char **parts)
   for (int i = 0; i < n; i++) strcat(out, parts[i]);
   return out;
 }
+
+typedef enum {
+  SGM_TAG_I64,
+  SGM_TAG_F32,
+  SGM_TAG_F64,
+  SGM_TAG_DEC,
+  SGM_TAG_BOOL,
+  SGM_TAG_CHAR,
+  SGM_TAG_STR,
+  SGM_TAG_OBJ
+} sgm_tag_t;
+
+typedef struct sgm_obj sgm_obj_t;
+
+typedef struct {
+  sgm_tag_t tag;
+  union {
+    int64_t i64;
+    float f32;
+    double f64;
+    sgm_decimal_t dec;
+    bool b;
+    const char *str;
+    sgm_obj_t *obj;
+  } u;
+} sgm_val_t;
+
+struct sgm_obj {
+  bool is_tuple;
+  int64_t len;
+  sgm_val_t *items;
+};
+
+__attribute__((unused)) static sgm_val_t sgm_val_i64(int64_t v) { return (sgm_val_t){ SGM_TAG_I64, { .i64 = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_f32(float v) { return (sgm_val_t){ SGM_TAG_F32, { .f32 = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_f64(double v) { return (sgm_val_t){ SGM_TAG_F64, { .f64 = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_dec(sgm_decimal_t v) { return (sgm_val_t){ SGM_TAG_DEC, { .dec = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_bool(bool v) { return (sgm_val_t){ SGM_TAG_BOOL, { .b = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_char(const char *v) { return (sgm_val_t){ SGM_TAG_CHAR, { .str = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_str(const char *v) { return (sgm_val_t){ SGM_TAG_STR, { .str = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_obj(sgm_obj_t *v) { return (sgm_val_t){ SGM_TAG_OBJ, { .obj = v } }; }
+
+__attribute__((unused)) static sgm_obj_t* sgm_obj_alloc(bool is_tuple, int64_t len) {
+  sgm_obj_t *o = (sgm_obj_t*)malloc(sizeof(sgm_obj_t));
+  o->is_tuple = is_tuple;
+  o->len = len;
+  o->items = (len > 0) ? (sgm_val_t*)calloc((size_t)len, sizeof(sgm_val_t)) : NULL;
+  return o;
+}
+
+__attribute__((unused)) static void sgm_obj_spread(sgm_obj_t *dst, int64_t *k, sgm_obj_t *src) {
+  for (int64_t i = 0; i < src->len; i++) {
+    dst->items[(*k)++] = src->items[i];
+  }
+}
+
+__attribute__((unused)) static sgm_val_t* sgm_obj_slot(sgm_obj_t *o, int64_t idx) {
+  if (idx < 0 || idx >= o->len) {
+    fprintf(stderr, "Runtime error: index %" PRId64 " out of bounds (length %" PRId64 ")\n", idx, o->len);
+    exit(1);
+  }
+  return &o->items[idx];
+}
+
+__attribute__((unused)) static sgm_obj_t* sgm_array_concat(sgm_obj_t *a, sgm_obj_t *b) {
+  sgm_obj_t *out = sgm_obj_alloc(false, a->len + b->len);
+  for (int64_t i = 0; i < a->len; i++) out->items[i] = a->items[i];
+  for (int64_t j = 0; j < b->len; j++) out->items[a->len + j] = b->items[j];
+  return out;
+}
+
+__attribute__((unused)) static sgm_obj_t* sgm_array_repeat(sgm_obj_t *a, int64_t n) {
+  if (n <= 0 || a->len <= 0) return sgm_obj_alloc(false, 0);
+  int64_t total = a->len * n;
+  sgm_obj_t *out = sgm_obj_alloc(false, total);
+  for (int64_t i = 0; i < total; i++) {
+    out->items[i] = a->items[i % a->len];
+  }
+  return out;
+}
+
+static bool sgm_obj_eq(sgm_obj_t *a, sgm_obj_t *b);
+
+__attribute__((unused)) static bool sgm_val_eq(sgm_val_t a, sgm_val_t b) {
+  if (a.tag != b.tag) return false;
+  switch (a.tag) {
+    case SGM_TAG_I64: return a.u.i64 == b.u.i64;
+    case SGM_TAG_F32: return a.u.f32 == b.u.f32;
+    case SGM_TAG_F64: return a.u.f64 == b.u.f64;
+    case SGM_TAG_DEC: return sgm_dec_cmp(a.u.dec, b.u.dec) == 0;
+    case SGM_TAG_BOOL: return a.u.b == b.u.b;
+    case SGM_TAG_CHAR: return sgm_decode_utf8(a.u.str) == sgm_decode_utf8(b.u.str);
+    case SGM_TAG_STR: return strcmp(a.u.str, b.u.str) == 0;
+    case SGM_TAG_OBJ: return sgm_obj_eq(a.u.obj, b.u.obj);
+  }
+  return false;
+}
+
+__attribute__((unused)) static bool sgm_obj_eq(sgm_obj_t *a, sgm_obj_t *b) {
+  if (a == b) return true;
+  if (!a || !b) return false;
+  if (a->is_tuple != b->is_tuple || a->len != b->len) return false;
+  for (int64_t i = 0; i < a->len; i++) {
+    if (!sgm_val_eq(a->items[i], b->items[i])) return false;
+  }
+  return true;
+}
+
+static const char* sgm_fmt_obj(sgm_obj_t *o);
+
+__attribute__((unused)) static const char* sgm_fmt_val(sgm_val_t v) {
+  switch (v.tag) {
+    case SGM_TAG_I64: return sgm_fmt_i64(v.u.i64);
+    case SGM_TAG_F32: return sgm_fmt_f32(v.u.f32);
+    case SGM_TAG_F64: return sgm_fmt_f64(v.u.f64);
+    case SGM_TAG_DEC: return sgm_fmt_dec(v.u.dec);
+    case SGM_TAG_BOOL: return v.u.b ? "true" : "false";
+    case SGM_TAG_CHAR:
+    case SGM_TAG_STR: return v.u.str;
+    case SGM_TAG_OBJ: return sgm_fmt_obj(v.u.obj);
+  }
+  return "";
+}
+
+__attribute__((unused)) static const char* sgm_fmt_obj(sgm_obj_t *o) {
+  if (!o) return "null";
+  int64_t n = o->len;
+  const char **parts = (n > 0) ? (const char**)malloc((size_t)n * sizeof(const char*)) : NULL;
+  size_t total = 2;
+  for (int64_t i = 0; i < n; i++) {
+    parts[i] = sgm_fmt_val(o->items[i]);
+    total += strlen(parts[i]);
+    if (i > 0) total += 2;
+  }
+  char *out = (char*)malloc(total + 1);
+  size_t pos = 0;
+  out[pos++] = o->is_tuple ? '(' : '[';
+  for (int64_t i = 0; i < n; i++) {
+    if (i > 0) {
+      out[pos++] = ',';
+      out[pos++] = ' ';
+    }
+    size_t plen = strlen(parts[i]);
+    memcpy(out + pos, parts[i], plen);
+    pos += plen;
+  }
+  out[pos++] = o->is_tuple ? ')' : ']';
+  out[pos] = '\0';
+  if (parts) free(parts);
+  return out;
+}
 |}
+
+let c_decl_type_and_qual ~is_const (ty : Ty.t) : string * string =
+  if is_const then
+    match ty with
+    | Ty.Char | Ty.String -> ("const char* const", "")
+    | Ty.Tuple _ | Ty.Array _ -> ("sgm_obj_t* const", "")
+    | _ -> (c_type_of_ty ty, "const ")
+  else
+    (c_type_of_ty ty, "")
 
 let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
-    let c_type, const_qualifier =
-      if v.is_const then
-        match v.ty with
-        | Ty.Char | Ty.String -> ("const char* const", "")
-        | _ -> (c_type_of_ty v.ty, "const ")
-      else
-        (c_type_of_ty v.ty, "")
-    in
+    let c_type, const_qualifier = c_decl_type_and_qual ~is_const:v.is_const v.ty in
     Buffer.add_string
       buf
       (Printf.sprintf "%s%s%s %s = %s;\n"
@@ -689,6 +978,32 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
          c_type
          (mangle_ident v.name)
          (emit_expr v.init))
+  | Typed_ast.TStmtDestruct d ->
+    incr chain_counter;
+    let id = !chain_counter in
+    let tmp_obj = Printf.sprintf "_sgm_destr_%d" id in
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%ssgm_obj_t *%s = %s;\n%s(void)%s;\n"
+         indent tmp_obj (emit_expr d.init) indent tmp_obj);
+    List.iteri
+      (fun i (bind : Typed_ast.destruct_binding) ->
+        match bind.name with
+        | None -> ()
+        | Some name ->
+          let c_type, const_qualifier = c_decl_type_and_qual ~is_const:d.is_const bind.ty in
+          let field = c_val_union_field bind.ty in
+          Buffer.add_string
+            buf
+            (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
+               indent
+               const_qualifier
+               c_type
+               (mangle_ident name)
+               tmp_obj
+               i
+               field))
+      d.bindings
   | Typed_ast.TStmtBlock stmts ->
     Buffer.add_string buf (indent ^ "{\n");
     List.iter (emit_stmt buf (indent ^ "  ")) stmts;
@@ -738,6 +1053,11 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
           Buffer.add_string
             buf
             (Printf.sprintf "%sfputs(%s, stdout);\n"
+               indent (emit_expr e))
+        | Ty.Tuple _ | Ty.Array _ ->
+          Buffer.add_string
+            buf
+            (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n"
                indent (emit_expr e)))
       args;
     if newline then Buffer.add_string buf (indent ^ "putchar('\\n');\n")

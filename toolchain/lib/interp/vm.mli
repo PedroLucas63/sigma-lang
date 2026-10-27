@@ -11,6 +11,8 @@ type value =
   | VBool of bool
   | VChar of string
   | VString of string
+  | VTuple of value array
+  | VArray of value array
 
 val value_to_string : value -> string
 

@@ -8,6 +8,13 @@ type opcode =
   | OP_CONST_BOOL of bool
   | OP_CONST_CHAR of string
   | OP_CONST_STR of string
+  | OP_MAKE_TUPLE of int
+  | OP_MAKE_ARRAY of int
+  | OP_SPREAD
+  | OP_INDEX_GET
+  | OP_INDEX_SET
+  | OP_ARRAY_CONCAT
+  | OP_ARRAY_REPEAT
   | OP_TO_STR
   | OP_CONCAT_STR of int
   | OP_I64_TO_F32
@@ -66,6 +73,7 @@ type opcode =
   | OP_EQ_BOOL
   | OP_EQ_CHAR
   | OP_EQ_STR
+  | OP_EQ_OBJ
   | OP_NE_I64
   | OP_NE_F32
   | OP_NE_F64
@@ -73,6 +81,7 @@ type opcode =
   | OP_NE_BOOL
   | OP_NE_CHAR
   | OP_NE_STR
+  | OP_NE_OBJ
   | OP_LT_I64
   | OP_LT_F32
   | OP_LT_F64
@@ -105,6 +114,7 @@ type opcode =
   | OP_DEF_GLOBAL_BOOL of string
   | OP_DEF_GLOBAL_CHAR of string
   | OP_DEF_GLOBAL_STR of string
+  | OP_DEF_GLOBAL_OBJ of string
   | OP_GET_GLOBAL_I64 of string
   | OP_GET_GLOBAL_F32 of string
   | OP_GET_GLOBAL_F64 of string
@@ -112,6 +122,7 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_GET_GLOBAL_OBJ of string
   | OP_SET_GLOBAL_I64 of string
   | OP_SET_GLOBAL_F32 of string
   | OP_SET_GLOBAL_F64 of string
@@ -119,6 +130,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
   | OP_PRINT_I64
@@ -128,6 +140,7 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
   | OP_ASSERT_EQ
@@ -153,6 +166,13 @@ let pp_opcode fmt = function
   | OP_CONST_BOOL b -> Format.fprintf fmt "OP_CONST_BOOL %B" b
   | OP_CONST_CHAR c -> Format.fprintf fmt "OP_CONST_CHAR %S" c
   | OP_CONST_STR s -> Format.fprintf fmt "OP_CONST_STR %S" s
+  | OP_MAKE_TUPLE n -> Format.fprintf fmt "OP_MAKE_TUPLE %d" n
+  | OP_MAKE_ARRAY n -> Format.fprintf fmt "OP_MAKE_ARRAY %d" n
+  | OP_SPREAD -> Format.fprintf fmt "OP_SPREAD"
+  | OP_INDEX_GET -> Format.fprintf fmt "OP_INDEX_GET"
+  | OP_INDEX_SET -> Format.fprintf fmt "OP_INDEX_SET"
+  | OP_ARRAY_CONCAT -> Format.fprintf fmt "OP_ARRAY_CONCAT"
+  | OP_ARRAY_REPEAT -> Format.fprintf fmt "OP_ARRAY_REPEAT"
   | OP_TO_STR -> Format.fprintf fmt "OP_TO_STR"
   | OP_CONCAT_STR n -> Format.fprintf fmt "OP_CONCAT_STR %d" n
   | OP_I64_TO_F32 -> Format.fprintf fmt "OP_I64_TO_F32"
@@ -211,6 +231,7 @@ let pp_opcode fmt = function
   | OP_EQ_BOOL -> Format.fprintf fmt "OP_EQ_BOOL"
   | OP_EQ_CHAR -> Format.fprintf fmt "OP_EQ_CHAR"
   | OP_EQ_STR -> Format.fprintf fmt "OP_EQ_STR"
+  | OP_EQ_OBJ -> Format.fprintf fmt "OP_EQ_OBJ"
   | OP_NE_I64 -> Format.fprintf fmt "OP_NE_I64"
   | OP_NE_F32 -> Format.fprintf fmt "OP_NE_F32"
   | OP_NE_F64 -> Format.fprintf fmt "OP_NE_F64"
@@ -218,6 +239,7 @@ let pp_opcode fmt = function
   | OP_NE_BOOL -> Format.fprintf fmt "OP_NE_BOOL"
   | OP_NE_CHAR -> Format.fprintf fmt "OP_NE_CHAR"
   | OP_NE_STR -> Format.fprintf fmt "OP_NE_STR"
+  | OP_NE_OBJ -> Format.fprintf fmt "OP_NE_OBJ"
   | OP_LT_I64 -> Format.fprintf fmt "OP_LT_I64"
   | OP_LT_F32 -> Format.fprintf fmt "OP_LT_F32"
   | OP_LT_F64 -> Format.fprintf fmt "OP_LT_F64"
@@ -250,6 +272,7 @@ let pp_opcode fmt = function
   | OP_DEF_GLOBAL_BOOL name -> Format.fprintf fmt "OP_DEF_GLOBAL_BOOL %s" name
   | OP_DEF_GLOBAL_CHAR name -> Format.fprintf fmt "OP_DEF_GLOBAL_CHAR %s" name
   | OP_DEF_GLOBAL_STR name -> Format.fprintf fmt "OP_DEF_GLOBAL_STR %s" name
+  | OP_DEF_GLOBAL_OBJ name -> Format.fprintf fmt "OP_DEF_GLOBAL_OBJ %s" name
   | OP_GET_GLOBAL_I64 name -> Format.fprintf fmt "OP_GET_GLOBAL_I64 %s" name
   | OP_GET_GLOBAL_F32 name -> Format.fprintf fmt "OP_GET_GLOBAL_F32 %s" name
   | OP_GET_GLOBAL_F64 name -> Format.fprintf fmt "OP_GET_GLOBAL_F64 %s" name
@@ -257,6 +280,7 @@ let pp_opcode fmt = function
   | OP_GET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_GET_GLOBAL_BOOL %s" name
   | OP_GET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_GET_GLOBAL_CHAR %s" name
   | OP_GET_GLOBAL_STR name -> Format.fprintf fmt "OP_GET_GLOBAL_STR %s" name
+  | OP_GET_GLOBAL_OBJ name -> Format.fprintf fmt "OP_GET_GLOBAL_OBJ %s" name
   | OP_SET_GLOBAL_I64 name -> Format.fprintf fmt "OP_SET_GLOBAL_I64 %s" name
   | OP_SET_GLOBAL_F32 name -> Format.fprintf fmt "OP_SET_GLOBAL_F32 %s" name
   | OP_SET_GLOBAL_F64 name -> Format.fprintf fmt "OP_SET_GLOBAL_F64 %s" name
@@ -264,6 +288,7 @@ let pp_opcode fmt = function
   | OP_SET_GLOBAL_BOOL name -> Format.fprintf fmt "OP_SET_GLOBAL_BOOL %s" name
   | OP_SET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_SET_GLOBAL_CHAR %s" name
   | OP_SET_GLOBAL_STR name -> Format.fprintf fmt "OP_SET_GLOBAL_STR %s" name
+  | OP_SET_GLOBAL_OBJ name -> Format.fprintf fmt "OP_SET_GLOBAL_OBJ %s" name
   | OP_UNDEF_GLOBAL name -> Format.fprintf fmt "OP_UNDEF_GLOBAL %s" name
   | OP_POP -> Format.fprintf fmt "OP_POP"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
@@ -273,6 +298,7 @@ let pp_opcode fmt = function
   | OP_PRINT_BOOL -> Format.fprintf fmt "OP_PRINT_BOOL"
   | OP_PRINT_CHAR -> Format.fprintf fmt "OP_PRINT_CHAR"
   | OP_PRINT_STR -> Format.fprintf fmt "OP_PRINT_STR"
+  | OP_PRINT_OBJ -> Format.fprintf fmt "OP_PRINT_OBJ"
   | OP_PRINT_SPACE -> Format.fprintf fmt "OP_PRINT_SPACE"
   | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
   | OP_ASSERT_EQ -> Format.fprintf fmt "OP_ASSERT_EQ"

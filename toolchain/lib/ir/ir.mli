@@ -10,6 +10,13 @@ type opcode =
   | OP_CONST_BOOL of bool
   | OP_CONST_CHAR of string
   | OP_CONST_STR of string
+  | OP_MAKE_TUPLE of int
+  | OP_MAKE_ARRAY of int
+  | OP_SPREAD
+  | OP_INDEX_GET
+  | OP_INDEX_SET
+  | OP_ARRAY_CONCAT
+  | OP_ARRAY_REPEAT
   | OP_TO_STR
   | OP_CONCAT_STR of int
   | OP_I64_TO_F32
@@ -68,6 +75,7 @@ type opcode =
   | OP_EQ_BOOL
   | OP_EQ_CHAR
   | OP_EQ_STR
+  | OP_EQ_OBJ
   | OP_NE_I64
   | OP_NE_F32
   | OP_NE_F64
@@ -75,6 +83,7 @@ type opcode =
   | OP_NE_BOOL
   | OP_NE_CHAR
   | OP_NE_STR
+  | OP_NE_OBJ
   | OP_LT_I64
   | OP_LT_F32
   | OP_LT_F64
@@ -107,6 +116,7 @@ type opcode =
   | OP_DEF_GLOBAL_BOOL of string
   | OP_DEF_GLOBAL_CHAR of string
   | OP_DEF_GLOBAL_STR of string
+  | OP_DEF_GLOBAL_OBJ of string
   | OP_GET_GLOBAL_I64 of string
   | OP_GET_GLOBAL_F32 of string
   | OP_GET_GLOBAL_F64 of string
@@ -114,6 +124,7 @@ type opcode =
   | OP_GET_GLOBAL_BOOL of string
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
+  | OP_GET_GLOBAL_OBJ of string
   | OP_SET_GLOBAL_I64 of string
   | OP_SET_GLOBAL_F32 of string
   | OP_SET_GLOBAL_F64 of string
@@ -121,6 +132,7 @@ type opcode =
   | OP_SET_GLOBAL_BOOL of string
   | OP_SET_GLOBAL_CHAR of string
   | OP_SET_GLOBAL_STR of string
+  | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
   | OP_PRINT_I64
@@ -130,6 +142,7 @@ type opcode =
   | OP_PRINT_BOOL
   | OP_PRINT_CHAR
   | OP_PRINT_STR
+  | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
   | OP_ASSERT_EQ
