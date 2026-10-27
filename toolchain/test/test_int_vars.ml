@@ -660,6 +660,31 @@ let test_syntax_and_semantic_errors () =
       ("assert(10, 10, 123);", "E0104");
       ("assert_error(\"E0106\");", "E0002");
       ("var s := \"const x : int;\"; assert_error(\"E0106\", s);", "E0002");
+      (* Tuple and Array errors *)
+      ("var t := ();", "E0002");
+      ("var t : () = (1, 2);", "E0002");
+      ("var () := (1, 2);", "E0002");
+      ("var t := (10, 20); t[0] = 30;", "E0107");
+      ("var t := (10, 20); t[0] += 5;", "E0107");
+      ("var t := (10, 20); t[0]++;", "E0107");
+      ("var t := (10, 20); println(t[2]);", "E0108");
+      ("var t := (10, 20); println(t[-1]);", "E0108");
+      ("var a := [10, 20]; println(a[2]);", "E0108");
+      ("var a := [10, 20]; println(a[-1]);", "E0108");
+      ("var a : int[];", "E0106");
+      ("var a : int[0];", "E0108");
+      ("var a : int[-2];", "E0108");
+      ("var a := [];", "E0108");
+      ("var a : int[3] = [1, 2];", "E0104");
+      ("var a := [10, \"20\"];", "E0104");
+      ("var a := [10, 20]; a += [30];", "E0104");
+      ("var a := [10, 20]; a *= 2;", "E0104");
+      ("var a := [10, 20] * 0;", "E0108");
+      ("var a := [10, 20] * -1;", "E0108");
+      ("const a := [10, 20]; a[0] = 50;", "E0107");
+      ("var (x, y) := (1, 2, 3);", "E0104");
+      ("var (x, x) := (1, 2);", "E0103");
+      ("var x := 10; var m := [..x, 20];", "E0104");
     ]
 
 let test_assignment_and_incdec_parity () =
@@ -1024,6 +1049,85 @@ let test_pkg_manifest_and_scaffold () =
       ~msg:"manifest script 'test' exists"
       (Manifest.find_script "test" parsed = Some "sigma test")
 
+let test_tuples_and_arrays_parity () =
+  let code =
+    {|# 1. Tuples: creation, typing, zero-init, overwrite, indexing
+var tuple := (10, 10., "10");
+println(tuple);
+println(tuple[0], tuple[1], tuple[2]);
+
+var t : (int, int);
+println(t);
+t = (10, 20);
+println(t);
+
+# 2. Destructuring tuples and arrays with wildcard `_`
+var (a, b, _) := tuple;
+println(a, b);
+const (cx, cy) := t;
+println(cx, cy);
+
+# 3. Static arrays: T[N], T[], concatenation (+), repetition (*)
+var z : int[3];
+println(z);
+var arr : int[] = [10, 20, 30];
+println(arr);
+var sum_arr := [10, 10] + [10];
+println(sum_arr, sum_arr == [10, 10, 10]);
+
+var l := [30, 40];
+var m := [..t, ..l, 50];
+println(m, m == [10, 20, 30, 40, 50]);
+
+var big_t := (..t, ..l, "fim");
+println(big_t);
+
+# 4. Object reference semantics & element mutation
+var base := [10, 20];
+var x := base * 3;
+var y := [base * 3];
+var z_ref := [base] * 3;
+var ll := [base];
+var lll := [[base]];
+base[0] = 50;
+println(base);
+println(x);
+println(y);
+println(z_ref);
+println(ll, ll == [[50, 20]]);
+println(lll, lll == [[[50, 20]]]);
+
+# 5. Compound assignments and ++/-- on array elements
+base[1] += 5;
+println(base[1]++, ++base[1], base);
+|}
+  in
+  let expected_stdout =
+    String.concat "\n"
+      [
+        "(10, 10, 10)";
+        "10 10 10";
+        "(0, 0)";
+        "(10, 20)";
+        "10 10";
+        "10 20";
+        "[0, 0, 0]";
+        "[10, 20, 30]";
+        "[10, 10, 10] true";
+        "[10, 20, 30, 40, 50] true";
+        "(10, 20, 30, 40, fim)";
+        "[50, 20]";
+        "[10, 20, 10, 20, 10, 20]";
+        "[[10, 20, 10, 20, 10, 20]]";
+        "[[50, 20], [50, 20], [50, 20]]";
+        "[[50, 20]] true";
+        "[[[50, 20]]] true";
+        "25 27 [50, 27]";
+        "";
+      ]
+  in
+  run_and_check_parity ~name:"tuples_and_arrays" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1032,6 +1136,7 @@ let () =
   test_print_and_println_parity ();
   test_if_else_and_blocks_parity ();
   test_const_declarations_parity ();
+  test_tuples_and_arrays_parity ();
   test_assert_and_test_runner_parity ();
   test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();

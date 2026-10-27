@@ -1,0 +1,99 @@
+# 06. Testes de Tuplas (Imutáveis), Desempacotamento, Arrays Estáticos, Spread (..) e Semântica de Referência
+
+# 1. Criação de Tuplas heterogêneas e indexação por constante inteira
+var tuple := (10, 10., "10", true, 'S', 42.5m);
+assert(tuple[0], 10, "Acesso ao índice 0 da tupla (int)");
+assert(tuple[1], 10., "Acesso ao índice 1 da tupla (double)");
+assert(tuple[2], "10", "Acesso ao índice 2 da tupla (string)");
+assert(tuple[3], true, "Acesso ao índice 3 da tupla (bool)");
+assert(tuple[4], 'S', "Acesso ao índice 4 da tupla (char)");
+assert(tuple[5], 42.5m, "Acesso ao índice 5 da tupla (decimal)");
+
+# 2. Tipagem explícita de Tupla, zero-initialization recursiva e sobrescrita completa
+var t : (int, int);
+assert(t, (0, 0), "Zero-initialization recursiva de tupla (int, int)");
+t = (25, 75);
+assert(t, (25, 75), "Sobrescrita completa da variável tupla mutável");
+assert(t[0] + t[1], 100, "Soma dos elementos da tupla");
+
+var t_nested : ((int, string), bool);
+assert(t_nested, ((0, ""), false), "Zero-init de tupla aninhada");
+
+# 3. Desempacotamento (Destructuring) de Tuplas e Arrays com curinga '_'
+var (a, b, _) := (100, 200, "ignorado");
+assert(a, 100, "Primeiro elemento desempacotado da tupla");
+assert(b, 200, "Segundo elemento desempacotado da tupla");
+a += 50;
+assert(a, 150, "Variável desempacotada com 'var' é mutável");
+
+const (cx, _, cz) : (int, double, string) = (7, 3.14d, "sigma");
+assert(cx, 7, "Constante desempacotada cx");
+assert(cz, "sigma", "Constante desempacotada cz");
+
+var arr_src : int[] = [5, 15, 25, 35];
+var (_, seg, _, qua) := arr_src;
+assert(seg + qua, 50, "Desempacotamento de array estático com curingas");
+
+# 4. Arrays de tamanho estático T[N] e tamanho inferido T[]
+var zeros : int[3];
+assert(zeros, [0, 0, 0], "Zero-initialization de int[3]");
+
+var inferred : int[] = [10, 20, 30];
+assert(inferred, [10, 20, 30], "Array com tamanho omitido int[] inferido do inicializador");
+
+# Indexação dinâmica, atribuição composta e incremento/decremento em elementos de array
+var idx := 1;
+inferred[idx] = 99;
+inferred[0] += 5;
+var old_last := inferred[2]++;
+assert(old_last, 30, "Pós-incremento em elemento de array retorna valor antigo");
+assert(inferred, [15, 99, 31], "Estado do array após mutações por índice");
+assert(++inferred[0], 16, "Pré-incremento em elemento de array");
+
+# 5. Operações matemáticas em Arrays: Concatenação (+) e Repetição (*)
+assert([10, 10] + [10], [10, 10, 10], "Concatenação de arrays [10, 10] + [10]");
+assert([1, 2] * 3, [1, 2, 1, 2, 1, 2], "Repetição de array arr * 3");
+assert(2 * [7, 8], [7, 8, 7, 8], "Repetição comutativa 2 * arr");
+
+# 6. Operador de Espalhamento / Spread (..) em Arrays e Tuplas
+var tp := (10, 20);
+var ls := [30, 40];
+var m := [..tp, ..ls, 50];
+assert(m, [10, 20, 30, 40, 50], "Spread de tupla e array dentro de literal de array");
+
+var tp_homog := (1, 2);
+var tp_big := (0, ..tp_homog, ..[3, 4], "fim");
+assert(tp_big, (0, 1, 2, 3, 4, "fim"), "Spread de tupla e array dentro de literal de tupla");
+
+# 7. Semântica de Objetos por Referência (Heap Reference Semantics)
+var l := [10, 20];
+var ll := [[l]];
+l[0] = 50;
+assert(ll, [[[50, 20]]], "Mutação em l reflete em [[l]] por referência");
+
+var base := [10, 20];
+var x := base * 3;
+var y := [base * 3];
+var z := [base] * 3;
+base[0] = 30;
+assert(x, [10, 20, 10, 20, 10, 20], "base * 3 copia os ints primitivos para um novo array independente");
+assert(y, [[10, 20, 10, 20, 10, 20]], "[base * 3] guarda o novo array independente");
+assert(z, [[30, 20], [30, 20], [30, 20]], "[base] * 3 repete a referência ao objeto base");
+
+# Interpolação de tupla e array em string
+assert("${tp} -> ${base}", "(10, 20) -> [30, 20]", "Interpolação de tupla e array em string");
+
+# 8. Diagnósticos estáticos de Tuplas, Arrays, Desempacotamento e Spread
+assert_error("E0107", "var tup := (10, 20); tup[0] = 99;", "Elementos de tupla são imutáveis (E0107)");
+assert_error("E0107", "var tup := (10, 20); tup[0]++;", "Incremento em elemento de tupla é proibido (E0107)");
+assert_error("E0107", "const (ca, cb) := (1, 2); ca = 10;", "Constante desempacotada é imutável (E0107)");
+assert_error("E0108", "var tup := (10, 20); println(tup[2]);", "Índice de tupla fora dos limites (E0108)");
+assert_error("E0108", "var arr := [10, 20]; println(arr[5]);", "Índice constante de array fora dos limites (E0108)");
+assert_error("E0108", "var a : int[0];", "Array de tamanho zero é inválido (E0108)");
+assert_error("E0108", "var a := [1, 2] * 0;", "Repetição de array por fator <= 0 é inválida (E0108)");
+assert_error("E0106", "var a : int[];", "Tipo T[] sem inicializador é inválido (E0106)");
+assert_error("E0108", "var a := [];", "Literal de array vazio sem elementos é inválido (E0108)");
+assert_error("E0104", "var a := [1, 2.5];", "Array exige elementos homogêneos (E0104)");
+assert_error("E0104", "var tup := (1, \"oi\"); var arr := [..tup];", "Spread de tupla heterogênea em array é inválido (E0104)");
+assert_error("E0104", "var (x, y) := (1, 2, 3);", "Aridade incorreta no desempacotamento (E0104)");
+assert_error("E0104", "var a := [1, 2]; a += [3];", "Atribuição composta += em array estático altera tamanho e é proibida (E0104)");
