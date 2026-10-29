@@ -38,15 +38,16 @@ type state = {
   mutable halted : bool;
   mutable collect_assertions : bool;
   mutable assertions_rev : assertion_result list;
+  mutable stdin_lines : string list option;
 }
 
-val create_state : ?collect_assertions:bool -> unit -> state
+val create_state : ?collect_assertions:bool -> ?stdin_lines:string list -> unit -> state
 
 (** Executa uma única instrução da IR, gravando qualquer saída em [out_buf]. *)
 val step : out_buf:Buffer.t -> Ir.program -> state -> (unit, string) result
 
 (** Executa todo o programa de IR e retorna o stdout capturado. *)
-val run : Ir.program -> (string, string) result
+val run : ?stdin_lines:string list -> Ir.program -> (string, string) result
 
 (** Executa o programa de IR em modo de teste, coletando todos os resultados de [assert] e [assert_error]. *)
-val run_tests : Ir.program -> (test_report, string) result
+val run_tests : ?stdin_lines:string list -> Ir.program -> (test_report, string) result

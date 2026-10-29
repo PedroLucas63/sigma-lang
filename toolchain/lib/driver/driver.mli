@@ -10,7 +10,7 @@ val compile_frontend :
   Source.t -> (Typed_ast.program * Ir.program, Diagnostic.t list) result
 
 (** Executa um código-fonte no interpretador (VM) e retorna o stdout. *)
-val run_source : Source.t -> (string, Diagnostic.t list) result
+val run_source : ?stdin_lines:string list -> Source.t -> (string, Diagnostic.t list) result
 
 (** Compila um código-fonte para um executável nativo via C99 backend. *)
 val build_source :

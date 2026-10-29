@@ -1,0 +1,83 @@
+# Suite 08: input(...), prompt(<msg>, ...) e Format Specifiers em String Interpolada
+# @stdin: Linha de teste Sigma
+# @stdin: 42
+# @stdin: 3.5 100
+# @stdin: 123.456.789-07
+# @stdin: id=99
+# @stdin: Pedro
+# @stdin: 15.75
+# @stdin: 10 20 30
+# @stdin: 2026-10-29
+
+# 1. Formatação em interpolação de strings (${expr : spec})
+var pi := 3.14159265d;
+var flt := 2.5f;
+var dec := 12.345m;
+var n := 42;
+var neg := -42;
+var txt := "Sigma";
+
+assert("${pi:.2}", "3.14", "Precisão de 2 casas em double");
+assert("${pi:.4}", "3.1416", "Arredondamento de precisão em double");
+assert("${flt:.3}", "2.500", "Preenchimento de casas decimais em float");
+assert("${dec:.2}", "12.35", "Arredondamento half-away-from-zero em decimal");
+assert("${dec:.5}", "12.34500", "Extensão de casas decimais em decimal");
+
+assert("${n:6}", "    42", "Largura mínima padrão alinhada à direita");
+assert("${n:<6}", "42    ", "Alinhamento à esquerda");
+assert("${n:>6}", "    42", "Alinhamento à direita explícito");
+assert("${n:^6}", "  42  ", "Alinhamento centralizado par");
+assert("${n:*^7}", "**42***", "Alinhamento centralizado ímpar com fill '*'");
+
+assert("${n:06}", "000042", "Zero-padding em inteiro positivo");
+assert("${neg:06}", "-00042", "Zero-padding preserva sinal '-' à esquerda");
+assert("${n:+06}", "+00042", "Sinal explícito '+' com zero-padding");
+assert("${pi:+08.2}", "+0003.14", "Combinação de '+', zero-padding, largura e precisão");
+
+assert("${txt:<8}", "Sigma   ", "String alinhada à esquerda");
+assert("${txt:.>8}", "...Sigma", "String alinhada à direita com fill '.'");
+assert("${txt:-^9}", "--Sigma--", "String centralizada com fill '-'");
+assert("${txt:.3}", "Sig", "Truncamento de string com .prec");
+assert("${txt:>6.3}", "   Sig", "Truncamento de string combinado com largura e alinhamento");
+
+# 2. Leitura estática sem prompt via input(...)
+var s_line : string = input();
+assert(s_line, "Linha de teste Sigma", "input() lê linha inteira como string");
+
+var n_in := input(int);
+assert(n_in, 42, "input(int) lê e converte int");
+
+var (f_in, i_in) := input(float, int);
+assert(f_in, 3.5f, "input(float, int) elemento 0");
+assert(i_in, 100, "input(float, int) elemento 1");
+
+var (c1, c2, c3, d_ver) := input("${int}.${int}.${int}-${int}");
+assert((c1, c2, c3, d_ver), (123, 456, 789, 7), "input com máscara estruturada de CPF");
+
+var only_id := input("id=${int}");
+assert(only_id, 99, "input com máscara de 1 placeholder retorna escalar T");
+
+# 3. Leitura estática com prompt obrigatório via prompt(<msg>, ...)
+var p_name := prompt("Nome: ");
+assert(p_name, "Pedro", "prompt(msg) retorna string lida");
+
+var p_val := prompt("Preço: ", decimal);
+assert(p_val, 15.75m, "prompt(msg, decimal) retorna decimal");
+
+var (a, b, c) := prompt("Tripla: ", int, int, int);
+assert(a + b + c, 60, "prompt(msg, int, int, int) retorna tupla (int, int, int)");
+
+var (ano, mes, dia) := prompt("Data: ", "${int}-${int}-${int}");
+assert((ano, mes, dia), (2026, 10, 29), "prompt com máscara de data retorna tupla");
+
+# 4. Testes negativos de sintaxe e semântica (assert_error)
+assert_error("E0002", "var s := input(\"Digite: \");", "input com string sem máscara deve sugerir prompt");
+assert_error("E0002", "var s := prompt();", "prompt() sem argumentos é inválido");
+assert_error("E0104", "var x := prompt(int);", "prompt(int) sem mensagem de texto inicial é inválido");
+assert_error("E0104", "var s := prompt(123, int);", "prompt com mensagem não-string é inválido");
+assert_error("E0101", "var x := input(numero);", "input com tipo inexistente emite E0101");
+assert_error("E0002", "var x := input(\"\${int}\${int}\");", "placeholders adjacentes sem delimitador em máscara");
+assert_error("E0002", "var s := \"\${10:abc}\";", "especificador de formatação malformado emite E0002");
+assert_error("E0104", "var s := \"\${10:.2}\";", "precisão .N em int emite E0104");
+assert_error("E0104", "var s := \"\${true:+5}\";", "flag '+' em bool emite E0104");
+assert_error("E0104", "var a := \"oi\"; var s := \"\${a:05}\";", "zero-padding '0N' em string emite E0104");

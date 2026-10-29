@@ -168,11 +168,35 @@ let rec lower_expr b (e : Typed_ast.expr) =
         match part with
         | Typed_ast.TInterpLit s ->
           ignore (emit b (Ir.OP_CONST_STR s) e.span)
-        | Typed_ast.TInterpExpr ie ->
+        | Typed_ast.TInterpExpr (ie, None) ->
           lower_expr b ie;
-          ignore (emit b Ir.OP_TO_STR ie.span))
+          ignore (emit b Ir.OP_TO_STR ie.span)
+        | Typed_ast.TInterpExpr (ie, Some spec) ->
+          lower_expr b ie;
+          ignore (emit b (Ir.OP_FMT_SPEC spec) ie.span))
       parts;
     ignore (emit b (Ir.OP_CONCAT_STR (List.length parts)) e.span)
+  | Typed_ast.TExprInput { prompt; mode } ->
+    (match prompt with
+     | None -> ()
+     | Some p ->
+       lower_expr b p;
+       ignore (emit b Ir.OP_PRINT_STR p.span));
+    let ir_spec =
+      match mode with
+      | Typed_ast.TInputLine -> Ir.IrInputLine
+      | Typed_ast.TInputTypes tys -> Ir.IrInputTypes tys
+      | Typed_ast.TInputMask parts ->
+        let ir_parts =
+          List.map
+            (function
+              | Typed_ast.TMaskLit s -> Ir.IrMaskLit s
+              | Typed_ast.TMaskType ty -> Ir.IrMaskType ty)
+            parts
+        in
+        Ir.IrInputMask ir_parts
+    in
+    ignore (emit b (Ir.OP_INPUT ir_spec) e.span)
   | Typed_ast.TExprIdent name ->
     ignore (emit b (get_global_opcode e.ty name) e.span)
   | Typed_ast.TExprTuple items ->

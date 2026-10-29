@@ -180,6 +180,8 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "in" -> Token.KW_IN
           | "break" -> Token.KW_BREAK
           | "continue" -> Token.KW_CONTINUE
+          | "input" -> Token.KW_INPUT
+          | "prompt" -> Token.KW_PROMPT
           | "print" -> Token.KW_PRINT
           | "println" -> Token.KW_PRINTLN
           | "assert" -> Token.KW_ASSERT
@@ -455,10 +457,32 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
             advance st;
             advance st;
             let expr_start_pos = cur_pos st in
+            let depth = ref 0 in
+            let in_char = ref false in
+            let colon_split : (int * Span.pos) option ref = ref None in
             while not (is_eof st) && peek st <> '}' && peek st <> '"' && peek st <> '\n' && peek st <> '\r' do
-              advance st
+              let ch = peek st in
+              if !in_char then begin
+                if ch = '\\' && not (is_eof st) then begin
+                  advance st;
+                  if not (is_eof st) then advance st
+                end else begin
+                  if ch = '\'' then in_char := false;
+                  advance st
+                end
+              end else if Option.is_none !colon_split && !depth = 0 && ch = ':' && peek_next st <> '=' then begin
+                let c_offset = st.offset in
+                advance st;
+                colon_split := Some (c_offset, cur_pos st)
+              end else begin
+                if ch = '\'' then in_char := true
+                else if ch = '(' || ch = '[' then incr depth
+                else if (ch = ')' || ch = ']') && !depth > 0 then decr depth;
+                advance st
+              end
             done;
             let expr_end_offset = st.offset in
+            let expr_end_pos = cur_pos st in
             if is_eof st || peek st <> '}' then begin
               str_failed := true;
               let span = Span.make ~file:src.filename ~start_pos:interp_start_pos ~end_pos:(cur_pos st) in
@@ -471,9 +495,21 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
             end else begin
               advance st;
               let seg_span = Span.make ~file:src.filename ~start_pos:interp_start_pos ~end_pos:(cur_pos st) in
-              match tokenize_range src expr_start_pos expr_end_offset with
+              let tok_end_offset, fmt_opt =
+                match !colon_split with
+                | None -> (expr_end_offset, None)
+                | Some (c_offset, fmt_start_pos) ->
+                  let raw_fmt =
+                    String.sub src.content fmt_start_pos.offset (expr_end_offset - fmt_start_pos.offset)
+                  in
+                  let fmt_span =
+                    Span.make ~file:src.filename ~start_pos:fmt_start_pos ~end_pos:expr_end_pos
+                  in
+                  (c_offset, Some (raw_fmt, fmt_span))
+              in
+              match tokenize_range src expr_start_pos tok_end_offset with
               | Ok sub_toks ->
-                segments := Token.SegTokens (sub_toks, seg_span) :: !segments
+                segments := Token.SegTokens (sub_toks, fmt_opt, seg_span) :: !segments
               | Error sub_errs ->
                 str_failed := true;
                 errors := List.rev_append sub_errs !errors

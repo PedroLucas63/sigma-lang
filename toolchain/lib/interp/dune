@@ -1,4 +1,4 @@
 (library
  (name sigma_interp)
  (public_name sigma.interp)
- (libraries sigma_common sigma_ir))
+ (libraries sigma_common sigma_syntax sigma_sema sigma_ir))

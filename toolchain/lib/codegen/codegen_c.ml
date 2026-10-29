@@ -114,6 +114,16 @@ let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (c
 
 let chain_counter = ref 0
 
+let c_tag_of_ty = function
+  | Ty.Int -> "SGM_TAG_I64"
+  | Ty.Float -> "SGM_TAG_F32"
+  | Ty.Double -> "SGM_TAG_F64"
+  | Ty.Decimal -> "SGM_TAG_DEC"
+  | Ty.Bool -> "SGM_TAG_BOOL"
+  | Ty.Char -> "SGM_TAG_CHAR"
+  | Ty.String -> "SGM_TAG_STR"
+  | Ty.Tuple _ | Ty.Array _ -> "SGM_TAG_OBJ"
+
 let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   match ty with
   | Ty.Int -> Printf.sprintf "sgm_fmt_i64(%s)" c_val
@@ -123,6 +133,25 @@ let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" c_val
   | Ty.Char | Ty.String -> c_val
   | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_fmt_obj(%s)" c_val
+
+let emit_fmt_spec_c_val (ty : Ty.t) (c_val : string) (spec : Ast.format_spec) : string =
+  let align_code =
+    match spec.align with
+    | None -> 0
+    | Some Ast.AlignLeft -> 1
+    | Some Ast.AlignRight -> 2
+    | Some Ast.AlignCenter -> 3
+  in
+  let width_val = match spec.width with None -> -1 | Some w -> w in
+  let prec_val = match spec.precision with None -> -1 | Some p -> p in
+  Printf.sprintf "sgm_fmt_spec(%s, %s, %d, %s, %s, %d, %d)"
+    (emit_box_val ty c_val)
+    (escape_c_string spec.fill)
+    align_code
+    (if spec.sign_plus then "true" else "false")
+    (if spec.zero_pad then "true" else "false")
+    width_val
+    prec_val
 
 let rec emit_expr (e : Typed_ast.expr) : string =
   match e.desc with
@@ -148,14 +177,52 @@ let rec emit_expr (e : Typed_ast.expr) : string =
       List.map
         (function
           | Typed_ast.TInterpLit s -> escape_c_string s
-          | Typed_ast.TInterpExpr ie ->
-            emit_fmt_c_val ie.ty (emit_expr ie))
+          | Typed_ast.TInterpExpr (ie, None) ->
+            emit_fmt_c_val ie.ty (emit_expr ie)
+          | Typed_ast.TInterpExpr (ie, Some spec) ->
+            emit_fmt_spec_c_val ie.ty (emit_expr ie) spec)
         parts
     in
     Printf.sprintf
       "sgm_concat(%d, (const char*[]){ %s })"
       (List.length c_parts)
       (String.concat ", " c_parts)
+  | Typed_ast.TExprInput { prompt; mode } ->
+    let read_c =
+      match mode with
+      | Typed_ast.TInputLine -> "sgm_read_line()"
+      | Typed_ast.TInputTypes tys ->
+        let tag_list = String.concat ", " (List.map c_tag_of_ty tys) in
+        let field = c_val_union_field e.ty in
+        Printf.sprintf "(sgm_input_types(%d, (const sgm_tag_t[]){ %s }).u.%s)"
+          (List.length tys) tag_list field
+      | Typed_ast.TInputMask parts ->
+        let n_parts = List.length parts in
+        let is_types =
+          parts
+          |> List.map (function Typed_ast.TMaskLit _ -> "0" | Typed_ast.TMaskType _ -> "1")
+          |> String.concat ", "
+        in
+        let lits =
+          parts
+          |> List.map (function Typed_ast.TMaskLit s -> escape_c_string s | Typed_ast.TMaskType _ -> "\"\"")
+          |> String.concat ", "
+        in
+        let tags =
+          parts
+          |> List.map (function Typed_ast.TMaskLit _ -> "SGM_TAG_STR" | Typed_ast.TMaskType ty -> c_tag_of_ty ty)
+          |> String.concat ", "
+        in
+        let field = c_val_union_field e.ty in
+        Printf.sprintf
+          "(sgm_input_mask(%d, (const int[]){ %s }, (const char*[]){ %s }, (const sgm_tag_t[]){ %s }).u.%s)"
+          n_parts is_types lits tags field
+    in
+    (match prompt with
+     | None -> read_c
+     | Some p ->
+       Printf.sprintf "__extension__ ({ printf(\"%%s\", %s); fflush(stdout); %s; })"
+         (emit_expr p) read_c)
   | Typed_ast.TExprIdent name -> mangle_ident name
   | Typed_ast.TExprTuple items ->
     incr chain_counter;
@@ -954,6 +1021,442 @@ __attribute__((unused)) static const char* sgm_fmt_obj(sgm_obj_t *o) {
   out[pos] = '\0';
   if (parts) free(parts);
   return out;
+}
+
+__attribute__((unused)) static int sgm_utf8_cp_len(const char *s) {
+  int count = 0;
+  size_t i = 0;
+  size_t len = strlen(s);
+  while (i < len) {
+    unsigned char b = (unsigned char)s[i];
+    size_t clen = (b < 0x80) ? 1 : ((b & 0xE0) == 0xC0) ? 2 : ((b & 0xF0) == 0xE0) ? 3 : 4;
+    i += clen;
+    count++;
+  }
+  return count;
+}
+
+__attribute__((unused)) static const char* sgm_utf8_truncate(const char *s, int max_chars) {
+  if (max_chars <= 0) {
+    char *empty = (char*)malloc(1);
+    empty[0] = '\0';
+    return empty;
+  }
+  size_t len = strlen(s);
+  size_t i = 0;
+  int count = 0;
+  while (i < len && count < max_chars) {
+    unsigned char b = (unsigned char)s[i];
+    size_t clen = (b < 0x80) ? 1 : ((b & 0xE0) == 0xC0) ? 2 : ((b & 0xF0) == 0xE0) ? 3 : 4;
+    if (i + clen > len) clen = len - i;
+    i += clen;
+    count++;
+  }
+  char *out = (char*)malloc(i + 1);
+  memcpy(out, s, i);
+  out[i] = '\0';
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_fmt_dec_prec(const char *raw, int p) {
+  const char *dot = strchr(raw, '.');
+  size_t ilen = dot ? (size_t)(dot - raw) : strlen(raw);
+  const char *frac = dot ? (dot + 1) : "";
+  size_t flen = strlen(frac);
+  if ((int)flen <= p) {
+    if (p == 0) {
+      char *out = (char*)malloc(ilen + 1);
+      memcpy(out, raw, ilen);
+      out[ilen] = '\0';
+      return out;
+    }
+    size_t total = ilen + 1 + (size_t)p;
+    char *out = (char*)malloc(total + 1);
+    memcpy(out, raw, ilen);
+    out[ilen] = '.';
+    if (flen > 0) memcpy(out + ilen + 1, frac, flen);
+    for (int k = (int)flen; k < p; k++) out[ilen + 1 + (size_t)k] = '0';
+    out[total] = '\0';
+    return out;
+  }
+  size_t clen = ilen + (size_t)p;
+  char *comb = (char*)malloc(clen + 2);
+  memcpy(comb, raw, ilen);
+  if (p > 0) memcpy(comb + ilen, frac, (size_t)p);
+  comb[clen] = '\0';
+  bool round_up = (frac[p] >= '5');
+  if (round_up) {
+    int idx = (int)clen - 1;
+    bool carry = true;
+    while (idx >= 0 && carry) {
+      int d = (comb[idx] - '0') + 1;
+      if (d == 10) {
+        comb[idx] = '0';
+        idx--;
+      } else {
+        comb[idx] = (char)('0' + d);
+        carry = false;
+      }
+    }
+    if (carry) {
+      memmove(comb + 1, comb, clen + 1);
+      comb[0] = '1';
+      clen++;
+    }
+  }
+  if (p == 0) return comb;
+  char *out = (char*)malloc(clen + 2);
+  size_t new_ilen = clen - (size_t)p;
+  memcpy(out, comb, new_ilen);
+  out[new_ilen] = '.';
+  memcpy(out + new_ilen + 1, comb + new_ilen, (size_t)p);
+  out[clen + 1] = '\0';
+  free(comb);
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_fmt_spec(sgm_val_t v, const char *fill, int align, bool sign_plus, bool zero_pad, int width, int prec) {
+  const char *sign_str = "";
+  const char *digits_str = "";
+  switch (v.tag) {
+    case SGM_TAG_I64: {
+      bool is_neg = (v.u.i64 < 0);
+      uint64_t abs_v = (v.u.i64 == (-9223372036854775807LL - 1LL))
+        ? 9223372036854775808ULL
+        : (uint64_t)(is_neg ? -v.u.i64 : v.u.i64);
+      char *buf = (char*)malloc(32);
+      snprintf(buf, 32, "%" PRIu64, abs_v);
+      digits_str = buf;
+      sign_str = is_neg ? "-" : (sign_plus ? "+" : "");
+      break;
+    }
+    case SGM_TAG_F32: {
+      bool is_neg = (signbit(v.u.f32) != 0) && !isnan(v.u.f32);
+      float abs_f = fabsf(v.u.f32);
+      if (prec >= 0) {
+        int sz = snprintf(NULL, 0, "%.*f", prec, (double)abs_f);
+        char *buf = (char*)malloc((size_t)sz + 1);
+        snprintf(buf, (size_t)sz + 1, "%.*f", prec, (double)abs_f);
+        digits_str = buf;
+      } else {
+        digits_str = sgm_fmt_f32(abs_f);
+      }
+      sign_str = is_neg ? "-" : (sign_plus ? "+" : "");
+      break;
+    }
+    case SGM_TAG_F64: {
+      bool is_neg = (signbit(v.u.f64) != 0) && !isnan(v.u.f64);
+      double abs_d = fabs(v.u.f64);
+      if (prec >= 0) {
+        int sz = snprintf(NULL, 0, "%.*f", prec, abs_d);
+        char *buf = (char*)malloc((size_t)sz + 1);
+        snprintf(buf, (size_t)sz + 1, "%.*f", prec, abs_d);
+        digits_str = buf;
+      } else {
+        digits_str = sgm_fmt_f64(abs_d);
+      }
+      sign_str = is_neg ? "-" : (sign_plus ? "+" : "");
+      break;
+    }
+    case SGM_TAG_DEC: {
+      bool is_neg = (v.u.dec.neg != 0) && (v.u.dec.coeff != 0);
+      sgm_decimal_t abs_m = v.u.dec;
+      abs_m.neg = 0;
+      const char *raw = sgm_fmt_dec(abs_m);
+      digits_str = (prec >= 0) ? sgm_fmt_dec_prec(raw, prec) : raw;
+      sign_str = is_neg ? "-" : (sign_plus ? "+" : "");
+      break;
+    }
+    case SGM_TAG_STR: {
+      digits_str = (prec >= 0) ? sgm_utf8_truncate(v.u.str, prec) : v.u.str;
+      break;
+    }
+    default: {
+      digits_str = sgm_fmt_val(v);
+      break;
+    }
+  }
+  if (zero_pad && align == 0) {
+    int cur_len = (int)strlen(sign_str) + sgm_utf8_cp_len(digits_str);
+    if (width > cur_len) {
+      const char *zeros = sgm_repeat_str("0", width - cur_len);
+      return sgm_concat(3, (const char*[]){ sign_str, zeros, digits_str });
+    }
+    return sgm_concat(2, (const char*[]){ sign_str, digits_str });
+  }
+  const char *full_body = (sign_str[0] != '\0')
+    ? sgm_concat(2, (const char*[]){ sign_str, digits_str })
+    : digits_str;
+  int cur_len = sgm_utf8_cp_len(full_body);
+  if (width <= 0 || width <= cur_len) return full_body;
+  int pad_total = width - cur_len;
+  if (align == 1) {
+    return sgm_concat(2, (const char*[]){ full_body, sgm_repeat_str(fill, pad_total) });
+  }
+  if (align == 3) {
+    int lp = pad_total / 2;
+    int rp = pad_total - lp;
+    return sgm_concat(3, (const char*[]){ sgm_repeat_str(fill, lp), full_body, sgm_repeat_str(fill, rp) });
+  }
+  return sgm_concat(2, (const char*[]){ sgm_repeat_str(fill, pad_total), full_body });
+}
+
+__attribute__((unused)) static const char* sgm_trim_ws(const char *s) {
+  size_t len = strlen(s);
+  size_t start = 0;
+  while (start < len && (s[start] == ' ' || s[start] == '\t')) start++;
+  size_t end = len;
+  while (end > start && (s[end - 1] == ' ' || s[end - 1] == '\t')) end--;
+  char *out = (char*)malloc(end - start + 1);
+  memcpy(out, s + start, end - start);
+  out[end - start] = '\0';
+  return out;
+}
+
+__attribute__((unused)) static const char* sgm_read_line(void) {
+  fflush(stdout);
+  size_t cap = 64;
+  size_t len = 0;
+  char *buf = (char*)malloc(cap);
+  int c;
+  bool got_any = false;
+  while ((c = fgetc(stdin)) != EOF) {
+    got_any = true;
+    if (c == '\n') break;
+    if (len + 1 >= cap) {
+      cap *= 2;
+      buf = (char*)realloc(buf, cap);
+    }
+    buf[len++] = (char)c;
+  }
+  if (!got_any && c == EOF) {
+    free(buf);
+    fprintf(stderr, "Runtime error: unexpected end of input (EOF) while reading from stdin\n");
+    exit(1);
+  }
+  if (len > 0 && buf[len - 1] == '\r') len--;
+  buf[len] = '\0';
+  return buf;
+}
+
+__attribute__((unused)) static sgm_val_t sgm_parse_prim(sgm_tag_t tag, const char *raw) {
+  switch (tag) {
+    case SGM_TAG_I64: {
+      const char *s = sgm_trim_ws(raw);
+      size_t slen = strlen(s);
+      size_t start = (slen > 0 && (s[0] == '+' || s[0] == '-')) ? 1 : 0;
+      bool valid = (slen > start);
+      for (size_t i = start; i < slen; i++) {
+        if (s[i] < '0' || s[i] > '9') { valid = false; break; }
+      }
+      if (!valid) {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'int'\n", raw);
+        exit(1);
+      }
+      bool neg = (s[0] == '-');
+      uint64_t acc = 0;
+      uint64_t limit = neg ? 9223372036854775808ULL : 9223372036854775807ULL;
+      for (size_t i = start; i < slen; i++) {
+        uint64_t d = (uint64_t)(s[i] - '0');
+        if (acc > (limit - d) / 10ULL) {
+          fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'int'\n", raw);
+          exit(1);
+        }
+        acc = acc * 10ULL + d;
+      }
+      int64_t res = neg
+        ? ((acc == 9223372036854775808ULL) ? (-9223372036854775807LL - 1LL) : -(int64_t)acc)
+        : (int64_t)acc;
+      return sgm_val_i64(res);
+    }
+    case SGM_TAG_F32: {
+      const char *s = sgm_trim_ws(raw);
+      if (s[0] == '\0') {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'float'\n", raw);
+        exit(1);
+      }
+      char *endp = NULL;
+      float v = strtof(s, &endp);
+      if (!endp || *endp != '\0' || isnan(v) || isinf(v)) {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'float'\n", raw);
+        exit(1);
+      }
+      return sgm_val_f32(v);
+    }
+    case SGM_TAG_F64: {
+      const char *s = sgm_trim_ws(raw);
+      if (s[0] == '\0') {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'double'\n", raw);
+        exit(1);
+      }
+      char *endp = NULL;
+      double v = strtod(s, &endp);
+      if (!endp || *endp != '\0' || isnan(v) || isinf(v)) {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'double'\n", raw);
+        exit(1);
+      }
+      return sgm_val_f64(v);
+    }
+    case SGM_TAG_DEC: {
+      const char *s = sgm_trim_ws(raw);
+      size_t slen = strlen(s);
+      size_t idx = 0;
+      int neg = 0;
+      if (idx < slen && (s[idx] == '+' || s[idx] == '-')) {
+        if (s[idx] == '-') neg = 1;
+        idx++;
+      }
+      bool seen_dot = false;
+      bool seen_digit = false;
+      int scale = 0;
+      sgm_u128 coeff = 0;
+      for (; idx < slen; idx++) {
+        char c = s[idx];
+        if (c == '.') {
+          if (seen_dot) { seen_digit = false; break; }
+          seen_dot = true;
+        } else if (c >= '0' && c <= '9') {
+          seen_digit = true;
+          coeff = coeff * 10 + (sgm_u128)(c - '0');
+          if (seen_dot) scale++;
+        } else {
+          seen_digit = false;
+          break;
+        }
+      }
+      if (!seen_digit) {
+        fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'decimal'\n", raw);
+        exit(1);
+      }
+      return sgm_val_dec(sgm_dec_normalize(neg, scale, coeff));
+    }
+    case SGM_TAG_BOOL: {
+      const char *s = sgm_trim_ws(raw);
+      if (strcmp(s, "true") == 0) return sgm_val_bool(true);
+      if (strcmp(s, "false") == 0) return sgm_val_bool(false);
+      fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'bool' (expected 'true' or 'false')\n", raw);
+      exit(1);
+    }
+    case SGM_TAG_CHAR: {
+      if (sgm_utf8_cp_len(raw) == 1) {
+        char *dup = (char*)malloc(strlen(raw) + 1);
+        strcpy(dup, raw);
+        return sgm_val_char(dup);
+      }
+      const char *trimmed = sgm_trim_ws(raw);
+      if (sgm_utf8_cp_len(trimmed) == 1) {
+        return sgm_val_char(trimmed);
+      }
+      fprintf(stderr, "Runtime error: failed to parse \"%s\" as 'char' (expected a single character)\n", raw);
+      exit(1);
+    }
+    case SGM_TAG_STR: {
+      char *dup = (char*)malloc(strlen(raw) + 1);
+      strcpy(dup, raw);
+      return sgm_val_str(dup);
+    }
+    default:
+      fprintf(stderr, "Runtime error: unsupported composite input type\n");
+      exit(1);
+  }
+}
+
+__attribute__((unused)) static sgm_val_t sgm_input_types(int n, const sgm_tag_t *tags) {
+  const char *line = sgm_read_line();
+  if (n == 1) {
+    if (tags[0] == SGM_TAG_STR) {
+      return sgm_val_str(sgm_trim_ws(line));
+    }
+    return sgm_parse_prim(tags[0], line);
+  }
+  size_t len = strlen(line);
+  const char **toks = (const char**)malloc((size_t)(n + 2) * sizeof(const char*));
+  int count = 0;
+  size_t i = 0;
+  while (i < len) {
+    while (i < len && (line[i] == ' ' || line[i] == '\t')) i++;
+    if (i >= len) break;
+    size_t start = i;
+    while (i < len && line[i] != ' ' && line[i] != '\t') i++;
+    if (count < n + 1) {
+      char *tok = (char*)malloc(i - start + 1);
+      memcpy(tok, line + start, i - start);
+      tok[i - start] = '\0';
+      toks[count] = tok;
+    }
+    count++;
+  }
+  if (count != n) {
+    fprintf(stderr, "Runtime error: input expected %d whitespace-separated values, found %d in \"%s\"\n", n, count, line);
+    exit(1);
+  }
+  sgm_obj_t *tup = sgm_obj_alloc(true, (int64_t)n);
+  for (int k = 0; k < n; k++) {
+    tup->items[k] = sgm_parse_prim(tags[k], toks[k]);
+  }
+  free(toks);
+  return sgm_val_obj(tup);
+}
+
+__attribute__((unused)) static sgm_val_t sgm_input_mask(int n_parts, const int *is_type, const char **lits, const sgm_tag_t *tags) {
+  const char *line = sgm_read_line();
+  size_t hlen = strlen(line);
+  size_t pos = 0;
+  int n_vals = 0;
+  for (int i = 0; i < n_parts; i++) {
+    if (is_type[i]) n_vals++;
+  }
+  sgm_val_t *vals = (sgm_val_t*)malloc((size_t)n_vals * sizeof(sgm_val_t));
+  int v_idx = 0;
+  for (int i = 0; i < n_parts; i++) {
+    if (!is_type[i]) {
+      size_t llen = strlen(lits[i]);
+      if (pos + llen > hlen || strncmp(line + pos, lits[i], llen) != 0) {
+        fprintf(stderr, "Runtime error: input \"%s\" does not match mask delimiter \"%s\" at position %zu\n", line, lits[i], pos);
+        exit(1);
+      }
+      pos += llen;
+    } else {
+      if (i + 1 >= n_parts) {
+        size_t slen = hlen - pos;
+        char *sub = (char*)malloc(slen + 1);
+        memcpy(sub, line + pos, slen);
+        sub[slen] = '\0';
+        vals[v_idx++] = sgm_parse_prim(tags[i], sub);
+        free(sub);
+        pos = hlen;
+      } else {
+        const char *next_lit = lits[i + 1];
+        const char *found = strstr(line + pos, next_lit);
+        if (!found) {
+          fprintf(stderr, "Runtime error: input \"%s\" is missing mask delimiter \"%s\"\n", line, next_lit);
+          exit(1);
+        }
+        size_t slen = (size_t)(found - (line + pos));
+        char *sub = (char*)malloc(slen + 1);
+        memcpy(sub, line + pos, slen);
+        sub[slen] = '\0';
+        vals[v_idx++] = sgm_parse_prim(tags[i], sub);
+        free(sub);
+        pos = (size_t)(found - line);
+      }
+    }
+  }
+  if (pos != hlen) {
+    fprintf(stderr, "Runtime error: unexpected trailing input \"%s\" after matching mask in \"%s\"\n", line + pos, line);
+    exit(1);
+  }
+  if (n_vals == 1) {
+    sgm_val_t single = vals[0];
+    free(vals);
+    return single;
+  }
+  sgm_obj_t *tup = sgm_obj_alloc(true, (int64_t)n_vals);
+  for (int k = 0; k < n_vals; k++) {
+    tup->items[k] = vals[k];
+  }
+  free(vals);
+  return sgm_val_obj(tup);
 }
 |}
 

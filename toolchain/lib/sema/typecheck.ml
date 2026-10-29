@@ -110,6 +110,54 @@ let binop_of_assign_op (op : Ast.assign_op) : Ast.binop option =
   | Ast.AssignShl -> Some Ast.BinShl
   | Ast.AssignShr -> Some Ast.BinShr
 
+let validate_format_spec (spec : Ast.format_spec) (ty : Ty.t) : (unit, Diagnostic.t) result =
+  let is_numeric =
+    match ty with
+    | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal -> true
+    | _ -> false
+  in
+  let supports_prec =
+    match ty with
+    | Ty.Float | Ty.Double | Ty.Decimal | Ty.String -> true
+    | _ -> false
+  in
+  if spec.sign_plus && not is_numeric then
+    Error
+      (Diagnostic.error
+         ~hint:"the '+' format flag is only valid for numeric types ('int', 'float', 'double', 'decimal')"
+         ~code:"E0104"
+         ~span:spec.span
+         (Printf.sprintf "format flag '+' cannot be applied to value of type '%s'"
+            (Ty.to_string ty)))
+  else if spec.zero_pad && not is_numeric then
+    Error
+      (Diagnostic.error
+         ~hint:"zero-padding ('0width') is only valid for numeric types; use explicit fill and alignment like '${s:0>5}' for non-numeric types"
+         ~code:"E0104"
+         ~span:spec.span
+         (Printf.sprintf "zero-padding format '0' cannot be applied to value of type '%s'"
+            (Ty.to_string ty)))
+  else if spec.precision <> None && not supports_prec then
+    Error
+      (Diagnostic.error
+         ~hint:"precision '.N' is only supported on 'float', 'double', 'decimal' (decimal places) and 'string' (max characters)"
+         ~code:"E0104"
+         ~span:spec.span
+         (Printf.sprintf "precision specifier cannot be applied to value of type '%s'"
+            (Ty.to_string ty)))
+  else Ok ()
+
+let resolve_input_type (ty_name : string) (sp : Span.t) : (Ty.t, Diagnostic.t) result =
+  match Ty.of_string ty_name with
+  | Some ty -> Ok ty
+  | None ->
+    Error
+      (Diagnostic.error
+         ~hint:"supported input types are 'int', 'float', 'double', 'decimal', 'bool', 'char', and 'string'"
+         ~code:"E0101"
+         ~span:sp
+         (Printf.sprintf "unknown or unsupported input type '%s'" ty_name))
+
 let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match e.desc with
   | Ast.ExprInt n ->
@@ -131,15 +179,125 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
       | [] -> Ok (List.rev acc)
       | Ast.InterpLit s :: rest ->
         check_parts (Typed_ast.TInterpLit s :: acc) rest
-      | Ast.InterpExpr ie :: rest ->
+      | Ast.InterpExpr (ie, fmt_opt) :: rest ->
         (match check_expr env ie with
          | Error err -> Error err
-         | Ok tie -> check_parts (Typed_ast.TInterpExpr tie :: acc) rest)
+         | Ok tie ->
+           (match fmt_opt with
+            | None -> check_parts (Typed_ast.TInterpExpr (tie, None) :: acc) rest
+            | Some spec ->
+              (match validate_format_spec spec tie.ty with
+               | Error err -> Error err
+               | Ok () ->
+                 check_parts (Typed_ast.TInterpExpr (tie, Some spec) :: acc) rest)))
     in
     (match check_parts [] parts with
      | Ok tparts ->
        Ok { Typed_ast.desc = Typed_ast.TExprInterp tparts; ty = Ty.String; span = e.span }
      | Error err -> Error err)
+  | Ast.ExprInput { prompt; mode } ->
+    let prompt_res =
+      match prompt with
+      | None -> Ok None
+      | Some ({ Ast.desc = Ast.ExprIdent name; span = p_span } as p_expr) ->
+        if Hashtbl.find_opt env name = None && Ty.of_string name <> None then
+          Error
+            (Diagnostic.error
+               ~hint:(Printf.sprintf "use 'input(%s)' to read without a prompt, or 'prompt(\"message: \", %s)' to display a prompt first" name name)
+               ~code:"E0104"
+               ~span:p_span
+               (Printf.sprintf "first argument of 'prompt(...)' must be a prompt message of type 'string', found type name '%s'" name))
+        else
+          (match check_expr env p_expr with
+           | Error err -> Error err
+           | Ok tp ->
+             if tp.ty = Ty.String then Ok (Some tp)
+             else
+               Error
+                 (Diagnostic.error
+                    ~hint:"the first argument to 'prompt(...)' must be a 'string' expression"
+                    ~code:"E0104"
+                    ~span:tp.span
+                    (Printf.sprintf "prompt message must be of type 'string', found '%s'"
+                       (Ty.to_string tp.ty))))
+      | Some p_expr ->
+        (match check_expr env p_expr with
+         | Error err -> Error err
+         | Ok tp ->
+           if tp.ty = Ty.String then Ok (Some tp)
+           else
+             Error
+               (Diagnostic.error
+                  ~hint:"the first argument to 'prompt(...)' must be a 'string' expression"
+                  ~code:"E0104"
+                  ~span:tp.span
+                  (Printf.sprintf "prompt message must be of type 'string', found '%s'"
+                     (Ty.to_string tp.ty))))
+    in
+    (match prompt_res with
+     | Error err -> Error err
+     | Ok tprompt ->
+       let mode_res =
+         match mode with
+         | Ast.InputLine -> Ok (Typed_ast.TInputLine, Ty.String)
+         | Ast.InputTypes ty_list ->
+           let rec resolve_all acc = function
+             | [] ->
+               let tys = List.rev acc in
+               let res_ty =
+                 match tys with
+                 | [ single ] -> single
+                 | _ -> Ty.Tuple tys
+               in
+               Ok (Typed_ast.TInputTypes tys, res_ty)
+             | (ty_name, sp) :: rest ->
+               (match resolve_input_type ty_name sp with
+                | Error err -> Error err
+                | Ok ty -> resolve_all (ty :: acc) rest)
+           in
+           resolve_all [] ty_list
+         | Ast.InputMask parts ->
+           let rec check_mask acc_parts acc_tys prev_was_type = function
+             | [] ->
+               let tparts = List.rev acc_parts in
+               let tys = List.rev acc_tys in
+               let res_ty =
+                 match tys with
+                 | [ single ] -> single
+                 | _ -> Ty.Tuple tys
+               in
+               Ok (Typed_ast.TInputMask tparts, res_ty)
+             | Ast.MaskLit s :: rest ->
+               check_mask (Typed_ast.TMaskLit s :: acc_parts) acc_tys false rest
+             | Ast.MaskType (ty_name, sp) :: rest ->
+               if prev_was_type then
+                 Error
+                   (Diagnostic.error
+                      ~hint:"place a delimiter between placeholders, e.g. '\"${int} ${int}\"' or '\"${int}-${int}\"'"
+                      ~code:"E0002"
+                      ~span:sp
+                      "adjacent type placeholders in input mask require a literal separator")
+               else
+                 (match resolve_input_type ty_name sp with
+                  | Error err -> Error err
+                  | Ok ty ->
+                    check_mask
+                      (Typed_ast.TMaskType ty :: acc_parts)
+                      (ty :: acc_tys)
+                      true
+                      rest)
+           in
+           check_mask [] [] false parts
+       in
+       (match mode_res with
+        | Error err -> Error err
+        | Ok (tmode, res_ty) ->
+          Ok
+            {
+              Typed_ast.desc = Typed_ast.TExprInput { prompt = tprompt; mode = tmode };
+              ty = res_ty;
+              span = e.span;
+            }))
   | Ast.ExprIdent name ->
     (match Hashtbl.find_opt env name with
      | Some info ->

@@ -22,11 +22,39 @@ let compile_frontend (src : Source.t) :
           let ir = Lower.lower_program typed_ast in
           Ok (typed_ast, ir)))
 
-let run_source (src : Source.t) : (string, Diagnostic.t list) result =
+let extract_stdin_directives (content : string) : string list option =
+  let lines = String.split_on_char '\n' content in
+  let prefix_sp = "# @stdin: " in
+  let prefix_empty = "# @stdin:" in
+  let acc = ref [] in
+  List.iter
+    (fun raw_line ->
+      let len = String.length raw_line in
+      let line =
+        if len > 0 && raw_line.[len - 1] = '\r' then String.sub raw_line 0 (len - 1)
+        else raw_line
+      in
+      let trimmed = String.trim line in
+      if String.starts_with ~prefix:prefix_sp line then
+        let plen = String.length prefix_sp in
+        acc := String.sub line plen (String.length line - plen) :: !acc
+      else if trimmed = prefix_empty then
+        acc := "" :: !acc)
+    lines;
+  match List.rev !acc with
+  | [] -> None
+  | xs -> Some xs
+
+let run_source ?stdin_lines (src : Source.t) : (string, Diagnostic.t list) result =
   match compile_frontend src with
   | Error errs -> Error errs
   | Ok (_typed_ast, ir) ->
-    (match Vm.run ir with
+    let stdin_lines =
+      match stdin_lines with
+      | Some _ -> stdin_lines
+      | None -> extract_stdin_directives src.content
+    in
+    (match Vm.run ?stdin_lines ir with
      | Ok out -> Ok out
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0900" ~span:Span.dummy msg ])
@@ -68,19 +96,39 @@ type file_test_result = {
   error_msg : string option;
 }
 
-let run_native_test_binary (typed_ast : Typed_ast.program) : (int * string, string) result =
+let run_native_test_binary ?stdin_lines (typed_ast : Typed_ast.program) : (int * string, string) result =
   let bin_path = Filename.temp_file "sigma_test_native_" ".out" in
   let out_path = Filename.temp_file "sigma_test_out_" ".txt" in
+  let in_path_opt =
+    match stdin_lines with
+    | None -> None
+    | Some lines ->
+      let p = Filename.temp_file "sigma_test_in_" ".txt" in
+      let oc = open_out p in
+      List.iter (fun l -> output_string oc l; output_char oc '\n') lines;
+      close_out oc;
+      Some p
+  in
   let cleanup () =
     (try if Sys.file_exists bin_path then Sys.remove bin_path with _ -> ());
-    (try if Sys.file_exists out_path then Sys.remove out_path with _ -> ())
+    (try if Sys.file_exists out_path then Sys.remove out_path with _ -> ());
+    (match in_path_opt with
+     | Some p -> (try if Sys.file_exists p then Sys.remove p with _ -> ())
+     | None -> ())
   in
   match Codegen_c.compile_executable ~test_mode:true ~output_path:bin_path typed_ast with
   | Error msg ->
     cleanup ();
     Error msg
   | Ok () ->
-    let cmd = Printf.sprintf "%s > %s 2>&1" (Filename.quote bin_path) (Filename.quote out_path) in
+    let cmd =
+      match in_path_opt with
+      | None ->
+        Printf.sprintf "%s > %s 2>&1" (Filename.quote bin_path) (Filename.quote out_path)
+      | Some in_p ->
+        Printf.sprintf "%s < %s > %s 2>&1"
+          (Filename.quote bin_path) (Filename.quote in_p) (Filename.quote out_path)
+    in
     let exit_code = Sys.command cmd in
     let captured =
       try
@@ -99,7 +147,8 @@ let test_source ?(mode = ModeVm) (src : Source.t) :
   match compile_frontend src with
   | Error errs -> Error errs
   | Ok (typed_ast, ir) ->
-    (match Vm.run_tests ir with
+    let stdin_lines = extract_stdin_directives src.content in
+    (match Vm.run_tests ?stdin_lines ir with
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0900" ~span:Span.dummy msg ]
      | Ok vm_rep ->
@@ -115,7 +164,7 @@ let test_source ?(mode = ModeVm) (src : Source.t) :
               error_msg = None;
             }
         | ModeNative | ModeParity ->
-          (match run_native_test_binary typed_ast with
+          (match run_native_test_binary ?stdin_lines typed_ast with
            | Error msg ->
              Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ]
            | Ok (exit_code, native_out) ->

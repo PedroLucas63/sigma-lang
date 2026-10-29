@@ -1,4 +1,15 @@
 open Sigma_common
+open Sigma_syntax
+open Sigma_sema
+
+type input_part =
+  | IrMaskLit of string
+  | IrMaskType of Ty.t
+
+type input_spec =
+  | IrInputLine
+  | IrInputTypes of Ty.t list
+  | IrInputMask of input_part list
 
 type opcode =
   | OP_CONST_I64 of int64
@@ -16,7 +27,9 @@ type opcode =
   | OP_ARRAY_CONCAT
   | OP_ARRAY_REPEAT
   | OP_TO_STR
+  | OP_FMT_SPEC of Ast.format_spec
   | OP_CONCAT_STR of int
+  | OP_INPUT of input_spec
   | OP_I64_TO_F32
   | OP_I64_TO_F64
   | OP_I64_TO_DEC
@@ -174,7 +187,9 @@ let pp_opcode fmt = function
   | OP_ARRAY_CONCAT -> Format.fprintf fmt "OP_ARRAY_CONCAT"
   | OP_ARRAY_REPEAT -> Format.fprintf fmt "OP_ARRAY_REPEAT"
   | OP_TO_STR -> Format.fprintf fmt "OP_TO_STR"
+  | OP_FMT_SPEC _ -> Format.fprintf fmt "OP_FMT_SPEC"
   | OP_CONCAT_STR n -> Format.fprintf fmt "OP_CONCAT_STR %d" n
+  | OP_INPUT _ -> Format.fprintf fmt "OP_INPUT"
   | OP_I64_TO_F32 -> Format.fprintf fmt "OP_I64_TO_F32"
   | OP_I64_TO_F64 -> Format.fprintf fmt "OP_I64_TO_F64"
   | OP_I64_TO_DEC -> Format.fprintf fmt "OP_I64_TO_DEC"

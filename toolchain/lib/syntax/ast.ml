@@ -46,6 +46,30 @@ type incdec_op =
   | PostInc
   | PostDec
 
+type align =
+  | AlignLeft
+  | AlignRight
+  | AlignCenter
+
+type format_spec = {
+  fill : string;
+  align : align option;
+  sign_plus : bool;
+  zero_pad : bool;
+  width : int option;
+  precision : int option;
+  span : Span.t;
+}
+
+type mask_part =
+  | MaskLit of string
+  | MaskType of string * Span.t
+
+type input_mode =
+  | InputLine
+  | InputTypes of (string * Span.t) list
+  | InputMask of mask_part list
+
 type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
@@ -77,10 +101,14 @@ and expr_desc =
   | ExprChainCmp of expr * binop * expr * binop * expr
   | ExprAssign of lvalue * assign_op * expr
   | ExprIncDec of incdec_op * lvalue
+  | ExprInput of {
+      prompt : expr option;
+      mode : input_mode;
+    }
 
 and interp_part =
   | InterpLit of string
-  | InterpExpr of expr
+  | InterpExpr of expr * format_spec option
 
 and expr = {
   desc : expr_desc;
@@ -258,10 +286,38 @@ and pp_expr fmt (e : expr) =
     List.iter
       (function
         | InterpLit s -> Format.fprintf fmt "%s" s
-        | InterpExpr ie -> Format.fprintf fmt "${%a}" pp_expr ie)
+        | InterpExpr (ie, _) -> Format.fprintf fmt "${%a}" pp_expr ie)
       parts;
     Format.fprintf fmt "\""
   | ExprIdent id -> Format.fprintf fmt "%s" id
+  | ExprInput { prompt; mode } ->
+    let fn = if Option.is_some prompt then "prompt" else "input" in
+    let prompt_s =
+      match prompt with
+      | None -> ""
+      | Some pe -> Format.asprintf "%a" pp_expr pe
+    in
+    let mode_s =
+      match mode with
+      | InputLine -> ""
+      | InputTypes tys -> String.concat ", " (List.map fst tys)
+      | InputMask parts ->
+        let buf = Buffer.create 16 in
+        Buffer.add_char buf '"';
+        List.iter
+          (function
+            | MaskLit s -> Buffer.add_string buf s
+            | MaskType (t, _) -> Buffer.add_string buf ("${" ^ t ^ "}"))
+          parts;
+        Buffer.add_char buf '"';
+        Buffer.contents buf
+    in
+    let args_s =
+      if prompt_s <> "" && mode_s <> "" then prompt_s ^ ", " ^ mode_s
+      else if prompt_s <> "" then prompt_s
+      else mode_s
+    in
+    Format.fprintf fmt "%s(%s)" fn args_s
   | ExprTuple items ->
     Format.fprintf fmt "(%a)"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_collection_item)

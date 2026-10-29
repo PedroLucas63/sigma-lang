@@ -51,6 +51,208 @@ let expr_to_lvalue (e : Ast.expr) : Ast.lvalue option =
   | Ast.ExprIndex (base, idx) -> Some (Ast.LValIndex (base, idx, e.span))
   | _ -> None
 
+let utf8_chars (s : string) : string list =
+  let len = String.length s in
+  let rec loop i acc =
+    if i >= len then List.rev acc
+    else
+      let b = Char.code s.[i] in
+      let clen =
+        if b < 0x80 then 1
+        else if b land 0xE0 = 0xC0 then 2
+        else if b land 0xF0 = 0xE0 then 3
+        else 4
+      in
+      let clen = if i + clen > len then len - i else clen in
+      loop (i + clen) (String.sub s i clen :: acc)
+  in
+  loop 0 []
+
+let is_ascii_digit_str (s : string) : bool =
+  String.length s = 1 && s.[0] >= '0' && s.[0] <= '9'
+
+let parse_align_char (s : string) : Ast.align option =
+  match s with
+  | "<" -> Some Ast.AlignLeft
+  | ">" -> Some Ast.AlignRight
+  | "^" -> Some Ast.AlignCenter
+  | _ -> None
+
+let take_digits (chars : string list) : string * string list =
+  let buf = Buffer.create 8 in
+  let rec loop = function
+    | c :: rest when is_ascii_digit_str c ->
+      Buffer.add_string buf c;
+      loop rest
+    | rest -> (Buffer.contents buf, rest)
+  in
+  loop chars
+
+let parse_format_spec (raw_spec : string) (fmt_span : Span.t)
+    : (Ast.format_spec, Diagnostic.t) result =
+  let trimmed = String.trim raw_spec in
+  if String.length trimmed = 0 then
+    Error
+      (Diagnostic.error
+         ~hint:"provide a format specifier after ':', e.g. '${x:.2}', '${x:>10}', or remove ':'"
+         ~code:"E0002"
+         ~span:fmt_span
+         "empty format specifier after ':' inside string interpolation")
+  else
+    let chars = utf8_chars trimmed in
+    let fill_opt, align, chars =
+      match chars with
+      | f :: a :: rest when parse_align_char a <> None ->
+        (Some f, parse_align_char a, rest)
+      | a :: rest when parse_align_char a <> None ->
+        (None, parse_align_char a, rest)
+      | _ -> (None, None, chars)
+    in
+    let sign_plus, chars =
+      match chars with
+      | "+" :: rest -> (true, rest)
+      | _ -> (false, chars)
+    in
+    let zero_pad, chars =
+      match chars with
+      | "0" :: rest -> (true, rest)
+      | _ -> (false, chars)
+    in
+    let width_digits, chars = take_digits chars in
+    let width =
+      if width_digits = "" then None else Some (int_of_string width_digits)
+    in
+    let prec_res =
+      match chars with
+      | "." :: rest ->
+        let prec_digits, rest2 = take_digits rest in
+        if prec_digits = "" then
+          Error
+            (Diagnostic.error
+               ~hint:"specify the number of digits after '.', e.g. '${pi:.2}'"
+               ~code:"E0002"
+               ~span:fmt_span
+               (Printf.sprintf "invalid format specifier ':%s': expected precision digits after '.'"
+                  trimmed))
+        else Ok (Some (int_of_string prec_digits), rest2)
+      | _ -> Ok (None, chars)
+    in
+    match prec_res with
+    | Error e -> Error e
+    | Ok (precision, leftover) ->
+      if leftover <> [] then
+        Error
+          (Diagnostic.error
+             ~hint:"valid format syntax is '[fill][<|>|^][+][0][width][.precision]', e.g. '${x:.2}', '${x:>10}', '${x:*^10}', '${x:+08}'"
+             ~code:"E0002"
+             ~span:fmt_span
+             (Printf.sprintf "invalid format specifier ':%s' in string interpolation"
+                trimmed))
+      else
+        let fill =
+          match fill_opt with
+          | Some f -> f
+          | None -> if zero_pad && align = None then "0" else " "
+        in
+        Ok { Ast.fill; align; sign_plus; zero_pad; width; precision; span = fmt_span }
+
+let parse_mask_segments (segments : Token.interp_segment list) (str_span : Span.t)
+    : (Ast.input_mode, Diagnostic.t) result =
+  let rec loop acc has_type = function
+    | [] ->
+      if not has_type then
+        Error
+          (Diagnostic.error
+             ~hint:"include at least one '${type}' placeholder, e.g. '\"${int}.${int}\"'"
+             ~code:"E0002"
+             ~span:str_span
+             "input mask must contain at least one '${type}' placeholder")
+      else Ok (Ast.InputMask (List.rev acc))
+    | Token.SegLit "" :: rest -> loop acc has_type rest
+    | Token.SegLit s :: rest -> loop (Ast.MaskLit s :: acc) has_type rest
+    | Token.SegTokens (sub_toks, fmt_opt, seg_span) :: rest ->
+      (match fmt_opt with
+       | Some (_, fmt_span) ->
+         Error
+           (Diagnostic.error
+              ~hint:"use plain type placeholders like '${int}' or '${float}' in input masks"
+              ~code:"E0002"
+              ~span:fmt_span
+              "format specifiers are not allowed inside input mask placeholders")
+       | None ->
+         (match sub_toks with
+          | [ { Token.kind = Token.EOF; _ } ] ->
+            Error
+              (Diagnostic.error
+                 ~hint:"specify a type inside '${...}', e.g. '${int}' or '${string}'"
+                 ~code:"E0002"
+                 ~span:seg_span
+                 "empty placeholder '${}' in input mask")
+          | [ { Token.kind = Token.IDENT ty_name; span = ty_span }; { Token.kind = Token.EOF; _ } ] ->
+            loop (Ast.MaskType (ty_name, ty_span) :: acc) true rest
+          | _ ->
+            Error
+              (Diagnostic.error
+                 ~hint:"input mask placeholders must be primitive type names like '${int}', '${float}', '${string}'"
+                 ~code:"E0002"
+                 ~span:seg_span
+                 "expected primitive type name inside input mask placeholder '${...}'")))
+  in
+  loop [] false segments
+
+let parse_input_mode_args st ~kw_name : (Ast.input_mode, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.STRING _ ->
+    if kw_name = "input" then
+      Error
+        (Diagnostic.error
+           ~hint:"use 'prompt(\"...\")' to display a prompt message, or include '${type}' placeholders for a mask like 'input(\"${int}-${int}\")'"
+           ~code:"E0002"
+           ~span:tok.span
+           "string literal in 'input(...)' must contain at least one '${type}' mask placeholder; to display a prompt message, use 'prompt(...)'")
+    else
+      Error
+        (Diagnostic.error
+           ~hint:"include at least one '${type}' placeholder in the mask string, e.g. 'prompt(\"CPF: \", \"${int}.${int}.${int}-${int}\")'"
+           ~code:"E0002"
+           ~span:tok.span
+           "mask string in 'prompt(...)' must contain at least one '${type}' placeholder")
+  | Token.INTERP_STRING segments ->
+    bump st;
+    parse_mask_segments segments tok.span
+  | Token.IDENT first_ty ->
+    bump st;
+    let rec loop acc =
+      let next_tok = cur st in
+      match next_tok.kind with
+      | Token.COMMA ->
+        bump st;
+        let t_tok = cur st in
+        (match t_tok.kind with
+         | Token.IDENT ty_name ->
+           bump st;
+           loop ((ty_name, t_tok.span) :: acc)
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:(Printf.sprintf "pass primitive type names separated by commas, e.g. '%s(int, float)'" kw_name)
+                ~code:"E0002"
+                ~span:t_tok.span
+                (Printf.sprintf "expected type name after ',' in '%s(...)', found %s"
+                   kw_name (Token.kind_to_string t_tok.kind))))
+      | _ -> Ok (Ast.InputTypes (List.rev acc))
+    in
+    loop [ (first_ty, tok.span) ]
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "pass a primitive type (e.g. '%s(int)'), multiple types ('%s(int, float)'), or a mask string ('%s(\"${int}/${int}\")')" kw_name kw_name kw_name)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "expected type name or mask string in '%s(...)', found %s"
+            kw_name (Token.kind_to_string tok.kind)))
+
 let rec parse_expr st : (Ast.expr, Diagnostic.t) result =
   parse_assignment st
 
@@ -435,7 +637,7 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
       | [] -> Ok (List.rev acc)
       | Token.SegLit s :: rest ->
         convert_segments (Ast.InterpLit s :: acc) rest
-      | Token.SegTokens (sub_toks, seg_span) :: rest ->
+      | Token.SegTokens (sub_toks, fmt_opt, seg_span) :: rest ->
         let sub_arr = Array.of_list sub_toks in
         let sub_st = { tokens = sub_arr; idx = 0 } in
         if is_eof sub_st then
@@ -457,11 +659,111 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
                     (Printf.sprintf "unexpected token %s inside string interpolation '${...}'"
                        (Token.kind_to_string extra.kind)))
              else
-               convert_segments (Ast.InterpExpr ie :: acc) rest)
+               match fmt_opt with
+               | None -> convert_segments (Ast.InterpExpr (ie, None) :: acc) rest
+               | Some (raw_spec, fmt_span) ->
+                 (match parse_format_spec raw_spec fmt_span with
+                  | Error e -> Error e
+                  | Ok spec ->
+                    convert_segments (Ast.InterpExpr (ie, Some spec) :: acc) rest))
     in
     (match convert_segments [] segments with
      | Ok parts -> Ok { Ast.desc = Ast.ExprInterp parts; span = tok.span }
      | Error e -> Error e)
+  | Token.KW_INPUT ->
+    bump st;
+    let open_tok = cur st in
+    if open_tok.kind <> Token.LPAREN then
+      Error
+        (Diagnostic.error
+           ~hint:"call 'input' with parentheses, e.g. 'input()', 'input(int)', or 'input(\"${int}-${int}\")'"
+           ~code:"E0002"
+           ~span:open_tok.span
+           (Printf.sprintf "expected '(' after 'input', found %s"
+              (Token.kind_to_string open_tok.kind)))
+    else begin
+      bump st;
+      if (cur st).kind = Token.RPAREN then begin
+        let close_tok = cur st in
+        bump st;
+        let span = Span.merge tok.span close_tok.span in
+        Ok { Ast.desc = Ast.ExprInput { prompt = None; mode = Ast.InputLine }; span }
+      end else
+        match parse_input_mode_args st ~kw_name:"input" with
+        | Error e -> Error e
+        | Ok mode ->
+          let close_tok = cur st in
+          if close_tok.kind = Token.RPAREN then begin
+            bump st;
+            let span = Span.merge tok.span close_tok.span in
+            Ok { Ast.desc = Ast.ExprInput { prompt = None; mode }; span }
+          end else
+            Error
+              (Diagnostic.error
+                 ~hint:"close 'input(...)' with ')'"
+                 ~code:"E0002"
+                 ~span:close_tok.span
+                 (Printf.sprintf "expected ')' to close 'input(...)', found %s"
+                    (Token.kind_to_string close_tok.kind)))
+    end
+  | Token.KW_PROMPT ->
+    bump st;
+    let open_tok = cur st in
+    if open_tok.kind <> Token.LPAREN then
+      Error
+        (Diagnostic.error
+           ~hint:"call 'prompt' with parentheses and a prompt message, e.g. 'prompt(\"Name: \")' or 'prompt(\"Age: \", int)'"
+           ~code:"E0002"
+           ~span:open_tok.span
+           (Printf.sprintf "expected '(' after 'prompt', found %s"
+              (Token.kind_to_string open_tok.kind)))
+    else begin
+      bump st;
+      if (cur st).kind = Token.RPAREN then begin
+        let close_tok = cur st in
+        bump st;
+        Error
+          (Diagnostic.error
+             ~hint:"pass a prompt string as the first argument (e.g. 'prompt(\"Enter: \")'), or use 'input()' to read without a prompt"
+             ~code:"E0002"
+             ~span:(Span.merge tok.span close_tok.span)
+             "'prompt()' requires a prompt message argument")
+      end else
+        match parse_expr st with
+        | Error e -> Error e
+        | Ok prompt_expr ->
+          let next_tok = cur st in
+          if next_tok.kind = Token.RPAREN then begin
+            bump st;
+            let span = Span.merge tok.span next_tok.span in
+            Ok { Ast.desc = Ast.ExprInput { prompt = Some prompt_expr; mode = Ast.InputLine }; span }
+          end else if next_tok.kind = Token.COMMA then begin
+            bump st;
+            match parse_input_mode_args st ~kw_name:"prompt" with
+            | Error e -> Error e
+            | Ok mode ->
+              let close_tok = cur st in
+              if close_tok.kind = Token.RPAREN then begin
+                bump st;
+                let span = Span.merge tok.span close_tok.span in
+                Ok { Ast.desc = Ast.ExprInput { prompt = Some prompt_expr; mode }; span }
+              end else
+                Error
+                  (Diagnostic.error
+                     ~hint:"close 'prompt(...)' with ')'"
+                     ~code:"E0002"
+                     ~span:close_tok.span
+                     (Printf.sprintf "expected ')' to close 'prompt(...)', found %s"
+                        (Token.kind_to_string close_tok.kind)))
+          end else
+            Error
+              (Diagnostic.error
+                 ~hint:"use 'prompt(msg)' or 'prompt(msg, type_or_mask)'"
+                 ~code:"E0002"
+                 ~span:next_tok.span
+                 (Printf.sprintf "expected ')' or ',' after prompt message in 'prompt(...)', found %s"
+                    (Token.kind_to_string next_tok.kind)))
+    end
   | Token.IDENT name ->
     bump st;
     Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }

@@ -5,6 +5,15 @@ type collection_item =
   | TItemExpr of expr
   | TItemSpread of expr
 
+and mask_part =
+  | TMaskLit of string
+  | TMaskType of Ty.t
+
+and input_mode =
+  | TInputLine
+  | TInputTypes of Ty.t list
+  | TInputMask of mask_part list
+
 and lvalue =
   | TLValIdent of string
   | TLValIndex of expr * expr
@@ -27,10 +36,14 @@ and expr_desc =
   | TExprChainCmp of expr * Ast.binop * expr * Ast.binop * expr
   | TExprAssign of lvalue * Ast.assign_op * expr
   | TExprIncDec of Ast.incdec_op * lvalue
+  | TExprInput of {
+      prompt : expr option;
+      mode : input_mode;
+    }
 
 and interp_part =
   | TInterpLit of string
-  | TInterpExpr of expr
+  | TInterpExpr of expr * Ast.format_spec option
 
 and expr = {
   desc : expr_desc;

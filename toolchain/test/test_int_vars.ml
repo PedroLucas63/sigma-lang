@@ -17,20 +17,35 @@ let assert_true ~msg cond =
 let has_code code (diags : Diagnostic.t list) =
   List.exists (fun (d : Diagnostic.t) -> d.code = code) diags
 
-let run_and_check_parity ~name ~code ~expected_stdout =
+let run_and_check_parity_opt ~stdin_lines ~name ~code ~expected_stdout =
   let src = Source.of_string ~filename:(name ^ ".sgm") ~content:code in
-  (match Driver.run_source src with
+  (match Driver.run_source ?stdin_lines src with
    | Ok out -> assert_eq ~msg:(name ^ " VM interpreter output") expected_stdout out
    | Error errs ->
      List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
      assert_true ~msg:(name ^ " VM run should succeed") false);
   let bin_path = Filename.temp_file "sigma_test_bin_" ".out" in
+  let in_path_opt =
+    match stdin_lines with
+    | None -> None
+    | Some lines ->
+      let p = Filename.temp_file "sigma_test_in_" ".txt" in
+      let oc = open_out p in
+      List.iter (fun l -> output_string oc l; output_char oc '\n') lines;
+      close_out oc;
+      Some p
+  in
   (match Driver.build_source ~output_path:bin_path src with
    | Error errs ->
      List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
      assert_true ~msg:(name ^ " Native build should succeed") false
    | Ok () ->
-     let ic = Unix.open_process_in (Filename.quote bin_path) in
+     let cmd =
+       match in_path_opt with
+       | None -> Filename.quote bin_path
+       | Some in_p -> Printf.sprintf "%s < %s" (Filename.quote bin_path) (Filename.quote in_p)
+     in
+     let ic = Unix.open_process_in cmd in
      let buf = Buffer.create 64 in
      (try
         while true do
@@ -39,8 +54,12 @@ let run_and_check_parity ~name ~code ~expected_stdout =
       with End_of_file -> ());
      let _ = Unix.close_process_in ic in
      (try Sys.remove bin_path with _ -> ());
+     (match in_path_opt with Some p -> (try Sys.remove p with _ -> ()) | None -> ());
      let native_out = Buffer.contents buf in
      assert_eq ~msg:(name ^ " Interpreter == Native Compiler parity") expected_stdout native_out)
+
+let run_and_check_parity ~name ~code ~expected_stdout =
+  run_and_check_parity_opt ~stdin_lines:None ~name ~code ~expected_stdout
 
 let test_valid_declarations_and_parity () =
   let code =
@@ -1213,6 +1232,65 @@ println("outer_w final i:", i);
   in
   run_and_check_parity ~name:"loops" ~code ~expected_stdout
 
+let test_input_and_format_parity () =
+  let code =
+    {|# 1. String interpolation format specifiers:
+var pi := 3.14159265d;
+var price := 19.9m;
+var n := 42;
+var neg := -7;
+var s := "Sigma";
+
+println("${pi:.2} | ${pi:+08.2}");
+println("${price:.2} | ${price:*>8.2}");
+println("${n:05} | ${n:+05} | ${neg:05}");
+println("[${s:<8}] [${s:>8}] [${s:^9}] [${s:-^9}]");
+println("[${s:.3}] [${s:>6.3}]");
+
+# 2. input(...) without prompt:
+var raw_line := input();
+var age := input(int);
+var (x, y) := input(int, float);
+var (p1, p2, p3, d1) := input("${int}.${int}.${int}-${int}");
+println("raw:", raw_line);
+println("age:", age, "xy:", x, "${y:.1}");
+println("cpf: ${p1:03}.${p2:03}.${p3:03}-${d1:02}");
+
+# 3. prompt(<msg>, ...) with prompt:
+var user := prompt("Nome: ");
+var (w, h) := prompt("Dim: ", int, int);
+var (dd, mm, yyyy) := prompt("Data: ", "${int}/${int}/${int}");
+println("user=${user} area=${w * h} date=${yyyy:04}-${mm:02}-${dd:02}");
+|}
+  in
+  let stdin_lines =
+    [
+      "linha livre com espacos";
+      "27";
+      "10 2.5";
+      "123.456.789-7";
+      "Pedro";
+      "8 5";
+      "9/4/2026";
+    ]
+  in
+  let expected_stdout =
+    String.concat "\n"
+      [
+        "3.14 | +0003.14";
+        "19.90 | ***19.90";
+        "00042 | +0042 | -0007";
+        "[Sigma   ] [   Sigma] [  Sigma  ] [--Sigma--]";
+        "[Sig] [   Sig]";
+        "raw: linha livre com espacos";
+        "age: 27 xy: 10 2.5";
+        "cpf: 123.456.789-07";
+        "Nome: Dim: Data: user=Pedro area=40 date=2026-04-09";
+        "";
+      ]
+  in
+  run_and_check_parity_opt ~stdin_lines:(Some stdin_lines) ~name:"input_and_format" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1223,6 +1301,7 @@ let () =
   test_const_declarations_parity ();
   test_tuples_and_arrays_parity ();
   test_loops_parity ();
+  test_input_and_format_parity ();
   test_assert_and_test_runner_parity ();
   test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();

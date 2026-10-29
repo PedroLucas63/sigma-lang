@@ -11,6 +11,8 @@ type kind =
   | KW_IN
   | KW_BREAK
   | KW_CONTINUE
+  | KW_INPUT
+  | KW_PROMPT
   | KW_PRINT
   | KW_PRINTLN
   | KW_ASSERT
@@ -73,7 +75,7 @@ type kind =
 
 and interp_segment =
   | SegLit of string
-  | SegTokens of t list * Span.t
+  | SegTokens of t list * (string * Span.t) option * Span.t
 
 and t = {
   kind : kind;
@@ -91,6 +93,8 @@ let kind_to_string = function
   | KW_IN -> "'in'"
   | KW_BREAK -> "'break'"
   | KW_CONTINUE -> "'continue'"
+  | KW_INPUT -> "'input'"
+  | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"
   | KW_PRINTLN -> "'println'"
   | KW_ASSERT -> "'assert'"

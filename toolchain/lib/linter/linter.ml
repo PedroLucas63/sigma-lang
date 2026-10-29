@@ -21,8 +21,10 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     List.iter
       (function
         | Typed_ast.TInterpLit _ -> ()
-        | Typed_ast.TInterpExpr ie -> mark_expr_usage tbl ie)
+        | Typed_ast.TInterpExpr (ie, _) -> mark_expr_usage tbl ie)
       parts
+  | Typed_ast.TExprInput { prompt; _ } ->
+    Option.iter (mark_expr_usage tbl) prompt
   | Typed_ast.TExprIdent name ->
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true

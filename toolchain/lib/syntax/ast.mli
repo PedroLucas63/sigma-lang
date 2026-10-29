@@ -48,6 +48,30 @@ type incdec_op =
   | PostInc
   | PostDec
 
+type align =
+  | AlignLeft
+  | AlignRight
+  | AlignCenter
+
+type format_spec = {
+  fill : string;
+  align : align option;
+  sign_plus : bool;
+  zero_pad : bool;
+  width : int option;
+  precision : int option;
+  span : Span.t;
+}
+
+type mask_part =
+  | MaskLit of string
+  | MaskType of string * Span.t
+
+type input_mode =
+  | InputLine
+  | InputTypes of (string * Span.t) list
+  | InputMask of mask_part list
+
 type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
@@ -79,10 +103,14 @@ and expr_desc =
   | ExprChainCmp of expr * binop * expr * binop * expr
   | ExprAssign of lvalue * assign_op * expr
   | ExprIncDec of incdec_op * lvalue
+  | ExprInput of {
+      prompt : expr option;
+      mode : input_mode;
+    }
 
 and interp_part =
   | InterpLit of string
-  | InterpExpr of expr
+  | InterpExpr of expr * format_spec option
 
 and expr = {
   desc : expr_desc;
