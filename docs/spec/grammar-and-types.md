@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `const`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `const`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `input`, `prompt`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -19,7 +19,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
   - `double` (64 bits IEEE 754): literais com sufixo `d` (`10d`, `10.5d`, `1.0e-5d`).
   - `decimal` (128 bits Base-10 Exato até 38 dígitos): literais com sufixo `m` (`10m`, `10.9m`, `123_456.789_012_345_678_901_234_567_89m`).
 - **Literais de Caractere (`char`):** Aspas simples `'...'`, contendo **1 code point Unicode UTF-8** (`'A'`, `'ç'`, `'Σ'`, `'🚀'`) ou escape (`\n`, `\r`, `\t`, `\\`, `\'`, `\"`, `\0`, `\$`).
-- **Literais de Texto (`string` e Interpolação):** Aspas duplas `"..."`, suportando UTF-8, escapes e interpolação de expressões arbitrárias `${expr}`.
+- **Literais de Texto (`string` e Interpolação Formatada):** Aspas duplas `"..."`, suportando UTF-8, escapes e interpolação de expressões arbitrárias com especificadores opcionais de formatação `${expr : [fill][<|>|^][+][0][width][.precision]}`.
 - **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `..`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `[`, `]`, `{`, `}`, `,`, `;`
 
 ---
@@ -100,10 +100,15 @@ power         ::= postfix ( "^" unary )? ;
 postfix       ::= primary ( "[" expr "]" | "++" | "--" )* ;
 primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP_STRING
                 | IDENT
+                | input_expr
+                | prompt_expr
                 | "(" expr ")"
                 | "(" elem_or_spread ( "," elem_or_spread )+ ")"
                 | "[" ( elem_or_spread ( "," elem_or_spread )* )? "]" ;
+input_expr    ::= "input" "(" ( PRIM_TYPE ( "," PRIM_TYPE )* | INTERP_MASK )? ")" ;
+prompt_expr   ::= "prompt" "(" expr ( "," ( PRIM_TYPE ( "," PRIM_TYPE )* | INTERP_MASK ) )? ")" ;
 elem_or_spread ::= ".." expr | expr ;
+format_spec   ::= ( fill? ( "<" | ">" | "^" ) )? "+"? "0"? width? ( "." precision )? ;
 ```
 
 ### Tabela de Precedência (da maior para a menor)
@@ -174,6 +179,18 @@ elem_or_spread ::= ".." expr | expr ;
     - `for (<init>; <bool-expr>; <step>) <stmt>`: aceita declaração local (`var`/`const` simples ou desempacotamento `(a, b)`) ou expressão em `<init>`, condição booleana `<bool-expr>` (`E0104`) e expressão de passo `<step>`. Variáveis declaradas em `<init>` pertencem exclusivamente ao escopo do laço (`E0102` fora dele, `E0103` se colidirem com variável externa).
     - `foreach (var/const <binding> [: <type>] in <array-expr>) <stmt>`: itera sobre um array estático `T[N]` (`E0104` caso a coleção não seja array). Suporta variável simples (`var x in arr`), constante (`const x in arr`) e desempacotamento de tuplas/sub-arrays com curinga `_` (`var (a, b) in [(10, 20), (20, 30)]`).
     - **Laços Rotulados e `break`/`continue` Direcionados:** Qualquer laço pode receber um rótulo `<label>: while/for/foreach ...` (`E0103` se o rótulo já estiver ativo em um laço externo). `break [<label>];` encerra o laço alvo e `continue [<label>];` avança para a próxima iteração/passo do laço alvo (`E0109` se usado fora de laço ou com rótulo inexistente).
+11. **Entrada Tipada (`input(...)` e `prompt(<msg>, ...)`) e Formatação em Interpolação (`${expr : spec}`):**
+    - **`input(...)` (Leitura sem prompt):**
+      - `input() -> string`: lê uma linha inteira do `stdin`.
+      - `input(T) -> T`: lê uma linha e converte para o tipo primitivo `T` (`int`, `float`, `double`, `decimal`, `bool`, `char`, `string`; erro `E0101` se tipo desconhecido).
+      - `input(T1, T2, ...) -> (T1, T2, ...)`: lê múltiplos tokens separados por espaço/tab na linha e retorna uma tupla tipada.
+      - `input("...${T1}...${Tn}...") -> T1 | (T1, ..., Tn)`: valida os delimitadores literais da máscara na linha lida e extrai 1 valor escalar `T1` ou uma tupla `(T1, ..., Tn)` para $n \ge 2$ placeholders (`E0002` se string sem `${type}` ou com placeholders adjacentes sem delimitador).
+    - **`prompt(<msg-expr>, ...)` (Leitura com prompt obrigatório):**
+      - Exige o 1º argumento `<msg-expr>` do tipo `string` (`E0002` se vazio `prompt()`; `E0104` se `<msg-expr>` não for `string`), imprime `<msg-expr>` em `stdout` sem quebra de linha e executa os mesmos modos de leitura (`prompt(msg)`, `prompt(msg, T)`, `prompt(msg, T1, T2, ...)`, `prompt(msg, "...${T}...")`).
+    - **Formatação em Strings Interpoladas (`"${expr : [fill][<|>|^][+][0][width][.prec]}"`):**
+      - Alinhamento: `<` (esquerda), `>` (direita), `^` (centralizado), precedido opcionalmente por 1 caractere UTF-8 de preenchimento `fill` (padrão `' '`).
+      - Sinais e Zero-Padding: `+` (sinal explícito) e `0` antes de `width` (preenchimento com zeros após o sinal); restritos a tipos numéricos (`int`, `float`, `double`, `decimal`, caso contrário `E0104`).
+      - Precisão `.N`: define $N$ casas decimais em `float`, `double` e `decimal` (arredondamento *half-away-from-zero*) ou truncamento máximo de $N$ caracteres UTF-8 em `string` (`E0104` em `int`, `bool`, `char`, tuplas ou arrays).
 
 ---
 

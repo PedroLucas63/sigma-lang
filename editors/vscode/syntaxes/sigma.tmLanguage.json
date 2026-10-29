@@ -43,7 +43,7 @@
         },
         {
           "name": "support.function.builtin.io.sigma",
-          "match": "\\b(println|print)\\b"
+          "match": "\\b(println|print|input|prompt)\\b"
         },
         {
           "name": "support.function.builtin.test.sigma",
@@ -107,6 +107,7 @@
               },
               "patterns": [
                 { "include": "#keywords" },
+                { "include": "#types" },
                 { "include": "#booleans" },
                 { "include": "#chars" },
                 { "include": "#strings" },

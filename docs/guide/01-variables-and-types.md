@@ -97,6 +97,48 @@ println(emoji);
 println(relatorio);
 ```
 
+### Especificadores de Formatação (`${expr : [fill][<|>|^][+][0][width][.prec]}`)
+
+Dentro de `${...}`, adicione `:` seguido de um especificador de formatação para controlar casas decimais, largura mínima, preenchimento e alinhamento à esquerda (`<`), à direita (`>`) ou centralizado (`^`):
+
+```sigma
+var pi := 3.14159265d;
+var preco := 19.9m;
+var cod := 42;
+var titulo := "Sigma";
+
+println("${pi:.2}");          # "3.14" (2 casas decimais)
+println("${preco:*>8.2}");    # "***19.90" (fill '*', alinhado à direita, largura 8)
+println("${cod:05}");         # "00042" (zero-padding numérico)
+println("${cod:+06}");        # "+00042" (sinal explícito '+' com zero-padding)
+println("[${titulo:<8}]");    # "[Sigma   ]" (alinhado à esquerda)
+println("[${titulo:^9}]");    # "[  Sigma  ]" (centralizado)
+println("[${titulo:-^9}]");   # "[--Sigma--]" (centralizado com fill '-')
+println("${titulo:.3}");      # "Sig" (truncamento de string em 3 caracteres)
+```
+
+---
+
+## 4.1. Entrada de Dados Estaticamente Tipada (`input` e `prompt`)
+
+A Sigma resolve a entrada de dados com tipagem estática através de duas construções complementares:
+- **`input(...)`** — lê do `stdin` **sem** exibir mensagem de prompt.
+- **`prompt(<msg>, ...)`** — **obriga** o 1º argumento a ser a mensagem de prompt (`string`), imprime-a sem quebra de linha e lê do `stdin`.
+
+```sigma
+# 1. Leitura sem prompt via input(...)
+var linha := input();                                         # -> string
+var idade := input(int);                                      # -> int
+var (peso, altura) := input(float, float);                    # -> (float, float)
+var (p1, p2, p3, dig) := input("${int}.${int}.${int}-${int}"); # -> (int, int, int, int)
+
+# 2. Leitura com prompt obrigatório via prompt(<msg>, ...)
+var nome := prompt("Nome: ");                                  # -> string
+var nota := prompt("Nota: ", decimal);                         # -> decimal
+var (x, y) := prompt("Coordenadas (x y): ", int, int);         # -> (int, int)
+var (dia, mes, ano) := prompt("Data: ", "${int}/${int}/${int}"); # -> (int, int, int)
+```
+
 ---
 
 ## 5. Tipagem Forte na Prática (`E0104`)

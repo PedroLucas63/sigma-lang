@@ -7,7 +7,7 @@ Bem-vindo à documentação oficial da **Sigma**, uma linguagem de programação
 1. **Especificação da Linguagem (`spec/`)**
    - [Gramática, Sistema de Tipos, Precedência, IR e Diagnósticos](./spec/grammar-and-types.md)
 2. **Guia de Aprendizado (`guide/`)**
-   - [01. Variáveis, Tipos Primitivos, Ponto Flutuante Exato (`decimal`), Strings Interpoladas e `print`/`println`](./guide/01-variables-and-types.md)
+   - [01. Variáveis, Tipos Primitivos, Ponto Flutuante Exato (`decimal`), Strings Formatadas (`${expr:spec}`) e Entrada/Saída (`input`, `prompt`, `print`, `println`)](./guide/01-variables-and-types.md)
    - [02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais, Atribuições Compostas e Incremento/Decremento](./guide/02-operators-and-expressions.md)
    - [03. Estruturas Condicionais (`if`/`else`), Laços (`while`, `for`, `foreach`), Rótulos (`break`/`continue`) e Blocos (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
    - [04. Testes Nativos (`assert`, `assert_error`), Test Runner (`sigma test`) e Gerenciador de Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)

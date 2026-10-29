@@ -116,5 +116,33 @@
       "var ${1:arr}: ${2|int,float,double,decimal,bool,char,string|}[${3:3}] = [${4:10, 20, 30}];"
     ],
     "description": "Declare a static-size array T[N] or T[]"
+  },
+  "Typed Input (No Prompt)": {
+    "prefix": "input",
+    "body": [
+      "var ${1:val} := input(${2|int,float,double,decimal,bool,char,string|});"
+    ],
+    "description": "Read a statically-typed value from stdin without a prompt"
+  },
+  "Structured Mask Input": {
+    "prefix": "inputm",
+    "body": [
+      "var (${1:a}, ${2:b}) := input(\"\\${${3:int}}-\\${${4:int}}\");"
+    ],
+    "description": "Read multiple typed values from stdin using a structured mask"
+  },
+  "Prompt Input": {
+    "prefix": "prompt",
+    "body": [
+      "var ${1:val} := prompt(\"${2:Enter value: }\", ${3|int,float,double,decimal,bool,char,string|});"
+    ],
+    "description": "Display a prompt message and read a statically-typed value from stdin"
+  },
+  "Formatted String Interpolation": {
+    "prefix": "fmt",
+    "body": [
+      "\"\\${${1:expr}:${2:.2}}\""
+    ],
+    "description": "Interpolated string with format specifier ([fill][<|>|^][+][0][width][.prec])"
   }
 }

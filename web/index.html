@@ -190,18 +190,19 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="loops">1. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
-            <option value="tuples_arrays">2. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
-            <option value="if_else_blocks">3. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
-            <option value="const_decl">4. Constantes Imutáveis (const) e Segurança Estática</option>
-            <option value="assign_incdec">5. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
-            <option value="arithmetic">6. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">7. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">8. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">9. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">10. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="assert_tests">11. Testes Integrados (assert, assert_error) e Test Runner</option>
-            <option value="typeerror">12. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="input_format">1. Entrada Tipada (input / prompt), Máscaras e Formatação ${expr:spec}</option>
+            <option value="loops">2. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
+            <option value="tuples_arrays">3. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
+            <option value="if_else_blocks">4. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
+            <option value="const_decl">5. Constantes Imutáveis (const) e Segurança Estática</option>
+            <option value="assign_incdec">6. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">7. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">8. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">9. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">10. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">11. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="assert_tests">12. Testes Integrados (assert, assert_error) e Test Runner</option>
+            <option value="typeerror">13. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -377,6 +378,16 @@ var c : int;                    # zero-init -> 0</pre>
           <li><strong>Laços Rotulados e <code>break</code> / <code>continue</code> Direcionados:</strong> Anote laços com <code>&lt;label&gt;:</code> e controle laços externos a partir de laços internos com <code>break &lt;label&gt;;</code> e <code>continue &lt;label&gt;;</code> (<code>E0109</code> se usado fora de laço ou com rótulo inexistente).</li>
         </ul>
       </article>
+
+      <article class="card">
+        <h3>13. Entrada Tipada (<code>input</code> / <code>prompt</code>), Máscaras e Formatação (<code>${expr:spec}</code>)</h3>
+        <p>Leitura de dados compatível com tipagem estática forte e mini-linguagem de formatação de strings:</p>
+        <ul>
+          <li><strong><code>input(...)</code> (Leitura sem prompt):</strong> <code>input()</code> retorna <code>string</code>; <code>input(int)</code> retorna <code>int</code>; <code>input(int, float)</code> lê múltiplos valores separados por espaço retornando <code>(int, float)</code>; <code>input("${int}.${int}.${int}-${int}")</code> valida a máscara estruturada e retorna <code>(int, int, int, int)</code>.</li>
+          <li><strong><code>prompt(&lt;msg&gt;, ...)</code> (Leitura com prompt obrigatório):</strong> Exige o 1º argumento do tipo <code>string</code> (<code>E0002</code>/<code>E0104</code>), exibe a mensagem sem quebra de linha e suporta todos os modos: <code>prompt("Nome: ")</code>, <code>prompt("Idade: ", int)</code>, <code>prompt("Data: ", "${int}/${int}/${int}")</code>.</li>
+          <li><strong>Formatação em Interpolação (<code>"${expr : [fill][&lt;|&gt;|^][+][0][width][.prec]}"</code>):</strong> Alinhamento à esquerda (<code>&lt;</code>), direita (<code>&gt;</code>) ou centralizado (<code>^</code>) com caractere de preenchimento (ex: <code>"${s:-^10}"</code>), sinal <code>+</code>, zero-padding <code>0</code> (ex: <code>"${n:+06}"</code>) e casas decimais <code>.N</code> para <code>float</code>, <code>double</code> e <code>decimal</code> (ex: <code>"${pi:.2}"</code>) ou truncamento de <code>string</code>.</li>
+        </ul>
+      </article>
     </div>
 
     <!-- TABELA DE PRECEDÊNCIA -->
@@ -428,6 +439,28 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      input_format: {
+        code: `# @stdin: 123.456.789-07
+# @stdin: Pedro
+# @stdin: 19.90 3
+
+# 1. Formatação avançada em strings interpoladas (${expr : [fill][<|>|^][+][0][width][.prec]})
+var pi := 3.14159265d;
+var titulo := "Relatório Sigma";
+println("${titulo:=^28}");
+println("PI (2 casas): ${pi:.2} | Sinal + zero-pad: ${pi:+08.2}");
+
+# 2. input(...) com máscara estruturada (sem prompt)
+var (c1, c2, c3, dig) := input("${int}.${int}.${int}-${int}");
+println("CPF lido: ${c1:03}.${c2:03}.${c3:03}-${dig:02}");
+
+# 3. prompt(<msg>, ...) com prompt obrigatório e múltiplos tipos
+var cliente := prompt("Cliente: ");
+var (preco, qtd) := prompt("Preço e Qtd: ", decimal, int);
+var total := preco * qtd;
+println("Cliente: ${cliente:<10} | Total: R$ ${total:*>8.2}");`,
+        out: `======Relatório Sigma=======\nPI (2 casas): 3.14 | Sinal + zero-pad: +0003.14\nCPF lido: 123.456.789-07\nCliente: Preço e Qtd: Cliente: Pedro      | Total: R$ ***59.70`
+      },
       loops: {
         code: `# 1. while (<bool-expr>) <stmt>
 var i := 0;

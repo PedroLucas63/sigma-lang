@@ -16,6 +16,8 @@
 | Palavra-chave | `KW_IN` | `in` |
 | Palavra-chave | `KW_BREAK` | `break` |
 | Palavra-chave | `KW_CONTINUE` | `continue` |
+| Palavra-chave | `KW_INPUT` | `input` |
+| Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
 | Palavra-chave | `KW_PRINTLN` | `println` |
 | Palavra-chave | `KW_ASSERT` | `assert` |
@@ -162,16 +164,22 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
+                | input_expr
+                | prompt_expr
                 | "(" expr ")"
                 | "(" elem_or_spread ( "," elem_or_spread )* ","? ")"
                 | "[" ( elem_or_spread ( "," elem_or_spread )* ","? )? "]" ;
+
+input_expr     ::= "input" "(" ( INTERP_STRING | IDENT ( "," IDENT )* )? ")" ;
+prompt_expr    ::= "prompt" "(" expr ( "," ( INTERP_STRING | IDENT ( "," IDENT )* ) )? ")" ;
 
 elem_or_spread ::= ".." expr | expr ;
 
 BOOL          ::= "true" | "false" ;
 CHAR          ::= "'" ( UNICODE_SCALAR | ESCAPE ) "'" ;
 STRING        ::= '"' ( UNICODE_CHAR | ESCAPE )* '"' ;
-INTERP_STRING ::= '"' ( STRING_PART | "${" expr "}" )* '"' ;
+INTERP_STRING ::= '"' ( STRING_PART | "${" expr ( ":" FORMAT_SPEC )? "}" )* '"' ;
+FORMAT_SPEC   ::= ( FILL? ( "<" | ">" | "^" ) )? "+"? "0"? DIGITS? ( "." DIGITS )? ;
 ESCAPE        ::= "\" ( "n" | "r" | "t" | "\" | "'" | '"' | "0" | "$" ) ;
 INT           ::= DIGITS ;
 FLOAT         ::= DEC_REAL "f"? | DIGITS "f" ;
@@ -234,6 +242,30 @@ type incdec_op =
   | PostInc
   | PostDec
 
+type align =
+  | AlignLeft
+  | AlignRight
+  | AlignCenter
+
+type format_spec = {
+  fill : string;
+  align : align option;
+  sign_plus : bool;
+  zero_pad : bool;
+  width : int option;
+  precision : int option;
+  span : Sigma_common.Span.t;
+}
+
+type mask_part =
+  | MaskLit of string
+  | MaskType of string * Sigma_common.Span.t
+
+type input_mode =
+  | InputLine
+  | InputTypes of (string * Sigma_common.Span.t) list
+  | InputMask of mask_part list * Sigma_common.Span.t
+
 type type_expr =
   | TypeNamed of string * Sigma_common.Span.t
   | TypeTuple of type_expr list * Sigma_common.Span.t
@@ -265,10 +297,14 @@ and expr_desc =
   | ExprChainCmp of expr * binop * expr * binop * expr
   | ExprAssign of lvalue * assign_op * expr
   | ExprIncDec of incdec_op * lvalue
+  | ExprInput of {
+      prompt : expr option;
+      mode : input_mode;
+    }
 
 and interp_part =
   | InterpLit of string
-  | InterpExpr of expr
+  | InterpExpr of expr * format_spec option
 
 and expr = {
   desc : expr_desc;
@@ -396,7 +432,9 @@ type opcode =
   | OP_ARRAY_CONCAT
   | OP_ARRAY_REPEAT
   | OP_TO_STR
+  | OP_FMT_SPEC of fmt_spec
   | OP_CONCAT_STR of int
+  | OP_INPUT of input_spec
   | OP_I64_TO_F32
   | OP_I64_TO_F64
   | OP_I64_TO_DEC
