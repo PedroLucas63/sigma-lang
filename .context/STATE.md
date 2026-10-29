@@ -5,7 +5,7 @@
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
 - **Milestone:** `M2 — Estruturas de Dados, Controle de Fluxo e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (`feature/cli-emit-c` finalizada e mesclada).
+- **Git Flow:** Branch base `develop` (Release `v0.2.0` publicada em `main` e sincronizada com `develop`).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
