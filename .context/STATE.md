@@ -5,7 +5,7 @@
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
 - **Milestone:** `M2 — Estruturas de Dados, Controle de Fluxo e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (`feature/input-and-string-format` finalizada e mesclada).
+- **Git Flow:** Branch base `develop` (`feature/cli-emit-c` finalizada e mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -29,7 +29,7 @@
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
 - [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 249 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
-- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
+- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `input`/`prompt`, máscaras estruturadas, especificadores de formatação `${expr:spec}`, laços `while`/`for`/`foreach`, rótulos `break`/`continue`, tuplas, desempacotamento, arrays estáticos, spread `..`, semântica de referência, `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else` e blocos `{ ... }`).
 

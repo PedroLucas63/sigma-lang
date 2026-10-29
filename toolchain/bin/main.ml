@@ -20,6 +20,8 @@ let usage () =
   prerr_endline "Usage:";
   prerr_endline "  sigma run [file.sgm | <script>]           Run entry/file in VM or execute a sigma.toml script";
   prerr_endline "  sigma build [file.sgm] [-o <out>]         Compile entry/file to native executable (C99 -O3)";
+  prerr_endline "  sigma emit-c [file.sgm] [-o <out.c> | --stdout]  Transpile entry/file to standalone C99 source (.c)";
+  prerr_endline "  sigma transpile [file.sgm] [-o <out.c> | --stdout] Alias for 'sigma emit-c'";
   prerr_endline "  sigma test [path] [--native | --parity]   Execute Sigma test files (default: VM interpreter)";
   prerr_endline "  sigma check [file.sgm]                    Typecheck entry/file without running";
   prerr_endline "  sigma lint [file.sgm]                     Run static linter rules on entry/file";
@@ -158,6 +160,57 @@ let run_test_command rest_args =
   print_string report;
   if !had_compile_error || not suite_ok then exit 1
 
+let run_emit_c_command rest_args =
+  let input_file = ref None in
+  let output_path = ref None in
+  let to_stdout = ref false in
+  let rec parse_args = function
+    | [] -> ()
+    | "--stdout" :: tl | "-" :: tl ->
+      to_stdout := true;
+      parse_args tl
+    | "-o" :: out :: tl ->
+      output_path := Some out;
+      parse_args tl
+    | arg :: _ when String.starts_with ~prefix:"-" arg ->
+      Printf.eprintf "error: unknown flag '%s' for 'sigma emit-c'\n" arg;
+      usage ()
+    | file :: tl ->
+      input_file := Some file;
+      parse_args tl
+  in
+  parse_args rest_args;
+  let target_file =
+    match !input_file with
+    | Some f -> f
+    | None ->
+      let _m, entry = resolve_entry_or_exit () in
+      entry
+  in
+  let src = load_or_exit target_file in
+  if !to_stdout then
+    match Driver.emit_c_source src with
+    | Ok c_code -> print_string c_code
+    | Error errs ->
+      print_diagnostics src errs;
+      exit 1
+  else
+    let out_c =
+      match !output_path with
+      | Some out -> out
+      | None ->
+        let base =
+          try Filename.remove_extension target_file
+          with Invalid_argument _ -> target_file
+        in
+        base ^ ".c"
+    in
+    match Driver.emit_c_source ~output_path:out_c src with
+    | Ok _ -> Printf.printf "Generated C99 source: %s\n" out_c
+    | Error errs ->
+      print_diagnostics src errs;
+      exit 1
+
 let () =
   let args = Array.to_list Sys.argv |> List.tl in
   match args with
@@ -220,6 +273,10 @@ let () =
      | Error errs ->
        print_diagnostics src errs;
        exit 1)
+  | ("emit-c" | "transpile") :: rest ->
+    run_emit_c_command rest
+  | "build" :: rest when List.mem "--emit-c" rest ->
+    run_emit_c_command (List.filter (fun a -> a <> "--emit-c") rest)
   | "test" :: rest ->
     run_test_command rest
   | [ "check" ] ->

@@ -8,6 +8,7 @@ O executável `sigma` (localizado em `toolchain/bin/main.ml`) concentra todas as
 | :--- | :--- | :--- |
 | `sigma run [arq.sgm \| <script>]` | `sigma run` ou `sigma run prog.sgm` | Executa o arquivo ou `entry` do projeto na VM, ou roda um script configurado em `[scripts]` do `sigma.toml`. |
 | `sigma build [arq.sgm] [-o <bin>]` | `sigma build` ou `sigma build prog.sgm -o prog` | Compila o arquivo ou `entry` do projeto para binário nativo otimizado (C99 `-O3`). |
+| `sigma emit-c [arq.sgm] [-o <arq.c> \| --stdout]` | `sigma emit-c 1001.sgm` ou `sigma emit-c 1001.sgm -o solucao.c` | Traduz (transpila) o código `.sgm` para código-fonte C99 autônomo (`.c`) sem compilar para binário (ideal para submissão em juízes online como Beecrowd). Alias: `sigma transpile` ou `sigma build --emit-c`. |
 | `sigma test [path] [--native \| --parity]` | `sigma test` ou `sigma test --parity` | Executa a suíte de testes (`tests/`) na VM (padrão), em C99 nativo (`--native`) ou verificando paridade absoluta (`--parity`). |
 | `sigma check [arq.sgm]` | `sigma check` ou `sigma check prog.sgm` | Valida sintaxe e tipos (Front-end) sem executar o programa. |
 | `sigma lint [arq.sgm]` | `sigma lint` ou `sigma lint prog.sgm` | Analisa o código estaticamente em busca de variáveis não utilizadas (`W0001`). |

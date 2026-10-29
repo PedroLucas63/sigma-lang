@@ -1742,6 +1742,16 @@ let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
   Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n";
   Buffer.contents buf
 
+let write_c_file ?(test_mode = false) ~output_path (prog : Typed_ast.program) : (unit, string) result =
+  let c_source = emit_c ~test_mode prog in
+  try
+    let oc = open_out_bin output_path in
+    output_string oc c_source;
+    close_out oc;
+    Ok ()
+  with Sys_error msg ->
+    Error msg
+
 let compile_executable ?(test_mode = false) ~output_path (prog : Typed_ast.program) : (unit, string) result =
   let c_source = emit_c ~test_mode prog in
   let tmp_c = Filename.temp_file "sigma_build_" ".c" in

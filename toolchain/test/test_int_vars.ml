@@ -1291,6 +1291,34 @@ println("user=${user} area=${w * h} date=${yyyy:04}-${mm:02}-${dd:02}");
   in
   run_and_check_parity_opt ~stdin_lines:(Some stdin_lines) ~name:"input_and_format" ~code ~expected_stdout
 
+let test_emit_c_source () =
+  let code =
+    {|# Beecrowd 1001 - Extremamente Básico
+var a := input(int);
+var b := input(int);
+var x := a + b;
+println("X = ${x}");
+|}
+  in
+  let src = Source.of_string ~filename:"1001.sgm" ~content:code in
+  let out_c = Filename.temp_file "sigma_beecrowd_1001_" ".c" in
+  (match Driver.emit_c_source ~output_path:out_c src with
+   | Error errs ->
+     List.iter (fun d -> prerr_endline (Diagnostic.render ~source:src d)) errs;
+     assert_true ~msg:"Driver.emit_c_source should succeed" false
+   | Ok c_code ->
+     assert_true ~msg:"emitted C file should exist on disk" (Sys.file_exists out_c);
+     assert_true
+       ~msg:"emitted C code should contain int main(void)"
+       (try
+          let ic = open_in out_c in
+          let len = in_channel_length ic in
+          let disk_c = really_input_string ic len in
+          close_in ic;
+          disk_c = c_code && String.length disk_c > 100
+        with _ -> false);
+     (try Sys.remove out_c with _ -> ()))
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1302,6 +1330,7 @@ let () =
   test_tuples_and_arrays_parity ();
   test_loops_parity ();
   test_input_and_format_parity ();
+  test_emit_c_source ();
   test_assert_and_test_runner_parity ();
   test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();

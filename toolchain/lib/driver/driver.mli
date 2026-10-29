@@ -16,6 +16,10 @@ val run_source : ?stdin_lines:string list -> Source.t -> (string, Diagnostic.t l
 val build_source :
   output_path:string -> Source.t -> (unit, Diagnostic.t list) result
 
+(** Traduz um código-fonte Sigma para código C99 autônomo (e opcionalmente grava em [output_path]). *)
+val emit_c_source :
+  ?output_path:string -> Source.t -> (string, Diagnostic.t list) result
+
 (** Executa o linter sobre o código-fonte, retornando warnings ou erros. *)
 val lint_source : Source.t -> (Diagnostic.t list, Diagnostic.t list) result
 

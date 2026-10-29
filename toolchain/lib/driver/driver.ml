@@ -68,6 +68,19 @@ let build_source ~output_path (src : Source.t) : (unit, Diagnostic.t list) resul
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ])
 
+let emit_c_source ?output_path (src : Source.t) : (string, Diagnostic.t list) result =
+  match compile_frontend src with
+  | Error errs -> Error errs
+  | Ok (typed_ast, _ir) ->
+    let c_code = Codegen_c.emit_c typed_ast in
+    (match output_path with
+     | None -> Ok c_code
+     | Some path ->
+       (match Codegen_c.write_c_file ~output_path:path typed_ast with
+        | Ok () -> Ok c_code
+        | Error msg ->
+          Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ]))
+
 let lint_source (src : Source.t) : (Diagnostic.t list, Diagnostic.t list) result =
   match compile_frontend src with
   | Error errs -> Error errs

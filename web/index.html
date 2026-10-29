@@ -426,6 +426,7 @@ var c : int;                    # zero-init -> 0</pre>
       <p>O binário único <code>sigma</code> (escrito em OCaml com Dune) compartilha 100% do front-end (Lexer, Parser, Typechecker e IR) entre todas as ferramentas:</p>
       <pre>dune exec sigma -- run arquivo.sgm             # Executa imediatamente na Máquina Virtual (Bytecode IR)
 dune exec sigma -- build arquivo.sgm -o app    # Compila para binário nativo via C99 otimizado (GCC -O3 -lm)
+dune exec sigma -- emit-c arquivo.sgm          # Traduz apenas para código-fonte C99 autônomo (arquivo.c, ideal para Beecrowd)
 dune exec sigma -- check arquivo.sgm           # Valida sintaxe e tipos sem executar
 dune exec sigma -- lint arquivo.sgm            # Executa o linter estático (ex: W0001 variáveis não usadas)
 dune exec sigma -- debug arquivo.sgm           # Executa passo-a-passo exibindo IP, opcode, pilha e variáveis globais
