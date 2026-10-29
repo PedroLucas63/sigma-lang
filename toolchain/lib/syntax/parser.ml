@@ -10,6 +10,10 @@ let cur st : Token.t =
   if st.idx < Array.length st.tokens then st.tokens.(st.idx)
   else st.tokens.(Array.length st.tokens - 1)
 
+let peek_next st : Token.t =
+  if st.idx + 1 < Array.length st.tokens then st.tokens.(st.idx + 1)
+  else st.tokens.(Array.length st.tokens - 1)
+
 let bump st =
   if st.idx < Array.length st.tokens - 1 then st.idx <- st.idx + 1
 
@@ -1104,6 +1108,45 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_IF ->
     bump st;
     parse_if_stmt st tok
+  | Token.KW_WHILE ->
+    bump st;
+    parse_while_stmt st tok.span ~label:None
+  | Token.KW_FOR ->
+    bump st;
+    parse_for_stmt st tok.span ~label:None
+  | Token.KW_FOREACH ->
+    bump st;
+    parse_foreach_stmt st tok.span ~label:None
+  | Token.IDENT lbl when (peek_next st).kind = Token.COLON ->
+    bump st;
+    let colon_tok = cur st in
+    bump st;
+    let loop_tok = cur st in
+    let label = Some (lbl, tok.span) in
+    (match loop_tok.kind with
+     | Token.KW_WHILE ->
+       bump st;
+       parse_while_stmt st tok.span ~label
+     | Token.KW_FOR ->
+       bump st;
+       parse_for_stmt st tok.span ~label
+     | Token.KW_FOREACH ->
+       bump st;
+       parse_foreach_stmt st tok.span ~label
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~hint:"labels can only annotate loops, e.g. 'loop1: for (var i := 0; i < 10; i++) { ... }'"
+            ~code:"E0002"
+            ~span:(Span.merge tok.span colon_tok.span)
+            (Printf.sprintf "label '%s:' must be followed by 'while', 'for', or 'foreach', found %s"
+               lbl (Token.kind_to_string loop_tok.kind))))
+  | Token.KW_BREAK ->
+    bump st;
+    parse_break_or_continue_stmt st tok ~is_break:true
+  | Token.KW_CONTINUE ->
+    bump st;
+    parse_break_or_continue_stmt st tok ~is_break:false
   | Token.LBRACE ->
     bump st;
     parse_block_stmt st tok
@@ -1177,6 +1220,246 @@ and parse_if_stmt st if_tok : (Ast.stmt, Diagnostic.t) result =
          ~span:open_tok.span
          (Printf.sprintf "expected '(' after 'if', found %s"
             (Token.kind_to_string open_tok.kind)))
+
+and parse_while_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok cond ->
+       let close_tok = cur st in
+       (match close_tok.kind with
+        | Token.RPAREN ->
+          bump st;
+          (match parse_non_decl_stmt st with
+           | Error e -> Error e
+           | Ok body ->
+             let full_span = Span.merge start_span body.span in
+             Ok
+               {
+                 Ast.desc = Ast.StmtWhile { label; cond; body };
+                 span = full_span;
+               })
+        | _ ->
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:close_tok.span
+               (Printf.sprintf "expected ')' after 'while' condition, found %s"
+                  (Token.kind_to_string close_tok.kind)))))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:"wrap the condition in parentheses, e.g. 'while (i < 10) { ... }'"
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after 'while', found %s"
+            (Token.kind_to_string open_tok.kind)))
+
+and parse_for_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    let init_res : (Ast.for_init, Diagnostic.t) result =
+      let tok = cur st in
+      match tok.kind with
+      | Token.KW_VAR | Token.KW_CONST ->
+        let is_const = tok.kind = Token.KW_CONST in
+        bump st;
+        (match parse_decl st tok ~is_const with
+         | Error e -> Error e
+         | Ok { Ast.desc = Ast.StmtVarDecl v; _ } -> Ok (Ast.ForInitVarDecl v)
+         | Ok { Ast.desc = Ast.StmtDestruct d; _ } -> Ok (Ast.ForInitDestruct d)
+         | Ok _ ->
+           Error
+             (Diagnostic.error
+                ~code:"E0002"
+                ~span:tok.span
+                "invalid declaration in 'for' initializer"))
+      | _ ->
+        (match parse_expr st with
+         | Error e -> Error e
+         | Ok init_e ->
+           let semi_tok = cur st in
+           if semi_tok.kind = Token.SEMI then begin
+             bump st;
+             Ok (Ast.ForInitExpr init_e)
+           end else
+             Error
+               (Diagnostic.error
+                  ~hint:"separate the 3 parts of 'for' with ';', e.g. 'for (var i := 0; i < 10; i++)'"
+                  ~code:"E0003"
+                  ~span:semi_tok.span
+                  (Printf.sprintf "expected ';' after 'for' initializer, found %s"
+                     (Token.kind_to_string semi_tok.kind))))
+    in
+    (match init_res with
+     | Error e -> Error e
+     | Ok init ->
+       (match parse_expr st with
+        | Error e -> Error e
+        | Ok cond ->
+          let semi2_tok = cur st in
+          if semi2_tok.kind <> Token.SEMI then
+            Error
+              (Diagnostic.error
+                 ~hint:"separate condition and step with ';', e.g. 'for (var i := 0; i < 10; i++)'"
+                 ~code:"E0003"
+                 ~span:semi2_tok.span
+                 (Printf.sprintf "expected ';' after 'for' condition, found %s"
+                    (Token.kind_to_string semi2_tok.kind)))
+          else begin
+            bump st;
+            match parse_expr st with
+            | Error e -> Error e
+            | Ok step ->
+              let close_tok = cur st in
+              if close_tok.kind <> Token.RPAREN then
+                Error
+                  (Diagnostic.error
+                     ~code:"E0002"
+                     ~span:close_tok.span
+                     (Printf.sprintf "expected ')' after 'for' step expression, found %s"
+                        (Token.kind_to_string close_tok.kind)))
+              else begin
+                bump st;
+                match parse_non_decl_stmt st with
+                | Error e -> Error e
+                | Ok body ->
+                  let full_span = Span.merge start_span body.span in
+                  Ok
+                    {
+                      Ast.desc = Ast.StmtFor { label; init; cond; step; body };
+                      span = full_span;
+                    }
+              end
+          end))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:"use 'for (<init>; <cond>; <step>) <stmt>'"
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after 'for', found %s"
+            (Token.kind_to_string open_tok.kind)))
+
+and parse_foreach_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+  let open_tok = cur st in
+  match open_tok.kind with
+  | Token.LPAREN ->
+    bump st;
+    let kw_tok = cur st in
+    (match kw_tok.kind with
+     | Token.KW_VAR | Token.KW_CONST ->
+       let is_const = kw_tok.kind = Token.KW_CONST in
+       bump st;
+       let bind_tok = cur st in
+       let bind_res : (Ast.foreach_binding, Diagnostic.t) result =
+         match bind_tok.kind with
+         | Token.IDENT name ->
+           bump st;
+           Ok (Ast.ForeachVar (name, bind_tok.span))
+         | Token.LPAREN ->
+           bump st;
+           (match parse_destruct_names st bind_tok with
+            | Error e -> Error e
+            | Ok names -> Ok (Ast.ForeachDestruct names))
+         | _ ->
+           Error
+             (Diagnostic.error
+                ~hint:"use 'foreach (var x in arr)' or 'foreach (var (a, b) in arr)'"
+                ~code:"E0002"
+                ~span:bind_tok.span
+                (Printf.sprintf "expected variable name or destructuring pattern '(a, b)' in 'foreach', found %s"
+                   (Token.kind_to_string bind_tok.kind)))
+       in
+       (match bind_res with
+        | Error e -> Error e
+        | Ok binding ->
+          let annot_res : (Ast.type_expr option, Diagnostic.t) result =
+            if (cur st).kind = Token.COLON then begin
+              bump st;
+              match parse_type_expr st with
+              | Error e -> Error e
+              | Ok te -> Ok (Some te)
+            end else
+              Ok None
+          in
+          (match annot_res with
+           | Error e -> Error e
+           | Ok ty_annot ->
+             let in_tok = cur st in
+             if in_tok.kind <> Token.KW_IN then
+               Error
+                 (Diagnostic.error
+                    ~hint:"use 'in' before the array expression, e.g. 'foreach (var x in arr)'"
+                    ~code:"E0002"
+                    ~span:in_tok.span
+                    (Printf.sprintf "expected 'in' in 'foreach' header, found %s"
+                       (Token.kind_to_string in_tok.kind)))
+             else begin
+               bump st;
+               match parse_expr st with
+               | Error e -> Error e
+               | Ok collection ->
+                 let close_tok = cur st in
+                 if close_tok.kind <> Token.RPAREN then
+                   Error
+                     (Diagnostic.error
+                        ~code:"E0002"
+                        ~span:close_tok.span
+                        (Printf.sprintf "expected ')' after 'foreach' collection expression, found %s"
+                           (Token.kind_to_string close_tok.kind)))
+                 else begin
+                   bump st;
+                   match parse_non_decl_stmt st with
+                   | Error e -> Error e
+                   | Ok body ->
+                     let head = { Ast.binding; is_const; ty_annot } in
+                     let full_span = Span.merge start_span body.span in
+                     Ok
+                       {
+                         Ast.desc = Ast.StmtForeach { label; head; collection; body };
+                         span = full_span;
+                       }
+                 end
+             end))
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~hint:"declare the loop variable with 'var' or 'const', e.g. 'foreach (var x in arr)'"
+            ~code:"E0002"
+            ~span:kw_tok.span
+            (Printf.sprintf "expected 'var' or 'const' in 'foreach' header, found %s"
+               (Token.kind_to_string kw_tok.kind))))
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:"use 'foreach (var x in arr) <stmt>'"
+         ~code:"E0002"
+         ~span:open_tok.span
+         (Printf.sprintf "expected '(' after 'foreach', found %s"
+            (Token.kind_to_string open_tok.kind)))
+
+and parse_break_or_continue_stmt st kw_tok ~is_break : (Ast.stmt, Diagnostic.t) result =
+  let label_opt =
+    let next_tok = cur st in
+    match next_tok.kind with
+    | Token.IDENT lbl ->
+      bump st;
+      Some (lbl, next_tok.span)
+    | _ -> None
+  in
+  match expect_semi st kw_tok.Token.span with
+  | Error e -> Error e
+  | Ok full_span ->
+    let desc =
+      if is_break then Ast.StmtBreak label_opt else Ast.StmtContinue label_opt
+    in
+    Ok { Ast.desc; span = full_span }
 
 and parse_block_stmt st open_brace_tok : (Ast.stmt, Diagnostic.t) result =
   let stmts = ref [] in

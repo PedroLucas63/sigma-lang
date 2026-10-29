@@ -60,6 +60,24 @@ type destruct_decl = {
   init : expr;
 }
 
+type for_init =
+  | TForInitVarDecl of var_decl
+  | TForInitDestruct of destruct_decl
+  | TForInitExpr of expr
+
+type foreach_head =
+  | TForeachVar of {
+      name : string option;
+      name_span : Span.t;
+      is_const : bool;
+      ty : Ty.t;
+    }
+  | TForeachDestruct of {
+      bindings : destruct_binding list;
+      is_const : bool;
+      ty : Ty.t;
+    }
+
 type stmt_desc =
   | TStmtVarDecl of var_decl
   | TStmtDestruct of destruct_decl
@@ -68,6 +86,37 @@ type stmt_desc =
       cond : expr;
       then_branch : stmt;
       else_branch : stmt option;
+    }
+  | TStmtWhile of {
+      loop_id : int;
+      label : string option;
+      cond : expr;
+      body : stmt;
+    }
+  | TStmtFor of {
+      loop_id : int;
+      label : string option;
+      init : for_init;
+      cond : expr;
+      step : expr;
+      body : stmt;
+    }
+  | TStmtForeach of {
+      loop_id : int;
+      label : string option;
+      head : foreach_head;
+      collection : expr;
+      elem_ty : Ty.t;
+      len : int;
+      body : stmt;
+    }
+  | TStmtBreak of {
+      target_loop_id : int;
+      label : string option;
+    }
+  | TStmtContinue of {
+      target_loop_id : int;
+      label : string option;
     }
   | TStmtPrint of {
       newline : bool;

@@ -1019,6 +1019,98 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
        Buffer.add_string buf (indent ^ "} else {\n");
        emit_stmt buf (indent ^ "  ") eb;
        Buffer.add_string buf (indent ^ "}\n"))
+  | Typed_ast.TStmtWhile { loop_id; cond; body; _ } ->
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%swhile (%s) {\n" indent (emit_expr cond));
+    emit_stmt buf (indent ^ "  ") body;
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%s  _sgm_cnt_%d: __attribute__((unused));\n%s}\n%s_sgm_brk_%d: __attribute__((unused));\n"
+         indent loop_id indent indent loop_id)
+  | Typed_ast.TStmtFor { loop_id; init; cond; step; body; _ } ->
+    let inner_indent = indent ^ "  " in
+    Buffer.add_string buf (indent ^ "{\n");
+    (match init with
+     | Typed_ast.TForInitVarDecl v ->
+       emit_stmt buf inner_indent { Typed_ast.desc = Typed_ast.TStmtVarDecl v; span = s.span }
+     | Typed_ast.TForInitDestruct d ->
+       emit_stmt buf inner_indent { Typed_ast.desc = Typed_ast.TStmtDestruct d; span = s.span }
+     | Typed_ast.TForInitExpr e ->
+       Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n" inner_indent (emit_expr e)));
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%swhile (%s) {\n%s  {\n" inner_indent (emit_expr cond) inner_indent);
+    emit_stmt buf (inner_indent ^ "    ") body;
+    Buffer.add_string
+      buf
+      (Printf.sprintf
+         "%s  }\n%s  _sgm_cnt_%d: __attribute__((unused));\n%s  (void)(%s);\n%s}\n%s_sgm_brk_%d: __attribute__((unused));\n%s}\n"
+         inner_indent
+         inner_indent loop_id
+         inner_indent (emit_expr step)
+         inner_indent
+         inner_indent loop_id
+         indent)
+  | Typed_ast.TStmtForeach { loop_id; head; collection; len; body; _ } ->
+    let inner_indent = indent ^ "  " in
+    let body_indent = inner_indent ^ "  " in
+    let coll_var = Printf.sprintf "_sgm_fcoll_%d" loop_id in
+    let idx_var = Printf.sprintf "_sgm_fidx_%d" loop_id in
+    Buffer.add_string
+      buf
+      (Printf.sprintf
+         "%s{\n%ssgm_obj_t *%s = %s;\n%s(void)%s;\n%sfor (int64_t %s = 0; %s < INT64_C(%d); %s++) {\n"
+         indent
+         inner_indent coll_var (emit_expr collection)
+         inner_indent coll_var
+         inner_indent idx_var idx_var len idx_var);
+    (match head with
+     | Typed_ast.TForeachVar { name = None; _ } -> ()
+     | Typed_ast.TForeachVar { name = Some name; is_const; ty; _ } ->
+       let c_type, const_qualifier = c_decl_type_and_qual ~is_const ty in
+       let field = c_val_union_field ty in
+       Buffer.add_string
+         buf
+         (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, %s)->u.%s;\n"
+            body_indent const_qualifier c_type (mangle_ident name) coll_var idx_var field)
+     | Typed_ast.TForeachDestruct { bindings; is_const; _ } ->
+       let elem_var = Printf.sprintf "_sgm_felem_%d" loop_id in
+       Buffer.add_string
+         buf
+         (Printf.sprintf "%ssgm_obj_t *%s = sgm_obj_slot(%s, %s)->u.obj;\n%s(void)%s;\n"
+            body_indent elem_var coll_var idx_var body_indent elem_var);
+       List.iteri
+         (fun i (bind : Typed_ast.destruct_binding) ->
+           match bind.name with
+           | None -> ()
+           | Some name ->
+             let c_type, const_qualifier = c_decl_type_and_qual ~is_const bind.ty in
+             let field = c_val_union_field bind.ty in
+             Buffer.add_string
+               buf
+               (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
+                  body_indent const_qualifier c_type (mangle_ident name) elem_var i field))
+         bindings);
+    Buffer.add_string buf (body_indent ^ "{\n");
+    emit_stmt buf (body_indent ^ "  ") body;
+    Buffer.add_string
+      buf
+      (Printf.sprintf
+         "%s}\n%s_sgm_cnt_%d: __attribute__((unused));\n%s}\n%s_sgm_brk_%d: __attribute__((unused));\n%s}\n"
+         body_indent
+         body_indent loop_id
+         inner_indent
+         inner_indent loop_id
+         indent)
+  | Typed_ast.TStmtBreak { target_loop_id; _ } ->
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%sgoto _sgm_brk_%d;\n" indent target_loop_id)
+  | Typed_ast.TStmtContinue { target_loop_id; _ } ->
+    Buffer.add_string
+      buf
+      (Printf.sprintf "%sgoto _sgm_cnt_%d;\n" indent target_loop_id)
   | Typed_ast.TStmtPrint { newline; args } ->
     List.iteri
       (fun i (e : Typed_ast.expr) ->

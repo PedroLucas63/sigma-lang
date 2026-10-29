@@ -5,6 +5,12 @@ type kind =
   | KW_CONST
   | KW_IF
   | KW_ELSE
+  | KW_WHILE
+  | KW_FOR
+  | KW_FOREACH
+  | KW_IN
+  | KW_BREAK
+  | KW_CONTINUE
   | KW_PRINT
   | KW_PRINTLN
   | KW_ASSERT
@@ -79,6 +85,12 @@ let kind_to_string = function
   | KW_CONST -> "'const'"
   | KW_IF -> "'if'"
   | KW_ELSE -> "'else'"
+  | KW_WHILE -> "'while'"
+  | KW_FOR -> "'for'"
+  | KW_FOREACH -> "'foreach'"
+  | KW_IN -> "'in'"
+  | KW_BREAK -> "'break'"
+  | KW_CONTINUE -> "'continue'"
   | KW_PRINT -> "'print'"
   | KW_PRINTLN -> "'println'"
   | KW_ASSERT -> "'assert'"

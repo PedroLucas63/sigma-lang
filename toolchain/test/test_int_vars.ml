@@ -1128,6 +1128,91 @@ println(base[1]++, ++base[1], base);
   in
   run_and_check_parity ~name:"tuples_and_arrays" ~code ~expected_stdout
 
+let test_loops_parity () =
+  let code =
+    {|# 1. while loop
+var i := 0;
+var sum_while := 0;
+while (i < 5) {
+  sum_while += i;
+  i++;
+}
+println("while:", sum_while, i);
+
+# 2. for loop with declaration, expression, and destructuring
+var sum_for := 0;
+for (var k := 1; k <= 5; k++) sum_for += k;
+println("for decl:", sum_for);
+
+var p := 1;
+for (p = 2; p < 30; p *= 2) {
+  print(p, "");
+}
+println("after p:", p);
+
+for (var (a, b) := (0, 6); a < b; a++) {
+  b--;
+  print(a, b, "| ");
+}
+println("");
+
+# 3. foreach over array and array of tuples with destructuring
+var arr := [10, 20, 30];
+var sum_fe := 0;
+foreach (var x : int in arr) {
+  sum_fe += x;
+}
+println("foreach int:", sum_fe);
+
+var l := [(10, 20), (20, 30), (30, 40)];
+foreach (var (a, b) in l) println(a + b);
+
+var triplas := [(1, "um", true), (2, "dois", false), (3, "tres", true)];
+foreach (const (id, nome, ok) : (int, string, bool) in triplas) {
+  if (ok) println(id, nome);
+}
+
+# 4. break, continue, and labeled loops (break <label>, continue <label>)
+var hit := 0;
+for1: for (var r := 0; r < 5; r++) {
+  for2: foreach (var (_, v) in l) {
+    if (v == 20) continue for2;
+    hit += r + v;
+    if (hit > 60) break for1;
+  }
+}
+println("labeled break/continue:", hit);
+
+outer_w: while (i < 20) {
+  i++;
+  for (var m := 0; m < 3; m++) {
+    if (m == 1) continue outer_w;
+    if (i > 8) break outer_w;
+  }
+}
+println("outer_w final i:", i);
+|}
+  in
+  let expected_stdout =
+    String.concat "\n"
+      [
+        "while: 10 5";
+        "for decl: 15";
+        "2 4 8 16 after p: 32";
+        "0 5 | 1 4 | 2 3 | ";
+        "foreach int: 60";
+        "30";
+        "50";
+        "70";
+        "1 um";
+        "3 tres";
+        "labeled break/continue: 70";
+        "outer_w final i: 9";
+        "";
+      ]
+  in
+  run_and_check_parity ~name:"loops" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1137,6 +1222,7 @@ let () =
   test_if_else_and_blocks_parity ();
   test_const_declarations_parity ();
   test_tuples_and_arrays_parity ();
+  test_loops_parity ();
   test_assert_and_test_runner_parity ();
   test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();

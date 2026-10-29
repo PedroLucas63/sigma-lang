@@ -110,6 +110,55 @@ let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     mark_expr_usage tbl cond;
     lint_stmt tbl decl_order then_branch;
     Option.iter (lint_stmt tbl decl_order) else_branch
+  | Typed_ast.TStmtWhile { cond; body; _ } ->
+    mark_expr_usage tbl cond;
+    lint_stmt tbl decl_order body
+  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+    let loop_vars =
+      match init with
+      | Typed_ast.TForInitVarDecl v ->
+        lint_stmt tbl decl_order { Typed_ast.desc = Typed_ast.TStmtVarDecl v; span = s.span };
+        [ v.name ]
+      | Typed_ast.TForInitDestruct d ->
+        lint_stmt tbl decl_order { Typed_ast.desc = Typed_ast.TStmtDestruct d; span = s.span };
+        List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) d.bindings
+      | Typed_ast.TForInitExpr e ->
+        mark_expr_usage tbl e;
+        []
+    in
+    mark_expr_usage tbl cond;
+    mark_expr_usage tbl step;
+    lint_stmt tbl decl_order body;
+    List.iter (Hashtbl.remove tbl) loop_vars
+  | Typed_ast.TStmtForeach { head; collection; body; _ } ->
+    mark_expr_usage tbl collection;
+    let loop_vars =
+      match head with
+      | Typed_ast.TForeachVar { name = None; _ } -> []
+      | Typed_ast.TForeachVar { name = Some name; name_span; _ } ->
+        if not (String.starts_with ~prefix:"_" name) then begin
+          let u = { name; span = name_span; used = false } in
+          Hashtbl.replace tbl name u;
+          decl_order := u :: !decl_order
+        end;
+        [ name ]
+      | Typed_ast.TForeachDestruct { bindings; _ } ->
+        List.iter
+          (fun (bind : Typed_ast.destruct_binding) ->
+            match bind.name with
+            | None -> ()
+            | Some name ->
+              if not (String.starts_with ~prefix:"_" name) then begin
+                let u = { name; span = bind.name_span; used = false } in
+                Hashtbl.replace tbl name u;
+                decl_order := u :: !decl_order
+              end)
+          bindings;
+        List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) bindings
+    in
+    lint_stmt tbl decl_order body;
+    List.iter (Hashtbl.remove tbl) loop_vars
+  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
   | Typed_ast.TStmtPrint { args; _ } ->
     List.iter (mark_expr_usage tbl) args
   | Typed_ast.TStmtAssert { actual; expected; message } ->

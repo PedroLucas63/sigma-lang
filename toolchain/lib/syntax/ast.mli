@@ -104,6 +104,21 @@ type destruct_decl = {
   init : expr option;
 }
 
+type for_init =
+  | ForInitVarDecl of var_decl
+  | ForInitDestruct of destruct_decl
+  | ForInitExpr of expr
+
+type foreach_binding =
+  | ForeachVar of string * Span.t
+  | ForeachDestruct of (string * Span.t) list
+
+type foreach_head = {
+  binding : foreach_binding;
+  is_const : bool;
+  ty_annot : type_expr option;
+}
+
 type stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -113,6 +128,26 @@ type stmt_desc =
       then_branch : stmt;
       else_branch : stmt option;
     }
+  | StmtWhile of {
+      label : (string * Span.t) option;
+      cond : expr;
+      body : stmt;
+    }
+  | StmtFor of {
+      label : (string * Span.t) option;
+      init : for_init;
+      cond : expr;
+      step : expr;
+      body : stmt;
+    }
+  | StmtForeach of {
+      label : (string * Span.t) option;
+      head : foreach_head;
+      collection : expr;
+      body : stmt;
+    }
+  | StmtBreak of (string * Span.t) option
+  | StmtContinue of (string * Span.t) option
   | StmtPrint of {
       newline : bool;
       args : expr list;

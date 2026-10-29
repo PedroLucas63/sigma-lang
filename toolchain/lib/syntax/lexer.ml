@@ -174,6 +174,12 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "const" -> Token.KW_CONST
           | "if" -> Token.KW_IF
           | "else" -> Token.KW_ELSE
+          | "while" -> Token.KW_WHILE
+          | "for" -> Token.KW_FOR
+          | "foreach" -> Token.KW_FOREACH
+          | "in" -> Token.KW_IN
+          | "break" -> Token.KW_BREAK
+          | "continue" -> Token.KW_CONTINUE
           | "print" -> Token.KW_PRINT
           | "println" -> Token.KW_PRINTLN
           | "assert" -> Token.KW_ASSERT

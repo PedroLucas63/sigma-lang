@@ -7,6 +7,12 @@ type kind =
   | KW_CONST
   | KW_IF
   | KW_ELSE
+  | KW_WHILE
+  | KW_FOR
+  | KW_FOREACH
+  | KW_IN
+  | KW_BREAK
+  | KW_CONTINUE
   | KW_PRINT
   | KW_PRINTLN
   | KW_ASSERT

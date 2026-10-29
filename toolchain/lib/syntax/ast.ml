@@ -102,6 +102,21 @@ type destruct_decl = {
   init : expr option;
 }
 
+type for_init =
+  | ForInitVarDecl of var_decl
+  | ForInitDestruct of destruct_decl
+  | ForInitExpr of expr
+
+type foreach_binding =
+  | ForeachVar of string * Span.t
+  | ForeachDestruct of (string * Span.t) list
+
+type foreach_head = {
+  binding : foreach_binding;
+  is_const : bool;
+  ty_annot : type_expr option;
+}
+
 type stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -111,6 +126,26 @@ type stmt_desc =
       then_branch : stmt;
       else_branch : stmt option;
     }
+  | StmtWhile of {
+      label : (string * Span.t) option;
+      cond : expr;
+      body : stmt;
+    }
+  | StmtFor of {
+      label : (string * Span.t) option;
+      init : for_init;
+      cond : expr;
+      step : expr;
+      body : stmt;
+    }
+  | StmtForeach of {
+      label : (string * Span.t) option;
+      head : foreach_head;
+      collection : expr;
+      body : stmt;
+    }
+  | StmtBreak of (string * Span.t) option
+  | StmtContinue of (string * Span.t) option
   | StmtPrint of {
       newline : bool;
       args : expr list;
@@ -296,6 +331,54 @@ let rec pp_stmt fmt (s : stmt) =
     Format.fprintf fmt "if (%a) %a" pp_expr cond pp_stmt then_branch
   | StmtIf { cond; then_branch; else_branch = Some eb } ->
     Format.fprintf fmt "if (%a) %a else %a" pp_expr cond pp_stmt then_branch pp_stmt eb
+  | StmtWhile { label; cond; body } ->
+    let lbl =
+      match label with
+      | None -> ""
+      | Some (l, _) -> l ^ ": "
+    in
+    Format.fprintf fmt "%swhile (%a) %a" lbl pp_expr cond pp_stmt body
+  | StmtFor { label; init; cond; step; body } ->
+    let lbl =
+      match label with
+      | None -> ""
+      | Some (l, _) -> l ^ ": "
+    in
+    let pp_for_init fmt = function
+      | ForInitVarDecl v ->
+        pp_stmt fmt { desc = StmtVarDecl v; span = s.span }
+      | ForInitDestruct d ->
+        pp_stmt fmt { desc = StmtDestruct d; span = s.span }
+      | ForInitExpr e ->
+        Format.fprintf fmt "%a;" pp_expr e
+    in
+    Format.fprintf fmt "%sfor (%a %a; %a) %a" lbl pp_for_init init pp_expr cond pp_expr step pp_stmt body
+  | StmtForeach { label; head; collection; body } ->
+    let lbl =
+      match label with
+      | None -> ""
+      | Some (l, _) -> l ^ ": "
+    in
+    let kw = if head.is_const then "const" else "var" in
+    let bind_s =
+      match head.binding with
+      | ForeachVar (name, _) -> name
+      | ForeachDestruct names -> "(" ^ String.concat ", " (List.map fst names) ^ ")"
+    in
+    let ty_s =
+      match head.ty_annot with
+      | None -> ""
+      | Some te -> " : " ^ type_expr_to_string te
+    in
+    Format.fprintf fmt "%sforeach (%s %s%s in %a) %a" lbl kw bind_s ty_s pp_expr collection pp_stmt body
+  | StmtBreak None ->
+    Format.fprintf fmt "break;"
+  | StmtBreak (Some (l, _)) ->
+    Format.fprintf fmt "break %s;" l
+  | StmtContinue None ->
+    Format.fprintf fmt "continue;"
+  | StmtContinue (Some (l, _)) ->
+    Format.fprintf fmt "continue %s;" l
   | StmtPrint { newline; args } ->
     let fn_name = if newline then "println" else "print" in
     Format.fprintf fmt "%s(%a);" fn_name

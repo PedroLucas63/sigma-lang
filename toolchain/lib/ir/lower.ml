@@ -551,11 +551,46 @@ let rec lower_expr b (e : Typed_ast.expr) =
          ignore (emit b (Ir.OP_GET_TEMP t_old) e.span)
        end)
 
-let rec lower_stmt b (s : Typed_ast.stmt) =
+type loop_frame = {
+  loop_id : int;
+  header_vars : string list;
+  body_scopes : string list ref list ref;
+  mutable continue_jumps : int list;
+  mutable break_jumps : int list;
+}
+
+let emit_undef_scopes b (scopes : string list ref list) span =
+  List.iter
+    (fun sc ->
+      List.iter
+        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
+        !sc)
+    scopes
+
+let rec emit_cleanup_to_target b (loops : loop_frame list) (target_loop_id : int) span : loop_frame option =
+  match loops with
+  | [] -> None
+  | f :: rest ->
+    emit_undef_scopes b !(f.body_scopes) span;
+    if f.loop_id = target_loop_id then Some f
+    else begin
+      List.iter
+        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
+        f.header_vars;
+      emit_cleanup_to_target b rest target_loop_id span
+    end
+
+let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     lower_expr b v.init;
-    ignore (emit b (def_global_opcode v.ty v.name) s.span)
+    ignore (emit b (def_global_opcode v.ty v.name) s.span);
+    (match loops with
+     | f :: _ ->
+       (match !(f.body_scopes) with
+        | top_sc :: _ -> top_sc := v.name :: !top_sc
+        | [] -> ())
+     | [] -> ())
   | Typed_ast.TStmtDestruct d ->
     let tid = fresh_temp b in
     lower_expr b d.init;
@@ -568,10 +603,26 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
           ignore (emit b (Ir.OP_GET_TEMP tid) bind.name_span);
           ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int i)) bind.name_span);
           ignore (emit b Ir.OP_INDEX_GET bind.name_span);
-          ignore (emit b (def_global_opcode bind.ty name) bind.name_span))
+          ignore (emit b (def_global_opcode bind.ty name) bind.name_span);
+          (match loops with
+           | f :: _ ->
+             (match !(f.body_scopes) with
+              | top_sc :: _ -> top_sc := name :: !top_sc
+              | [] -> ())
+           | [] -> ()))
       d.bindings
   | Typed_ast.TStmtBlock stmts ->
-    List.iter (lower_stmt b) stmts;
+    let cur_sc = ref [] in
+    (match loops with
+     | f :: _ -> f.body_scopes := cur_sc :: !(f.body_scopes)
+     | [] -> ());
+    List.iter (lower_stmt b loops) stmts;
+    (match loops with
+     | f :: _ ->
+       (match !(f.body_scopes) with
+        | _ :: rest -> f.body_scopes := rest
+        | [] -> ())
+     | [] -> ());
     List.iter
       (fun (sub : Typed_ast.stmt) ->
         match sub.desc with
@@ -589,15 +640,159 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
   | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
     lower_expr b cond;
     let j_false = emit b (Ir.OP_JUMP_IF_FALSE 0) cond.span in
-    lower_stmt b then_branch;
+    lower_stmt b loops then_branch;
     (match else_branch with
      | None ->
        patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b))
      | Some eb ->
        let j_end = emit b (Ir.OP_JUMP 0) s.span in
        patch b j_false (Ir.OP_JUMP_IF_FALSE (cur_ip b));
-       lower_stmt b eb;
+       lower_stmt b loops eb;
        patch b j_end (Ir.OP_JUMP (cur_ip b)))
+  | Typed_ast.TStmtWhile { loop_id; cond; body; _ } ->
+    let cond_ip = cur_ip b in
+    lower_expr b cond;
+    let j_exit = emit b (Ir.OP_JUMP_IF_FALSE 0) cond.span in
+    let frame =
+      {
+        loop_id;
+        header_vars = [];
+        body_scopes = ref [];
+        continue_jumps = [];
+        break_jumps = [];
+      }
+    in
+    lower_stmt b (frame :: loops) body;
+    let continue_ip = cond_ip in
+    ignore (emit b (Ir.OP_JUMP cond_ip) s.span);
+    let break_ip = cur_ip b in
+    patch b j_exit (Ir.OP_JUMP_IF_FALSE break_ip);
+    List.iter (fun j -> patch b j (Ir.OP_JUMP continue_ip)) frame.continue_jumps;
+    List.iter (fun j -> patch b j (Ir.OP_JUMP break_ip)) frame.break_jumps
+  | Typed_ast.TStmtFor { loop_id; init; cond; step; body; _ } ->
+    let header_vars =
+      match init with
+      | Typed_ast.TForInitVarDecl v ->
+        lower_expr b v.init;
+        ignore (emit b (def_global_opcode v.ty v.name) s.span);
+        [ v.name ]
+      | Typed_ast.TForInitDestruct d ->
+        let tid = fresh_temp b in
+        lower_expr b d.init;
+        ignore (emit b (Ir.OP_SET_TEMP tid) s.span);
+        List.iteri
+          (fun i (bind : Typed_ast.destruct_binding) ->
+            match bind.name with
+            | None -> ()
+            | Some name ->
+              ignore (emit b (Ir.OP_GET_TEMP tid) bind.name_span);
+              ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int i)) bind.name_span);
+              ignore (emit b Ir.OP_INDEX_GET bind.name_span);
+              ignore (emit b (def_global_opcode bind.ty name) bind.name_span))
+          d.bindings;
+        List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) d.bindings
+      | Typed_ast.TForInitExpr e ->
+        lower_expr b e;
+        ignore (emit b Ir.OP_POP e.span);
+        []
+    in
+    let cond_ip = cur_ip b in
+    lower_expr b cond;
+    let j_exit = emit b (Ir.OP_JUMP_IF_FALSE 0) cond.span in
+    let frame =
+      {
+        loop_id;
+        header_vars;
+        body_scopes = ref [];
+        continue_jumps = [];
+        break_jumps = [];
+      }
+    in
+    lower_stmt b (frame :: loops) body;
+    let continue_ip = cur_ip b in
+    lower_expr b step;
+    ignore (emit b Ir.OP_POP step.span);
+    ignore (emit b (Ir.OP_JUMP cond_ip) s.span);
+    let break_ip = cur_ip b in
+    patch b j_exit (Ir.OP_JUMP_IF_FALSE break_ip);
+    List.iter (fun j -> patch b j (Ir.OP_JUMP continue_ip)) frame.continue_jumps;
+    List.iter (fun j -> patch b j (Ir.OP_JUMP break_ip)) frame.break_jumps;
+    List.iter
+      (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) s.span))
+      header_vars
+  | Typed_ast.TStmtForeach { loop_id; head; collection; len; body; _ } ->
+    let t_arr = fresh_temp b in
+    let t_idx = fresh_temp b in
+    lower_expr b collection;
+    ignore (emit b (Ir.OP_SET_TEMP t_arr) collection.span);
+    ignore (emit b (Ir.OP_CONST_I64 0L) s.span);
+    ignore (emit b (Ir.OP_SET_TEMP t_idx) s.span);
+    let cond_ip = cur_ip b in
+    ignore (emit b (Ir.OP_GET_TEMP t_idx) s.span);
+    ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int len)) s.span);
+    ignore (emit b Ir.OP_LT_I64 s.span);
+    let j_exit = emit b (Ir.OP_JUMP_IF_FALSE 0) s.span in
+    ignore (emit b (Ir.OP_GET_TEMP t_arr) s.span);
+    ignore (emit b (Ir.OP_GET_TEMP t_idx) s.span);
+    ignore (emit b Ir.OP_INDEX_GET s.span);
+    let header_vars =
+      match head with
+      | Typed_ast.TForeachVar { name = None; _ } ->
+        ignore (emit b Ir.OP_POP s.span);
+        []
+      | Typed_ast.TForeachVar { name = Some name; name_span; ty; _ } ->
+        ignore (emit b (def_global_opcode ty name) name_span);
+        [ name ]
+      | Typed_ast.TForeachDestruct { bindings; _ } ->
+        let t_elem = fresh_temp b in
+        ignore (emit b (Ir.OP_SET_TEMP t_elem) s.span);
+        List.iteri
+          (fun i (bind : Typed_ast.destruct_binding) ->
+            match bind.name with
+            | None -> ()
+            | Some name ->
+              ignore (emit b (Ir.OP_GET_TEMP t_elem) bind.name_span);
+              ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int i)) bind.name_span);
+              ignore (emit b Ir.OP_INDEX_GET bind.name_span);
+              ignore (emit b (def_global_opcode bind.ty name) bind.name_span))
+          bindings;
+        List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) bindings
+    in
+    let frame =
+      {
+        loop_id;
+        header_vars;
+        body_scopes = ref [];
+        continue_jumps = [];
+        break_jumps = [];
+      }
+    in
+    lower_stmt b (frame :: loops) body;
+    let continue_ip = cur_ip b in
+    ignore (emit b (Ir.OP_GET_TEMP t_idx) s.span);
+    ignore (emit b (Ir.OP_CONST_I64 1L) s.span);
+    ignore (emit b Ir.OP_ADD_I64 s.span);
+    ignore (emit b (Ir.OP_SET_TEMP t_idx) s.span);
+    ignore (emit b (Ir.OP_JUMP cond_ip) s.span);
+    let break_ip = cur_ip b in
+    patch b j_exit (Ir.OP_JUMP_IF_FALSE break_ip);
+    List.iter (fun j -> patch b j (Ir.OP_JUMP continue_ip)) frame.continue_jumps;
+    List.iter (fun j -> patch b j (Ir.OP_JUMP break_ip)) frame.break_jumps;
+    List.iter
+      (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) s.span))
+      header_vars
+  | Typed_ast.TStmtBreak { target_loop_id; _ } ->
+    (match emit_cleanup_to_target b loops target_loop_id s.span with
+     | Some target_frame ->
+       let j = emit b (Ir.OP_JUMP 0) s.span in
+       target_frame.break_jumps <- j :: target_frame.break_jumps
+     | None -> ())
+  | Typed_ast.TStmtContinue { target_loop_id; _ } ->
+    (match emit_cleanup_to_target b loops target_loop_id s.span with
+     | Some target_frame ->
+       let j = emit b (Ir.OP_JUMP 0) s.span in
+       target_frame.continue_jumps <- j :: target_frame.continue_jumps
+     | None -> ())
   | Typed_ast.TStmtPrint { newline; args } ->
     List.iteri
       (fun i (arg : Typed_ast.expr) ->
@@ -635,6 +830,6 @@ let rec lower_stmt b (s : Typed_ast.stmt) =
 
 let lower_program (prog : Typed_ast.program) : Ir.program =
   let b = create_builder () in
-  List.iter (lower_stmt b) prog;
+  List.iter (lower_stmt b []) prog;
   ignore (emit b Ir.OP_HALT Span.dummy);
   Array.sub b.code 0 b.len
