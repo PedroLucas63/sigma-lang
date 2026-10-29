@@ -34,6 +34,10 @@
           "match": "\\b(if|else)\\b"
         },
         {
+          "name": "keyword.control.loop.sigma",
+          "match": "\\b(while|for|foreach|in|break|continue)\\b"
+        },
+        {
           "name": "keyword.declaration.var.sigma",
           "match": "\\b(var|const)\\b"
         },

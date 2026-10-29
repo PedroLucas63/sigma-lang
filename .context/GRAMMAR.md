@@ -10,6 +10,12 @@
 | Palavra-chave | `KW_CONST` | `const` |
 | Palavra-chave | `KW_IF` | `if` |
 | Palavra-chave | `KW_ELSE` | `else` |
+| Palavra-chave | `KW_WHILE` | `while` |
+| Palavra-chave | `KW_FOR` | `for` |
+| Palavra-chave | `KW_FOREACH` | `foreach` |
+| Palavra-chave | `KW_IN` | `in` |
+| Palavra-chave | `KW_BREAK` | `break` |
+| Palavra-chave | `KW_CONTINUE` | `continue` |
 | Palavra-chave | `KW_PRINT` | `print` |
 | Palavra-chave | `KW_PRINTLN` | `println` |
 | Palavra-chave | `KW_ASSERT` | `assert` |
@@ -85,12 +91,28 @@ decl_stmt     ::= var_decl
                 | destruct_decl ;
 
 non_decl_stmt ::= if_stmt
+                | loop_stmt
+                | break_stmt ";"
+                | continue_stmt ";"
                 | block_stmt
                 | print_stmt ";"
                 | assert_stmt ";"
                 | expr_stmt ";" ;
 
 if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
+
+loop_stmt     ::= ( IDENT ":" )? ( while_stmt | for_stmt | foreach_stmt ) ;
+while_stmt    ::= "while" "(" expr ")" non_decl_stmt ;
+for_stmt      ::= "for" "(" for_init ";" expr ";" expr ")" non_decl_stmt ;
+for_init      ::= var_decl
+                | const_decl
+                | destruct_decl
+                | expr ;
+foreach_stmt  ::= "foreach" "(" foreach_head "in" expr ")" non_decl_stmt ;
+foreach_head  ::= ( "var" | "const" ) IDENT ( ":" type_expr )?
+                | ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ","? ")" ( ":" type_expr )? ;
+break_stmt    ::= "break" IDENT? ;
+continue_stmt ::= "continue" IDENT? ;
 
 block_stmt    ::= "{" stmt* "}" ;
 
@@ -268,6 +290,21 @@ type destruct_decl = {
   init : expr option;
 }
 
+type for_init =
+  | ForInitVarDecl of var_decl
+  | ForInitDestruct of destruct_decl
+  | ForInitExpr of expr
+
+type foreach_binding =
+  | ForeachVar of string * Sigma_common.Span.t
+  | ForeachDestruct of (string * Sigma_common.Span.t) list
+
+type foreach_head = {
+  binding : foreach_binding;
+  is_const : bool;
+  ty_annot : type_expr option;
+}
+
 type stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -277,6 +314,26 @@ type stmt_desc =
       then_branch : stmt;
       else_branch : stmt option;
     }
+  | StmtWhile of {
+      label : (string * Sigma_common.Span.t) option;
+      cond : expr;
+      body : stmt;
+    }
+  | StmtFor of {
+      label : (string * Sigma_common.Span.t) option;
+      init : for_init;
+      cond : expr;
+      step : expr;
+      body : stmt;
+    }
+  | StmtForeach of {
+      label : (string * Sigma_common.Span.t) option;
+      head : foreach_head;
+      collection : expr;
+      body : stmt;
+    }
+  | StmtBreak of (string * Sigma_common.Span.t) option
+  | StmtContinue of (string * Sigma_common.Span.t) option
   | StmtPrint of {
       newline : bool;
       args : expr list;

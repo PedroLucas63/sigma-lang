@@ -190,17 +190,18 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="tuples_arrays">1. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
-            <option value="if_else_blocks">2. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
-            <option value="const_decl">3. Constantes Imutáveis (const) e Segurança Estática</option>
-            <option value="assign_incdec">4. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
-            <option value="arithmetic">5. Operações Aritméticas, //, % e Decimal 128-bit</option>
-            <option value="relational">6. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
-            <option value="logical_bitwise">7. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
-            <option value="strings">8. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
-            <option value="primitives">9. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
-            <option value="assert_tests">10. Testes Integrados (assert, assert_error) e Test Runner</option>
-            <option value="typeerror">11. Segurança de Tipos (E0104 / E0105)</option>
+            <option value="loops">1. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
+            <option value="tuples_arrays">2. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
+            <option value="if_else_blocks">3. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
+            <option value="const_decl">4. Constantes Imutáveis (const) e Segurança Estática</option>
+            <option value="assign_incdec">5. Atribuições (=, +=, //=, and=), ++ / -- e print / println</option>
+            <option value="arithmetic">6. Operações Aritméticas, //, % e Decimal 128-bit</option>
+            <option value="relational">7. Relacionais Encadeados (a &lt; x &lt;= b) e Curto-Circuito</option>
+            <option value="logical_bitwise">8. Lógicos (bool) &amp; Bitwise 64-bit (int)</option>
+            <option value="strings">9. Char Unicode, Operações de Texto &amp; Interpolação ${...}</option>
+            <option value="primitives">10. Tipos Primitivos, Sufixos (f, d, m) e Zero-Init</option>
+            <option value="assert_tests">11. Testes Integrados (assert, assert_error) e Test Runner</option>
+            <option value="typeerror">12. Segurança de Tipos (E0104 / E0105)</option>
           </select>
           <button class="primary" id="run-btn">Simular Saída</button>
         </div>
@@ -222,7 +223,7 @@
       <a href="../docs/spec/grammar-and-types.md">📐 Especificação Formal &amp; EBNF (docs/spec/)</a>
       <a href="../docs/guide/01-variables-and-types.md">📘 Guia 01: Variáveis &amp; Tipos (docs/guide/)</a>
       <a href="../docs/guide/02-operators-and-expressions.md">📙 Guia 02: Operadores &amp; Expressões (docs/guide/)</a>
-      <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais (if/else) &amp; Blocos (docs/guide/)</a>
+      <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais, Laços, Rótulos &amp; Blocos (docs/guide/)</a>
       <a href="../docs/guide/04-testing-and-project-management.md">🧪 Guia 04: Testes &amp; Projetos (docs/guide/)</a>
       <a href="../docs/guide/05-tuples-and-arrays.md">📦 Guia 05: Tuplas, Arrays, Spread &amp; Referências (docs/guide/)</a>
       <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
@@ -365,6 +366,17 @@ var c : int;                    # zero-init -> 0</pre>
           <li><strong>Semântica de Objetos por Referência:</strong> Arrays e tuplas são objetos no heap. Em <code>var l := [10, 20]; var ll := [[l]]; l[0] = 50;</code>, temos <code>ll == [[[50, 20]]]</code>. Já <code>l * 3</code> cria um novo array copiando os elementos de 1º nível.</li>
         </ul>
       </article>
+
+      <article class="card">
+        <h3>12. Laços de Repetição (<code>while</code>, <code>for</code>, <code>foreach</code>), Desempacotamento e Rótulos (<code>break</code> / <code>continue</code>)</h3>
+        <p>Estruturas de repetição estaticamente tipadas com escopo léxico próprio e controle de fluxo direcionado:</p>
+        <ul>
+          <li><strong><code>while (&lt;bool-expr&gt;) &lt;stmt&gt;</code>:</strong> Repete <code>&lt;stmt&gt;</code> enquanto a condição (estritamente <code>bool</code>, <code>E0104</code>) for <code>true</code>.</li>
+          <li><strong><code>for (&lt;init&gt;; &lt;bool-expr&gt;; &lt;step&gt;) &lt;stmt&gt;</code>:</strong> Aceita declaração com escopo próprio (<code>var i := 0</code> ou desempacotamento <code>var (a, b) := (0, 10)</code>) ou expressão no <code>&lt;init&gt;</code>.</li>
+          <li><strong><code>foreach (var/const &lt;binding&gt; [: &lt;type&gt;] in &lt;array&gt;) &lt;stmt&gt;</code>:</strong> Itera sobre arrays estáticos <code>T[N]</code>, suportando variável simples e desempacotamento direto de tuplas/sub-arrays com curinga <code>_</code>: <code>foreach (var (a, b) in [(10, 20), (20, 30)]) println(a + b);</code>.</li>
+          <li><strong>Laços Rotulados e <code>break</code> / <code>continue</code> Direcionados:</strong> Anote laços com <code>&lt;label&gt;:</code> e controle laços externos a partir de laços internos com <code>break &lt;label&gt;;</code> e <code>continue &lt;label&gt;;</code> (<code>E0109</code> se usado fora de laço ou com rótulo inexistente).</li>
+        </ul>
+      </article>
     </div>
 
     <!-- TABELA DE PRECEDÊNCIA -->
@@ -416,6 +428,37 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      loops: {
+        code: `# 1. while (<bool-expr>) <stmt>
+var i := 0;
+var soma_w := 0;
+while (i < 5) {
+  soma_w += i;
+  i++;
+}
+println("while soma:", soma_w);
+
+# 2. for (<init>; <bool-expr>; <step>) <stmt>
+var soma_f := 0;
+for (var k := 1; k <= 5; k++) soma_f += k;
+println("for soma:", soma_f);
+
+# 3. foreach com desempacotamento direto sobre array de tuplas
+var l := [(10, 20), (20, 30)];
+foreach (var (a, b) in l) println("a + b =", a + b);
+
+# 4. Rótulos de laço (<label>:) com break <label> e continue <label>
+for1: for (var r := 0; r < 10; r++) {
+  for2: foreach (var (x, y) in l) {
+    if (x == 10) continue for2;
+    if (r == 2 and y == 30) {
+      println("Interrompendo for1 em r =", r, "y =", y);
+      break for1;
+    }
+  }
+}`,
+        out: `while soma: 10\nfor soma: 15\na + b = 30\na + b = 50\nInterrompendo for1 em r = 2 y = 30`
+      },
       tuples_arrays: {
         code: `# Tuplas (Imutáveis), Desempacotamento, Arrays Estáticos, Spread (..) e Referências
 var tuple := (10, 10., "10");
@@ -626,7 +669,7 @@ var invalido := 0.1f + 0.2m;`,
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('tuples_arrays');
+    loadExample('loops');
   </script>
 </body>
 </html>

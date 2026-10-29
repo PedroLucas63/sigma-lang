@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `const`, `if`, `else`, `print`, `println`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `const`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -37,12 +37,28 @@ decl_stmt     ::= var_decl
                 | destruct_decl ;
 
 non_decl_stmt ::= if_stmt
+                | loop_stmt
+                | break_stmt ";"
+                | continue_stmt ";"
                 | block_stmt
                 | print_stmt ";"
                 | assert_stmt ";"
                 | expr_stmt ";" ;
 
 if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
+
+loop_stmt     ::= ( IDENT ":" )? ( while_stmt | for_stmt | foreach_stmt ) ;
+while_stmt    ::= "while" "(" expr ")" non_decl_stmt ;
+for_stmt      ::= "for" "(" for_init ";" expr ";" expr ")" non_decl_stmt ;
+for_init      ::= var_decl
+                | const_decl
+                | destruct_decl
+                | expr ;
+foreach_stmt  ::= "foreach" "(" foreach_head "in" expr ")" non_decl_stmt ;
+foreach_head  ::= ( "var" | "const" ) IDENT ( ":" type_expr )?
+                | ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ","? ")" ( ":" type_expr )? ;
+break_stmt    ::= "break" IDENT? ;
+continue_stmt ::= "continue" IDENT? ;
 
 block_stmt    ::= "{" stmt* "}" ;
 
@@ -153,6 +169,11 @@ elem_or_spread ::= ".." expr | expr ;
    - **Arrays de Tamanho Estático (`T[N]` e `T[]`):** Homogêneos de tamanho fixo $N \ge 1$ (`N <= 0` ou `[]` vazio disparam `E0108`). A anotação `T[]` com tamanho omitido é permitida quando acompanhada de inicializador (`var a : int[] = [10, 20];` infere `int[2]`), gerando `E0106` se usada sem inicializador. Elementos de arrays são mutáveis via indexação `arr[i] = val`, `<op>=` e `++`/`--` (mesmo quando a referência ao array é `const`, pois `const` congela apenas a referência da variável).
    - **Concatenação (`+`), Repetição (`*`) e Spread (`..`):** `T[N] + T[M] -> T[N+M]`; `T[N] * k -> T[N*k]` e `k * T[N] -> T[N*k]` (para constante inteira $k > 0$, ou `E0108` se $k \le 0$). Não há `+=` ou `*=` para arrays pois alterariam o tamanho estático $N$ (`E0104`). O operador de espalhamento `..expr` pode ser usado dentro de literais de array `[..t, ..l, 50]` e de tupla `(..t, 50)`.
    - **Semântica de Objetos por Referência (*Heap Reference Semantics*):** Tuplas e arrays são objetos alocados no heap e passados/armazenados por referência. `var l := [10, 20]; var ll := [[l]]; l[0] = 50;` faz `ll == [[[50, 20]]]`. Operações `+` e `*` alocam um novo array copiando os elementos de 1º nível (valores primitivos são copiados; referências a sub-arrays/tuplas continuam apontando para os mesmos objetos). Igualdade `==` e `!=` é estrutural profunda.
+10. **Estruturas de Repetição (`while`, `for`, `foreach`), Rótulos (`<label>:`) e Controle (`break`, `continue`):**
+    - `while (<bool-expr>) <stmt>`: avalia `<bool-expr>` (estritamente `bool`, `E0104`) antes de cada iteração e executa `<stmt>`.
+    - `for (<init>; <bool-expr>; <step>) <stmt>`: aceita declaração local (`var`/`const` simples ou desempacotamento `(a, b)`) ou expressão em `<init>`, condição booleana `<bool-expr>` (`E0104`) e expressão de passo `<step>`. Variáveis declaradas em `<init>` pertencem exclusivamente ao escopo do laço (`E0102` fora dele, `E0103` se colidirem com variável externa).
+    - `foreach (var/const <binding> [: <type>] in <array-expr>) <stmt>`: itera sobre um array estático `T[N]` (`E0104` caso a coleção não seja array). Suporta variável simples (`var x in arr`), constante (`const x in arr`) e desempacotamento de tuplas/sub-arrays com curinga `_` (`var (a, b) in [(10, 20), (20, 30)]`).
+    - **Laços Rotulados e `break`/`continue` Direcionados:** Qualquer laço pode receber um rótulo `<label>: while/for/foreach ...` (`E0103` se o rótulo já estiver ativo em um laço externo). `break [<label>];` encerra o laço alvo e `continue [<label>];` avança para a próxima iteração/passo do laço alvo (`E0109` se usado fora de laço ou com rótulo inexistente).
 
 ---
 
@@ -165,10 +186,11 @@ elem_or_spread ::= ".." expr | expr ;
 | `E0003` | Parser | Erro | Ausência de ponto-e-vírgula `;` obrigatório ao final da instrução. |
 | `E0101` | Sema | Erro | Tipo desconhecido ou ainda não suportado. |
 | `E0102` | Sema | Erro | Uso de variável não declarada no escopo. |
-| `E0103` | Sema | Erro | Redeclaração de variável já existente no mesmo escopo ou duplicata em padrão de desempacotamento. |
-| `E0104` | Sema | Erro | Incompatibilidade de tipos em atribuição, operação unária/binária/relacional, elementos de array ou aridade de desempacotamento. |
+| `E0103` | Sema | Erro | Redeclaração de variável/rótulo de laço já existente no mesmo escopo ou duplicata em padrão de desempacotamento. |
+| `E0104` | Sema | Erro | Incompatibilidade de tipos em atribuição, condição, coleção de `foreach`, elementos de array ou aridade de desempacotamento. |
 | `E0105` | Sema | Erro | Divisão ou módulo por zero detectado em tempo de compilação. |
 | `E0106` | Sema/Parser | Erro | Declaração de constante sem inicializador ou tipo de array `T[]` com tamanho omitido sem expressão inicializadora. |
 | `E0107` | Sema | Erro | Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável ou elemento de tupla. |
 | `E0108` | Sema | Erro | Índice constante fora dos limites, índice de tupla não-constante, tamanho de array `<= 0` ou repetição de array por fator `<= 0`. |
+| `E0109` | Sema | Erro | Uso de `break` ou `continue` fora de um laço de repetição ou referenciando um rótulo de laço inexistente/inativo. |
 | `W0001` | Linter | Aviso | Variável declarada e nunca utilizada (suprimido se o nome iniciar com `_`). |

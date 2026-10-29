@@ -9,7 +9,7 @@ Bem-vindo à documentação oficial da **Sigma**, uma linguagem de programação
 2. **Guia de Aprendizado (`guide/`)**
    - [01. Variáveis, Tipos Primitivos, Ponto Flutuante Exato (`decimal`), Strings Interpoladas e `print`/`println`](./guide/01-variables-and-types.md)
    - [02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais, Atribuições Compostas e Incremento/Decremento](./guide/02-operators-and-expressions.md)
-   - [03. Estruturas Condicionais (`if`/`else`) e Blocos de Escopo Léxico (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
+   - [03. Estruturas Condicionais (`if`/`else`), Laços (`while`, `for`, `foreach`), Rótulos (`break`/`continue`) e Blocos (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
    - [04. Testes Nativos (`assert`, `assert_error`), Test Runner (`sigma test`) e Gerenciador de Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)
    - [05. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos (`T[N]` / `T[]`), Spread (`..`) e Semântica de Referência](./guide/05-tuples-and-arrays.md)
 3. **Ferramentas e CLI Unificada (`tools/`)**
