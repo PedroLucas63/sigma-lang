@@ -1,0 +1,126 @@
+# Suíte de Testes 10 — Closures e Captura Léxica de Escopo
+
+# 1. Exemplo de referência com variáveis locais e sombreamento de globais
+fun example(a: int, b: int): int(int) {
+    var c := a + b;
+    var d := 10;
+    fun op(a: int): int {
+        return a * d + c;
+    }
+    return op;
+}
+
+var (a, b, c, d) := (5, 5, 5, 0);
+var op := example(a, b);
+var r := op(6);
+assert(r, 70); # 6 * 10 + 10 = 70
+assert(c, 5);
+assert(d, 0);
+
+# 2. Mutação de variável capturada (acumulador / contador independente)
+fun make_counter(start: int): int() {
+    var count := start;
+    fun inc(): int {
+        count += 1;
+        return count;
+    }
+    return inc;
+}
+
+var c1 := make_counter(0);
+var c2 := make_counter(100);
+assert(c1(), 1);
+assert(c1(), 2);
+assert(c2(), 101);
+assert(c1(), 3);
+assert(c2(), 102);
+
+# 3. Múltiplas closures compartilhando a mesma célula por referência
+fun make_cell(init: int): (int(), void(int)) {
+    var value := init;
+    fun get(): int { return value; }
+    act set(v: int) { value = v; }
+    return (get, set);
+}
+
+var (get_val, set_val) := make_cell(42);
+assert(get_val(), 42);
+set_val(99);
+assert(get_val(), 99);
+set_val(-10);
+assert(get_val(), -10);
+
+# 4. Captura direta de parâmetros do escopo pai
+fun multiplier(factor: int): int(int) {
+    fun apply(x: int): int {
+        return x * factor;
+    }
+    return apply;
+}
+
+var double_it := multiplier(2);
+var triple_it := multiplier(3);
+assert(double_it(10), 20);
+assert(triple_it(10), 30);
+
+# 5. Closures aninhadas em múltiplos níveis (3 níveis de escopo léxico)
+fun nest3(x: int): int(int) {
+    fun mid(y: int): int {
+        fun inner(z: int): int {
+            return x * 100 + y * 10 + z;
+        }
+        return inner(5);
+    }
+    return mid;
+}
+
+var m := nest3(2);
+assert(m(4), 245); # 2*100 + 4*10 + 5
+
+# 6. Funções recursivas locais
+fun run_fact(n: int): int {
+    fun local_fact(k: int): int {
+        if (k <= 1) return 1;
+        return k * local_fact(k - 1);
+    }
+    return local_fact(n);
+}
+
+assert(run_fact(5), 120);
+assert(run_fact(1), 1);
+assert(run_fact(0), 1);
+
+# 7. Closures com aplicação parcial e argumentos nomeados
+fun make_linear(scale: int, offset: int): int(int) {
+    fun transform(x: int): int {
+        return x * scale + offset;
+    }
+    return transform;
+}
+
+var lin := make_linear(offset=10, scale=3);
+assert(lin(5), 25); # 5 * 3 + 10
+
+# 8. Currying sobre funções retornadas que capturam estado
+fun make_adder(bias: int): int(int, int) {
+    fun add_both(a: int, b: int): int {
+        return a + b + bias;
+    }
+    return add_both;
+}
+
+var add_b := make_adder(100);
+var add_partial := add_b(20);
+assert(add_partial(5), 125);
+assert(add_b(7, 3), 110);
+
+# 9. Captura de tipos compostos (strings, tuplas e arrays)
+fun make_prefixer(prefix: string): string(string) {
+    fun with_pfx(msg: string): string {
+        return "${prefix}: ${msg}";
+    }
+    return with_pfx;
+}
+
+var log_info := make_prefixer("INFO");
+assert(log_info("server started"), "INFO: server started");

@@ -714,7 +714,6 @@ let test_syntax_and_semantic_errors () =
       ("act a() {} var x := a();", "E0113");
       ("var x : void;", "E0113");
       ("fun f(): void {}", "E0113");
-      ("fun outer(): int { fun inner(): int { return 1; } return inner(); }", "E0114");
     ]
 
 let test_assignment_and_incdec_parity () =

@@ -90,4 +90,4 @@ assert_error("E0112", "var x := 10; x(1);");
 assert_error("E0113", "act a() {} var x := a();");
 assert_error("E0113", "var x : void;");
 assert_error("E0113", "fun f(): void {}");
-assert_error("E0114", "fun outer(): int { fun inner(): int { return 1; } return inner(); }");
+assert_error("E0103", "fun f(a: int, a: int): int { return a; }");
