@@ -12,5 +12,6 @@ Bem-vindo à documentação oficial da **Sigma**, uma linguagem de programação
    - [03. Estruturas Condicionais (`if`/`else`), Laços (`while`, `for`, `foreach`), Rótulos (`break`/`continue`) e Blocos (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
    - [04. Testes Nativos (`assert`, `assert_error`), Test Runner (`sigma test`) e Gerenciador de Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)
    - [05. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos (`T[N]` / `T[]`), Spread (`..`) e Semântica de Referência](./guide/05-tuples-and-arrays.md)
+   - [06. Funções (`fun`), Procedimentos (`act`), Chamadas Parciais e Argumentos Nomeados](./guide/06-functions-and-actions.md)
 3. **Ferramentas e CLI Unificada (`tools/`)**
    - [Referência da CLI `sigma` (Interpretador, Compilador Nativo, Linter, Debugger e Pacotes)](./tools/cli-reference.md)

@@ -38,6 +38,14 @@
           "match": "\\b(while|for|foreach|in|break|continue)\\b"
         },
         {
+          "name": "keyword.declaration.function.sigma",
+          "match": "\\b(fun|act)\\b"
+        },
+        {
+          "name": "keyword.control.flow.return.sigma",
+          "match": "\\b(return)\\b"
+        },
+        {
           "name": "keyword.declaration.var.sigma",
           "match": "\\b(var|const)\\b"
         },
@@ -63,7 +71,7 @@
       "patterns": [
         {
           "name": "storage.type.primitive.sigma",
-          "match": "\\b(int|float|double|decimal|bool|char|string)\\b"
+          "match": "\\b(int|float|double|decimal|bool|char|string|void)\\b"
         }
       ]
     },

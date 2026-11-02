@@ -16,6 +16,9 @@
 | Palavra-chave | `KW_IN` | `in` |
 | Palavra-chave | `KW_BREAK` | `break` |
 | Palavra-chave | `KW_CONTINUE` | `continue` |
+| Palavra-chave | `KW_FUN` | `fun` |
+| Palavra-chave | `KW_ACT` | `act` |
+| Palavra-chave | `KW_RETURN` | `return` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -90,12 +93,15 @@ stmt          ::= decl_stmt ";"
 
 decl_stmt     ::= var_decl
                 | const_decl
-                | destruct_decl ;
+                | destruct_decl
+                | fun_decl
+                | act_decl ;
 
 non_decl_stmt ::= if_stmt
                 | loop_stmt
                 | break_stmt ";"
                 | continue_stmt ";"
+                | return_stmt ";"
                 | block_stmt
                 | print_stmt ";"
                 | assert_stmt ";"
@@ -115,15 +121,22 @@ foreach_head  ::= ( "var" | "const" ) IDENT ( ":" type_expr )?
                 | ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ","? ")" ( ":" type_expr )? ;
 break_stmt    ::= "break" IDENT? ;
 continue_stmt ::= "continue" IDENT? ;
+return_stmt   ::= "return" expr? ;
 
 block_stmt    ::= "{" stmt* "}" ;
+
+fun_decl      ::= "fun" IDENT "(" params? ")" ":" type_expr block_stmt ;
+act_decl      ::= "act" IDENT "(" params? ")" block_stmt ;
+params        ::= param ( "," param )* ","? ;
+param         ::= IDENT ":" type_expr ;
 
 var_decl      ::= "var" IDENT ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
 const_decl    ::= "const" IDENT ( ":" type_expr "=" expr | ":=" expr ) ;
 destruct_decl ::= ( "var" | "const" ) "(" IDENT ( "," IDENT )+ ","? ")"
                   ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
 
-type_expr     ::= base_type ( "[" INT? "]" )* ;
+type_expr     ::= base_type fn_suffix? ( "[" INT? "]" )* ;
+fn_suffix     ::= "(" ( type_expr ( "," type_expr )* )? ")" ;
 base_type     ::= IDENT
                 | "(" type_expr ( "," type_expr )* ","? ")" ;
 
@@ -154,7 +167,9 @@ mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
 power         ::= postfix ( "^" unary )? ;
-postfix       ::= primary ( "[" expr "]" | "++" | "--" )* ;
+postfix       ::= primary ( "[" expr "]" | "++" | "--" | "(" call_args? ")" )* ;
+call_args     ::= call_arg ( "," call_arg )* ","? ;
+call_arg      ::= ( IDENT "=" )? expr ;
 primary       ::= INT
                 | FLOAT
                 | DOUBLE

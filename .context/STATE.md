@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M2 — Estruturas de Dados, Controle de Fluxo e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (Release `v0.2.2` publicada em `main` e sincronizada com `develop`).
+- **Milestone:** `M2 — Funções de Primeira Classe, Procedimentos e Aplicação Parcial`
+- **Git Flow:** Branch ativa `feature/functions-and-actions` sobre `develop`.
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -25,23 +25,24 @@
 - [x] Declaração de constantes imutáveis `const` com inferência `:=` e tipo explícito `: <ty> =`, exigindo inicializador obrigatório (`E0106`) e proibindo estaticamente reatribuição ou incremento/decremento (`E0107`).
 - [x] Tuplas heterogêneas com elementos imutáveis `(e1, e2, ...)` e tipo `(T1, T2, ...)` (zero-init recursivo, indexação constante `tuple[0]` e proibição de mutação posicional `E0107`), desempacotamento `var/const (a, b, _) := ...` com curinga `_`, arrays estáticos `T[N]` e tamanho inferido `T[]` (com mutação por índice, concatenação `+`, repetição `*`), operador spread `..` em literais de tupla/array e semântica de objetos por referência no heap (`E0108`).
 - [x] Estruturas de repetição `while (<bool-expr>) <stmt>`, `for (<init>; <bool-expr>; <step>) <stmt>` (com declaração local simples/desempacotada ou expressão em `<init>`) e `foreach (var/const <binding> [:<type>] in <array>) <stmt>` (com suporte a variável simples e desempacotamento `var (a, b) in l`), além de laços rotulados `<label>:` e `break [<label>];` / `continue [<label>];` (`E0109`).
+- [x] Funções de primeira classe `fun <name>(<params>): <type> { ... }` e procedimentos `act <name>(<params>) { ... }` com tipo first-class `T(T1, T2)` / `void(T1)`, chamada com argumentos posicionais ou nomeados (`f(b=10, a=20)`), aplicação parcial automática (currying), recursão e validação estática de caminhos de retorno (`E0110`..`E0114`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 249 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta.
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 280 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (9 suítes).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
-- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/` (incluindo `input`/`prompt`, máscaras estruturadas, especificadores de formatação `${expr:spec}`, laços `while`/`for`/`foreach`, rótulos `break`/`continue`, tuplas, desempacotamento, arrays estáticos, spread `..`, semântica de referência, `assert`/`assert_error`, `sigma test`, `sigma.toml`, constantes `const`, `if`/`else` e blocos `{ ... }`).
+- [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
 ## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Implementar funções definidas pelo usuário (`fn` / `return`), arrays dinâmicos ou métodos/propriedades nativas (`len`, etc.).
+- [ ] Branch 2: Closures e captura léxica de variáveis por referência (`feature/closures`).
+- [ ] Arrays dinâmicos ou métodos/propriedades nativas (`len`, etc.).
 
 ## Histórico de Sessões (Resumo Compacto)
-- **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e variáveis primitivos (`int`, `bool`, `float`, `double`, `decimal` 128-bit, `char`, `string` + `${...}`) (`ADR-001` a `ADR-014`).
-- **2026-10-20:** Operações aritméticas (`+`, `-`, `*`, `/`, `//`, `^`, `%`), lógicas/bitwise (`not`, `and`, `xor`, `or`, `<<`, `>>`), relacionais encadeados (`a < x <= b`) e curto-circuito (`ADR-015` a `ADR-017`).
-- **2026-10-21:** Atribuições (`=`, `<op>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos de escopo léxico `{ ... }` (`ADR-018` a `ADR-020`).
-- **2026-10-24:** Constantes `const`, testes integrados (`assert`, `assert_error`), `sigma test` (`--parity`), `sigma.toml` e pipeline CI/CD GitHub Actions (`ADR-021` a `ADR-023`).
-- **2026-10-27:** Tuplas imutáveis `(T1, T2)`, desempacotamento `var/const (a, b, _) := ...`, arrays estáticos `T[N]` / `T[]` (`+`, `*`), spread `..` e semântica de referência no heap (`feature/tuples-and-arrays`, `ADR-024`).
-- **2026-10-29:** Laços `while`, `for` e `foreach` (com desempacotamento direto), rótulos `<label>:` e `break [<label>];` / `continue [<label>];` (`feature/loops`, `ADR-025`).
-- **2026-10-29:** Entrada estaticamente tipada `input(...)` e `prompt(<msg>, ...)` (com tipos múltiplos e máscaras `"${int}.${int}..."`), especificadores de formatação `"${expr : [fill][<|>|^][+][0][width][.prec]}"`, suíte `08_input_and_format_test.sgm` (249 asserções totais) e sincronização do ecossistema (`feature/input-and-string-format`, `ADR-026`).
-- **2026-11-02:** Streaming de `stdout` em tempo real com `flush stdout` imediato na VM (`~stream_stdout:true` em `sigma run`), correção do deploy GitHub Pages em `release.yml` (execução exclusiva em `refs/heads/main`) e substituição atômica (`rm -f` + `chmod 755`) no `install.sh` / `package.sh` (`v0.2.2`).
+- **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
+- **2026-10-20:** Operações aritméticas, lógicas/bitwise, relacionais encadeados e curto-circuito (`ADR-015` a `ADR-017`).
+- **2026-10-21:** Atribuições (`=`, `<op>=`), `++`/`--`, `print`/`println`, condicionais `if`/`else` e blocos `{ ... }` (`ADR-018` a `ADR-020`).
+- **2026-10-24:** Constantes `const`, testes integrados (`assert`, `assert_error`), `sigma test` (`--parity`), `sigma.toml` e CI/CD (`ADR-021` a `ADR-023`).
+- **2026-10-27:** Tuplas imutáveis, desempacotamento, arrays estáticos, spread `..` e semântica de referência (`ADR-024`).
+- **2026-10-29:** Laços `while`, `for`, `foreach`, rótulos `break`/`continue` (`ADR-025`), `input`/`prompt`, `${expr:spec}` (`ADR-026`) e transpilação `sigma emit-c` (`ADR-027`).
+- **2026-11-02:** Streaming de stdout imediato, correções no instalador/deploy (`v0.2.2`), e implementação completa de funções (`fun`), procedimentos (`act`), aplicação parcial e argumentos nomeados (`ADR-028`, 280 asserções, paridade 100%).

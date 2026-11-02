@@ -190,8 +190,9 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="input_format">1. Entrada Tipada (input / prompt), Máscaras e Formatação ${expr:spec}</option>
-            <option value="loops">2. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
+            <option value="functions_actions">1. Funções (fun), Procedimentos (act), Chamadas Parciais e Argumentos Nomeados</option>
+            <option value="input_format">2. Entrada Tipada (input / prompt), Máscaras e Formatação ${expr:spec}</option>
+            <option value="loops">3. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
             <option value="tuples_arrays">3. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
             <option value="if_else_blocks">4. Condicionais (if / else / else if) e Escopos Léxicos ({ ... })</option>
             <option value="const_decl">5. Constantes Imutáveis (const) e Segurança Estática</option>
@@ -227,6 +228,7 @@
       <a href="../docs/guide/03-control-flow-and-blocks.md">📕 Guia 03: Condicionais, Laços, Rótulos &amp; Blocos (docs/guide/)</a>
       <a href="../docs/guide/04-testing-and-project-management.md">🧪 Guia 04: Testes &amp; Projetos (docs/guide/)</a>
       <a href="../docs/guide/05-tuples-and-arrays.md">📦 Guia 05: Tuplas, Arrays, Spread &amp; Referências (docs/guide/)</a>
+      <a href="../docs/guide/06-functions-and-actions.md">⚡ Guia 06: Funções, Procedimentos &amp; Chamadas Parciais (docs/guide/)</a>
       <a href="../docs/tools/cli-reference.md">🛠️ Referência da CLI (docs/tools/)</a>
       <a href="../operations.csv">📊 Matriz Completa (operations.csv)</a>
     </div>
@@ -404,7 +406,7 @@ var c : int;                    # zero-init -> 0</pre>
         </thead>
         <tbody>
           <tr><td>1 (Maior)</td><td><code>( expr )</code>, <code>(e1, e2)</code>, <code>[e1, e2]</code>, literais, identificadores</td><td>Agrupamento, tuplas, arrays e átomos</td><td>—</td></tr>
-          <tr><td>2</td><td><code>x[i]</code>, <code>x++</code>, <code>x--</code></td><td>Indexação pós-fixada, pós-incremento e pós-decremento</td><td>Esquerda</td></tr>
+          <tr><td>2</td><td><code>x[i]</code>, <code>f(...)</code>, <code>x++</code>, <code>x--</code></td><td>Indexação, chamada de função/ação, pós-incremento e pós-decremento</td><td>Esquerda</td></tr>
           <tr><td>3</td><td><code>^</code></td><td>Potenciação</td><td>Direita (<code>2 ^ 3 ^ 2 == 512</code>)</td></tr>
           <tr><td>4</td><td><code>+</code>, <code>-</code>, <code>++x</code>, <code>--x</code></td><td>Sinal unário e pré-incremento/decremento (retornam novo valor)</td><td>Direita (<code>-2 ^ 2 == -4</code>)</td></tr>
           <tr><td>5</td><td><code>*</code>, <code>/</code>, <code>//</code>, <code>%</code></td><td>Multiplicação, divisão real, divisão inteira e módulo euclidiano</td><td>Esquerda</td></tr>
@@ -440,6 +442,33 @@ dune exec sigma -- pkg init meu_projeto        # Gera manifesto de pacote sigma.
 
   <script>
     const examples = {
+      functions_actions: {
+        code: `# Funções (fun) com retorno e Procedimentos (act) sem retorno
+fun soma(a: int, b: int): int {
+  return a + b;
+}
+
+# Funções são objetos de primeira classe e suportam chamada parcial
+var s := soma;
+var s10 := s(10);
+var res := s10(25); # 35
+println("soma(10, 25) =", res);
+
+# Argumentos nomeados com '='
+var r_nomeado := soma(b=30, a=70);
+println("soma(b=30, a=70) =", r_nomeado);
+
+# Procedimentos (act) para efeitos colaterais
+var contador := 0;
+act adicionar(qtd: int) {
+  contador += qtd;
+}
+
+adicionar(5);
+adicionar(10);
+println("Contador final:", contador);`,
+        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15`
+      },
       input_format: {
         code: `# @stdin: 123.456.789-07
 # @stdin: Pedro
@@ -703,7 +732,7 @@ var invalido := 0.1f + 0.2m;`,
     document.getElementById('run-btn').addEventListener('click', () => {
       output.textContent = examples[select.value].out;
     });
-    loadExample('loops');
+    loadExample('functions_actions');
   </script>
 </body>
 </html>
