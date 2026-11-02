@@ -217,16 +217,16 @@ let () =
   | [ "run" ] ->
     let _m, entry = resolve_entry_or_exit () in
     let src = load_or_exit entry in
-    (match Driver.run_source src with
-     | Ok out -> print_string out
+    (match Driver.run_source ~stream_stdout:true src with
+     | Ok _ -> ()
      | Error errs ->
        print_diagnostics src errs;
        exit 1)
   | [ "run"; target ] ->
     if Sys.file_exists target || Filename.check_suffix target ".sgm" then
       let src = load_or_exit target in
-      (match Driver.run_source src with
-       | Ok out -> print_string out
+      (match Driver.run_source ~stream_stdout:true src with
+       | Ok _ -> ()
        | Error errs ->
          print_diagnostics src errs;
          exit 1)
@@ -236,8 +236,8 @@ let () =
          ignore (run_manifest_script target m)
        | _ ->
          let src = load_or_exit target in
-         (match Driver.run_source src with
-          | Ok out -> print_string out
+         (match Driver.run_source ~stream_stdout:true src with
+          | Ok _ -> ()
           | Error errs ->
             print_diagnostics src errs;
             exit 1))

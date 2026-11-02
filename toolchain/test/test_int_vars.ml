@@ -1319,6 +1319,67 @@ println("X = ${x}");
         with _ -> false);
      (try Sys.remove out_c with _ -> ()))
 
+let test_vm_realtime_stdout_before_input () =
+  let code =
+    {|println("Passo 1");
+var x := prompt("Digite x: ", int);
+println("Resultado: ${x * 2}");
+|}
+  in
+  let src = Source.of_string ~filename:"realtime_prompt.sgm" ~content:code in
+  let in_r, in_w = Unix.pipe () in
+  let out_r, out_w = Unix.pipe () in
+  match Unix.fork () with
+  | 0 ->
+    Unix.close in_w;
+    Unix.close out_r;
+    Unix.dup2 in_r Unix.stdin;
+    Unix.dup2 out_w Unix.stdout;
+    Unix.close in_r;
+    Unix.close out_w;
+    (match Driver.run_source ~stream_stdout:true src with
+     | Ok _ -> exit 0
+     | Error _ -> exit 2)
+  | pid ->
+    Unix.close in_r;
+    Unix.close out_w;
+    (* Read stdout BEFORE sending any input to stdin! *)
+    let expected_pre = "Passo 1\nDigite x: " in
+    let pre_buf = Bytes.create (String.length expected_pre) in
+    let rec read_exact off len =
+      if len = 0 then ()
+      else
+        let n = Unix.read out_r pre_buf off len in
+        if n > 0 then read_exact (off + n) (len - n)
+    in
+    read_exact 0 (String.length expected_pre);
+    let got_pre = Bytes.to_string pre_buf in
+    assert_true
+      ~msg:(Printf.sprintf "Expected prompt before input %S, got %S" expected_pre got_pre)
+      (got_pre = expected_pre);
+    (* Now send input "21\n" *)
+    let payload = Bytes.of_string "21\n" in
+    ignore (Unix.write in_w payload 0 (Bytes.length payload));
+    Unix.close in_w;
+    (* Read remaining output after input is processed *)
+    let post_buf = Buffer.create 32 in
+    let tmp = Bytes.create 64 in
+    let rec drain () =
+      let n = Unix.read out_r tmp 0 64 in
+      if n > 0 then begin
+        Buffer.add_subbytes post_buf tmp 0 n;
+        drain ()
+      end
+    in
+    drain ();
+    Unix.close out_r;
+    let _, status = Unix.waitpid [] pid in
+    assert_true ~msg:"Child VM process should exit with 0" (status = Unix.WEXITED 0);
+    let got_post = Buffer.contents post_buf in
+    assert_true
+      ~msg:(Printf.sprintf "Expected post-input output %S, got %S" "Resultado: 42\n" got_post)
+      (got_post = "Resultado: 42\n")
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1331,6 +1392,7 @@ let () =
   test_loops_parity ();
   test_input_and_format_parity ();
   test_emit_c_source ();
+  test_vm_realtime_stdout_before_input ();
   test_assert_and_test_runner_parity ();
   test_pkg_manifest_and_scaffold ();
   test_linter_unused_variable ();

@@ -45,7 +45,8 @@ let extract_stdin_directives (content : string) : string list option =
   | [] -> None
   | xs -> Some xs
 
-let run_source ?stdin_lines (src : Source.t) : (string, Diagnostic.t list) result =
+let run_source ?stdin_lines ?(stream_stdout = false) (src : Source.t) :
+    (string, Diagnostic.t list) result =
   match compile_frontend src with
   | Error errs -> Error errs
   | Ok (_typed_ast, ir) ->
@@ -54,7 +55,7 @@ let run_source ?stdin_lines (src : Source.t) : (string, Diagnostic.t list) resul
       | Some _ -> stdin_lines
       | None -> extract_stdin_directives src.content
     in
-    (match Vm.run ?stdin_lines ir with
+    (match Vm.run ?stdin_lines ~stream_stdout ir with
      | Ok out -> Ok out
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0900" ~span:Span.dummy msg ])
