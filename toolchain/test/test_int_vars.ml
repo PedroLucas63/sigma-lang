@@ -704,6 +704,17 @@ let test_syntax_and_semantic_errors () =
       ("var (x, y) := (1, 2, 3);", "E0104");
       ("var (x, x) := (1, 2);", "E0103");
       ("var x := 10; var m := [..x, 20];", "E0104");
+      ("fun f(a: int): int { return a; } f(1, 2);", "E0110");
+      ("fun f(a: int): int { return a; } f(b=1);", "E0110");
+      ("fun f(a: int, b: int): int { return a+b; } f(a=1, 2);", "E0110");
+      ("return 10;", "E0111");
+      ("fun f(): int { }", "E0111");
+      ("act a() { return 10; }", "E0111");
+      ("var x := 10; x(1);", "E0112");
+      ("act a() {} var x := a();", "E0113");
+      ("var x : void;", "E0113");
+      ("fun f(): void {}", "E0113");
+      ("fun outer(): int { fun inner(): int { return 1; } return inner(); }", "E0114");
     ]
 
 let test_assignment_and_incdec_parity () =

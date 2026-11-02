@@ -1,0 +1,93 @@
+# Suíte de Testes 09: Funções e Procedimentos (M2 — Fase 1)
+
+# 1. Funções com retorno e recursão
+fun sum(a: int, b: int): int {
+    return a + b;
+}
+
+assert(sum(10, 20), 30);
+
+fun fact(n: int): int {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * fact(n - 1);
+}
+
+assert(fact(5), 120);
+assert(fact(1), 1);
+assert(fact(0), 1);
+
+# 2. Funções de primeira classe (valores) e chamada parcial
+var s := sum;
+var s5 := s(5);
+var r1 := s5(6);
+var r2 := sum(5, 6);
+assert(r1, 11);
+assert(r2, 11);
+assert(r1, r2);
+
+# 3. Argumentos nomeados
+var r3 := sum(b=10, a=20);
+assert(r3, 30);
+
+fun add3(a: int, b: int, c: int): int {
+    return a + b * 10 + c * 100;
+}
+
+assert(add3(1, 2, 3), 321);
+assert(add3(c=3, b=2, a=1), 321);
+assert(add3(1, c=3, b=2), 321);
+
+# Parcial com argumento nomeado
+var p := add3(c=5);
+assert(p(1, 2), 521);
+var p2 := p(b=4);
+assert(p2(3), 543);
+
+# 4. Procedimentos (act) sem retorno
+var side_effect := 0;
+
+act increment(step: int) {
+    side_effect += step;
+}
+
+increment(5);
+assert(side_effect, 5);
+increment(10);
+assert(side_effect, 15);
+
+var act_var := increment;
+act_var(5);
+assert(side_effect, 20);
+
+# Chamada parcial de procedimento
+act log_two(prefix: string, value: int) {
+    side_effect += value;
+}
+
+var log_ten := log_two(value=10);
+log_ten("teste");
+assert(side_effect, 30);
+
+# 5. Parâmetros com outros tipos primitivos e estruturas
+fun fmt_coord(x: float, y: float, label: string): string {
+    return "${label}: (${x:.1}, ${y:.1})";
+}
+
+assert(fmt_coord(1.5f, 2.5f, "P"), "P: (1.5, 2.5)");
+
+# 6. Testes de erros semânticos esperados (E0110, E0111, E0112, E0113, E0114)
+assert_error("E0110", "fun f(a: int): int { return a; } f(1, 2);");
+assert_error("E0110", "fun f(a: int): int { return a; } f(b=1);");
+assert_error("E0110", "fun f(a: int, b: int): int { return a+b; } f(a=1, 2);");
+assert_error("E0110", "fun f(a: int): int { return a; } f(a=1, a=2);");
+assert_error("E0111", "return 10;");
+assert_error("E0111", "fun f(): int { }");
+assert_error("E0111", "act a() { return 10; }");
+assert_error("E0111", "fun f(): int { return \"oi\"; }");
+assert_error("E0112", "var x := 10; x(1);");
+assert_error("E0113", "act a() {} var x := a();");
+assert_error("E0113", "var x : void;");
+assert_error("E0113", "fun f(): void {}");
+assert_error("E0114", "fun outer(): int { fun inner(): int { return 1; } return inner(); }");
