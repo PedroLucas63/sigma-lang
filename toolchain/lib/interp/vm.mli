@@ -20,10 +20,13 @@ and fun_value = {
   fname : string;
   pnames : string array;
   bound : value option array;
+  env : (string, value ref) Hashtbl.t;
 }
 
 type frame = {
-  vars : (string, value) Hashtbl.t;
+  vars : (string, value ref) Hashtbl.t;
+  f_env : (string, value ref) Hashtbl.t;
+  self_fn : fun_value option;
   ret_ip : int;
   saved_stack : value list;
 }
@@ -48,7 +51,7 @@ type test_report = {
 type state = {
   mutable ip : int;
   mutable stack : value list;
-  globals : (string, value) Hashtbl.t;
+  globals : (string, value ref) Hashtbl.t;
   mutable halted : bool;
   mutable collect_assertions : bool;
   mutable assertions_rev : assertion_result list;

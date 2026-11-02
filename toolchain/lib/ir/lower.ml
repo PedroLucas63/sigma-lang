@@ -861,7 +861,12 @@ let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
     ignore
       (emit b
          (Ir.OP_MAKE_FUN
-            { entry; fname = fd.tf_name; params = List.map fst fd.tf_params })
+            {
+              entry;
+              fname = fd.tf_name;
+              params = List.map fst fd.tf_params;
+              captures = List.map fst fd.tf_captures;
+            })
          s.span);
     ignore
       (emit b

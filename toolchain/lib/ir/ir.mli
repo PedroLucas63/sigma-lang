@@ -152,6 +152,7 @@ type opcode =
       entry : int;
       fname : string;
       params : string list;
+      captures : string list;
     }
   | OP_CALL of int list
   | OP_RETURN

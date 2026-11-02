@@ -20,10 +20,13 @@ and fun_value = {
   fname : string;
   pnames : string array;
   bound : value option array;
+  env : (string, value ref) Hashtbl.t;
 }
 
 type frame = {
-  vars : (string, value) Hashtbl.t;
+  vars : (string, value ref) Hashtbl.t;
+  f_env : (string, value ref) Hashtbl.t;
+  self_fn : fun_value option;
   ret_ip : int;
   saved_stack : value list;
 }
@@ -328,7 +331,7 @@ let format_value (spec : Ast.format_spec) (v : value) : string =
 type state = {
   mutable ip : int;
   mutable stack : value list;
-  globals : (string, value) Hashtbl.t;
+  globals : (string, value ref) Hashtbl.t;
   mutable halted : bool;
   mutable collect_assertions : bool;
   mutable assertions_rev : assertion_result list;
@@ -350,23 +353,58 @@ let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = fa
     frames = [];
   }
 
-let cur_vars (st : state) : (string, value) Hashtbl.t =
+let cur_vars (st : state) : (string, value ref) Hashtbl.t =
   match st.frames with
   | f :: _ -> f.vars
   | [] -> st.globals
+
+let find_var_ref (st : state) (name : string) : value ref option =
+  match st.frames with
+  | f :: _ ->
+    (match Hashtbl.find_opt f.vars name with
+     | Some r -> Some r
+     | None ->
+       (match Hashtbl.find_opt f.f_env name with
+        | Some r -> Some r
+        | None -> Hashtbl.find_opt st.globals name))
+  | [] -> Hashtbl.find_opt st.globals name
 
 let find_var (st : state) (name : string) : value option =
   match st.frames with
   | f :: _ ->
     (match Hashtbl.find_opt f.vars name with
-     | Some v -> Some v
-     | None -> Hashtbl.find_opt st.globals name)
-  | [] -> Hashtbl.find_opt st.globals name
+     | Some r -> Some !r
+     | None ->
+       (match Hashtbl.find_opt f.f_env name with
+        | Some r -> Some !r
+        | None ->
+          (match f.self_fn with
+           | Some self when self.fname = name -> Some (VFun self)
+           | _ ->
+             (match Hashtbl.find_opt st.globals name with
+              | Some r -> Some !r
+              | None -> None))))
+  | [] ->
+    (match Hashtbl.find_opt st.globals name with
+     | Some r -> Some !r
+     | None -> None)
 
 let set_var (st : state) (name : string) (v : value) : unit =
   match st.frames with
-  | f :: _ when Hashtbl.mem f.vars name -> Hashtbl.replace f.vars name v
-  | _ -> Hashtbl.replace st.globals name v
+  | f :: _ ->
+    (match Hashtbl.find_opt f.vars name with
+     | Some r -> r := v
+     | None ->
+       (match Hashtbl.find_opt f.f_env name with
+        | Some r -> r := v
+        | None ->
+          (match Hashtbl.find_opt st.globals name with
+           | Some r -> r := v
+           | None -> Hashtbl.replace st.globals name (ref v))))
+  | [] ->
+    (match Hashtbl.find_opt st.globals name with
+     | Some r -> r := v
+     | None -> Hashtbl.replace st.globals name (ref v))
 
 let max_call_depth = 100_000
 
@@ -1227,13 +1265,13 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
-         Hashtbl.replace (cur_vars st) (Printf.sprintf "$tmp_%d" id) v;
+         Hashtbl.replace (cur_vars st) (Printf.sprintf "$tmp_%d" id) (ref v);
          Ok ()
        | [] -> Error "VM stack underflow on OP_SET_TEMP")
     | Ir.OP_GET_TEMP id ->
       (match Hashtbl.find_opt (cur_vars st) (Printf.sprintf "$tmp_%d" id) with
-       | Some v ->
-         st.stack <- v :: st.stack;
+       | Some r ->
+         st.stack <- !r :: st.stack;
          Ok ()
        | None -> Error "VM undefined temporary slot")
     | Ir.OP_DEF_GLOBAL_I64 name
@@ -1247,7 +1285,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
-         Hashtbl.replace (cur_vars st) name v;
+         Hashtbl.replace (cur_vars st) name (ref v);
          Ok ()
        | [] -> Error "VM stack underflow on OP_DEF_GLOBAL")
     | Ir.OP_SET_GLOBAL_I64 name
@@ -1280,10 +1318,24 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_UNDEF_GLOBAL name ->
       Hashtbl.remove (cur_vars st) name;
       Ok ()
-    | Ir.OP_MAKE_FUN { entry; fname; params } ->
+    | Ir.OP_MAKE_FUN { entry; fname; params; captures } ->
       let n = List.length params in
+      let env = Hashtbl.create (List.length captures) in
+      List.iter
+        (fun c ->
+          match find_var_ref st c with
+          | Some r -> Hashtbl.replace env c r
+          | None -> ())
+        captures;
       st.stack <-
-        VFun { entry; fname; pnames = Array.of_list params; bound = Array.make n None }
+        VFun
+          {
+            entry;
+            fname;
+            pnames = Array.of_list params;
+            bound = Array.make n None;
+            env;
+          }
         :: st.stack;
       Ok ()
     | Ir.OP_CALL idxs ->
@@ -1312,10 +1364,18 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
              Array.iteri
                (fun k nm ->
                  match bound.(k) with
-                 | Some v -> Hashtbl.replace vars nm v
+                 | Some v -> Hashtbl.replace vars nm (ref v)
                  | None -> ())
                f.pnames;
-             st.frames <- { vars; ret_ip = st.ip; saved_stack = rest } :: st.frames;
+             st.frames <-
+               {
+                 vars;
+                 f_env = f.env;
+                 self_fn = Some f;
+                 ret_ip = st.ip;
+                 saved_stack = rest;
+               }
+               :: st.frames;
              st.stack <- rest;
              st.ip <- f.entry;
              Ok ()

@@ -150,6 +150,7 @@ type opcode =
       entry : int;
       fname : string;
       params : string list;
+      captures : string list;
     }
   | OP_CALL of int list
   | OP_RETURN
@@ -314,8 +315,8 @@ let pp_opcode fmt = function
   | OP_SET_GLOBAL_OBJ name -> Format.fprintf fmt "OP_SET_GLOBAL_OBJ %s" name
   | OP_UNDEF_GLOBAL name -> Format.fprintf fmt "OP_UNDEF_GLOBAL %s" name
   | OP_POP -> Format.fprintf fmt "OP_POP"
-  | OP_MAKE_FUN { entry; fname; params } ->
-    Format.fprintf fmt "OP_MAKE_FUN %s(%s) @%04d" fname (String.concat ", " params) entry
+  | OP_MAKE_FUN { entry; fname; params; captures } ->
+    Format.fprintf fmt "OP_MAKE_FUN %s(%s) [caps: %s] @%04d" fname (String.concat ", " params) (String.concat ", " captures) entry
   | OP_CALL idxs ->
     Format.fprintf fmt "OP_CALL [%s]" (String.concat "; " (List.map string_of_int idxs))
   | OP_RETURN -> Format.fprintf fmt "OP_RETURN"

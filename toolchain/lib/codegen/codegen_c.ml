@@ -4,6 +4,10 @@ open Sigma_sema
 
 let mangle_ident name = "sgm_var_" ^ name
 
+let current_cells : (string, string) Hashtbl.t = Hashtbl.create 16
+let current_boxed : (string, unit) Hashtbl.t = Hashtbl.create 16
+let fun_c_names : (Span.t, string) Hashtbl.t = Hashtbl.create 16
+
 let escape_c_string (s : string) : string =
   let buf = Buffer.create (String.length s + 8) in
   Buffer.add_char buf '"';
@@ -233,7 +237,10 @@ let rec emit_expr (e : Typed_ast.expr) : string =
      | Some p ->
        Printf.sprintf "__extension__ ({ printf(\"%%s\", %s); fflush(stdout); %s; })"
          (emit_expr p) read_c)
-  | Typed_ast.TExprIdent name -> mangle_ident name
+  | Typed_ast.TExprIdent name ->
+    (match Hashtbl.find_opt current_cells name with
+     | Some c_expr -> c_expr
+     | None -> mangle_ident name)
   | Typed_ast.TExprTuple items ->
     incr chain_counter;
     let id = !chain_counter in
@@ -418,7 +425,11 @@ let rec emit_expr (e : Typed_ast.expr) : string =
   | Typed_ast.TExprAssign (lval, op, rhs) ->
     (match lval with
      | Typed_ast.TLValIdent name ->
-       let vname = mangle_ident name in
+       let vname =
+         match Hashtbl.find_opt current_cells name with
+         | Some c_expr -> c_expr
+         | None -> mangle_ident name
+       in
        (match op, e.ty with
         | Ast.AssignEq, _ ->
           Printf.sprintf "(%s = (%s))" vname (emit_expr rhs)
@@ -488,7 +499,13 @@ let rec emit_expr (e : Typed_ast.expr) : string =
   | Typed_ast.TExprIncDec (inc_op, lval) ->
     let vname_raw, slot_prefix, slot_suffix =
       match lval with
-      | Typed_ast.TLValIdent name -> (mangle_ident name, "", "")
+      | Typed_ast.TLValIdent name ->
+        let vname =
+          match Hashtbl.find_opt current_cells name with
+          | Some c_expr -> c_expr
+          | None -> mangle_ident name
+        in
+        (vname, "", "")
       | Typed_ast.TLValIndex (target, idx) ->
         incr chain_counter;
         let slot = Printf.sprintf "_sgm_islot_%d" !chain_counter in
@@ -957,7 +974,9 @@ __attribute__((unused)) static sgm_val_t sgm_val_str(const char *v) { return (sg
 __attribute__((unused)) static sgm_val_t sgm_val_obj(sgm_obj_t *v) { return (sgm_val_t){ SGM_TAG_OBJ, { .obj = v } }; }
 
 struct sgm_fn {
-  sgm_val_t (*fp)(sgm_val_t *args);
+  sgm_val_t (*fp)(sgm_val_t *args, sgm_fn_t *self);
+  void *env;
+  struct sgm_fn *orig;
   int64_t nparams;
   bool *has;
   sgm_val_t *vals;
@@ -965,9 +984,11 @@ struct sgm_fn {
 
 __attribute__((unused)) static sgm_val_t sgm_val_fn(sgm_fn_t *v) { return (sgm_val_t){ SGM_TAG_FN, { .fn = v } }; }
 
-__attribute__((unused)) static sgm_fn_t* sgm_fn_make(sgm_val_t (*fp)(sgm_val_t *), int64_t n) {
+__attribute__((unused)) static sgm_fn_t* sgm_fn_make(sgm_val_t (*fp)(sgm_val_t *, sgm_fn_t *), int64_t n, void *env) {
   sgm_fn_t *f = (sgm_fn_t*)malloc(sizeof(sgm_fn_t));
   f->fp = fp;
+  f->env = env;
+  f->orig = f;
   f->nparams = n;
   f->has = (bool*)calloc((size_t)(n > 0 ? n : 1), sizeof(bool));
   f->vals = (sgm_val_t*)calloc((size_t)(n > 0 ? n : 1), sizeof(sgm_val_t));
@@ -975,7 +996,8 @@ __attribute__((unused)) static sgm_fn_t* sgm_fn_make(sgm_val_t (*fp)(sgm_val_t *
 }
 
 __attribute__((unused)) static sgm_fn_t* sgm_fn_bind(sgm_fn_t *f, int64_t n, const int64_t *idxs, const sgm_val_t *argv) {
-  sgm_fn_t *g = sgm_fn_make(f->fp, f->nparams);
+  sgm_fn_t *g = sgm_fn_make(f->fp, f->nparams, f->env);
+  g->orig = f->orig;
   for (int64_t k = 0; k < f->nparams; k++) {
     g->has[k] = f->has[k];
     g->vals[k] = f->vals[k];
@@ -997,7 +1019,13 @@ __attribute__((unused)) static sgm_fn_t* sgm_fn_bind(sgm_fn_t *f, int64_t n, con
   return g;
 }
 
-__attribute__((unused)) static sgm_val_t sgm_fn_invoke(sgm_fn_t *g) { return g->fp(g->vals); }
+__attribute__((unused)) static sgm_val_t sgm_fn_invoke(sgm_fn_t *g) { return g->fp(g->vals, g); }
+
+__attribute__((unused)) static sgm_val_t* sgm_cell_make(sgm_val_t v) {
+  sgm_val_t *c = (sgm_val_t*)malloc(sizeof(sgm_val_t));
+  *c = v;
+  return c;
+}
 
 __attribute__((unused)) static const char* sgm_fmt_fn(sgm_fn_t *f) { (void)f; return "<function>"; }
 
@@ -1564,15 +1592,24 @@ let c_decl_type_and_qual ~is_const (ty : Ty.t) : string * string =
 let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
-    let c_type, const_qualifier = c_decl_type_and_qual ~is_const:v.is_const v.ty in
-    Buffer.add_string
-      buf
-      (Printf.sprintf "%s%s%s %s = %s;\n"
-         indent
-         const_qualifier
-         c_type
-         (mangle_ident v.name)
-         (emit_expr v.init))
+    if Hashtbl.mem current_boxed v.name then begin
+      let boxed_val = emit_box_val v.ty (emit_expr v.init) in
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_val_t *sgm_cell_%s = sgm_cell_make(%s);\n"
+           indent v.name boxed_val);
+      Hashtbl.replace current_cells v.name
+        (Printf.sprintf "(sgm_cell_%s->u.%s)" v.name (c_val_union_field v.ty))
+    end else begin
+      let c_type, const_qualifier = c_decl_type_and_qual ~is_const:v.is_const v.ty in
+      Buffer.add_string
+        buf
+        (Printf.sprintf "%s%s%s %s = %s;\n"
+           indent
+           const_qualifier
+           c_type
+           (mangle_ident v.name)
+           (emit_expr v.init))
+    end
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
     let id = !chain_counter in
@@ -1586,18 +1623,27 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
         match bind.name with
         | None -> ()
         | Some name ->
-          let c_type, const_qualifier = c_decl_type_and_qual ~is_const:d.is_const bind.ty in
           let field = c_val_union_field bind.ty in
-          Buffer.add_string
-            buf
-            (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
-               indent
-               const_qualifier
-               c_type
-               (mangle_ident name)
-               tmp_obj
-               i
-               field))
+          if Hashtbl.mem current_boxed name then begin
+            Buffer.add_string
+              buf
+              (Printf.sprintf "%ssgm_val_t *sgm_cell_%s = sgm_cell_make(*sgm_obj_slot(%s, INT64_C(%d)));\n"
+                 indent name tmp_obj i);
+            Hashtbl.replace current_cells name
+              (Printf.sprintf "(sgm_cell_%s->u.%s)" name field)
+          end else begin
+            let c_type, const_qualifier = c_decl_type_and_qual ~is_const:d.is_const bind.ty in
+            Buffer.add_string
+              buf
+              (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
+                 indent
+                 const_qualifier
+                 c_type
+                 (mangle_ident name)
+                 tmp_obj
+                 i
+                 field)
+          end)
       d.bindings
   | Typed_ast.TStmtBlock stmts ->
     Buffer.add_string buf (indent ^ "{\n");
@@ -1822,23 +1868,89 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
      | Some e ->
        Buffer.add_string buf
          (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty (emit_expr e))))
-  | Typed_ast.TStmtFunDecl _ ->
-    (* Funções são emitidas como funções C de nível superior por [emit_c]. *)
-    ()
+  | Typed_ast.TStmtFunDecl fd ->
+    let c_fn_name =
+      match Hashtbl.find_opt fun_c_names fd.tf_name_span with
+      | Some n -> n
+      | None -> "sgm_fn_" ^ fd.tf_name
+    in
+    let n_caps = List.length fd.tf_captures in
+    if n_caps = 0 then
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_fn_t *%s = sgm_fn_make(%s, INT64_C(%d), NULL);\n"
+           indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params))
+    else begin
+      incr chain_counter;
+      let env_var = Printf.sprintf "_sgm_env_%d" !chain_counter in
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_val_t **%s = (sgm_val_t**)malloc(%d * sizeof(sgm_val_t*));\n"
+           indent env_var n_caps);
+      List.iteri
+        (fun j (cap_name, _) ->
+          Buffer.add_string buf
+            (Printf.sprintf "%s%s[%d] = sgm_cell_%s;\n" indent env_var j cap_name))
+        fd.tf_captures;
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_fn_t *%s = sgm_fn_make(%s, INT64_C(%d), %s);\n"
+           indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params) env_var)
+    end
   | Typed_ast.TStmtExpr e ->
     Buffer.add_string
       buf
       (Printf.sprintf "%s(void)(%s);\n" indent (emit_expr e))
 
+let rec collect_inner_captures (s : Typed_ast.stmt) : string list =
+  match s.desc with
+  | Typed_ast.TStmtFunDecl inner_fd ->
+    List.map fst inner_fd.tf_captures
+    @ List.concat_map collect_inner_captures inner_fd.tf_body
+  | Typed_ast.TStmtBlock stmts -> List.concat_map collect_inner_captures stmts
+  | Typed_ast.TStmtIf { then_branch; else_branch; _ } ->
+    collect_inner_captures then_branch
+    @ (match else_branch with Some b -> collect_inner_captures b | None -> [])
+  | Typed_ast.TStmtWhile { body; _ }
+  | Typed_ast.TStmtFor { body; _ }
+  | Typed_ast.TStmtForeach { body; _ } ->
+    collect_inner_captures body
+  | _ -> []
+
+let compute_boxed_vars_in_fun (fd : Typed_ast.fun_decl) : string list =
+  List.concat_map collect_inner_captures fd.tf_body
+
 let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
+  let c_fn_name =
+    match Hashtbl.find_opt fun_c_names fd.tf_name_span with
+    | Some n -> n
+    | None -> "sgm_fn_" ^ fd.tf_name
+  in
   Buffer.add_string buf
-    (Printf.sprintf "static sgm_val_t sgm_fn_%s(sgm_val_t *_sgm_args) {\n  (void)_sgm_args;\n"
-       fd.tf_name);
+    (Printf.sprintf "static sgm_val_t %s(sgm_val_t *_sgm_args, sgm_fn_t *_sgm_self) {\n  (void)_sgm_args;\n  (void)_sgm_self;\n"
+       c_fn_name);
+  Hashtbl.clear current_cells;
+  Hashtbl.clear current_boxed;
+  Hashtbl.replace current_cells fd.tf_name "(_sgm_self->orig)";
+  let boxed = compute_boxed_vars_in_fun fd in
+  List.iter (fun name -> Hashtbl.replace current_boxed name ()) boxed;
+  List.iteri
+    (fun i (cap_name, cap_ty) ->
+      Buffer.add_string buf
+        (Printf.sprintf "  sgm_val_t *sgm_cell_%s = ((sgm_val_t**)_sgm_self->env)[%d];\n"
+           cap_name i);
+      Hashtbl.replace current_cells cap_name
+        (Printf.sprintf "(sgm_cell_%s->u.%s)" cap_name (c_val_union_field cap_ty)))
+    fd.tf_captures;
   List.iteri
     (fun i (pname, pty) ->
-      Buffer.add_string buf
-        (Printf.sprintf "  %s %s = _sgm_args[%d].u.%s;\n" (c_type_of_ty pty)
-           (mangle_ident pname) i (c_val_union_field pty)))
+      if Hashtbl.mem current_boxed pname then begin
+        Buffer.add_string buf
+          (Printf.sprintf "  sgm_val_t *sgm_cell_%s = sgm_cell_make(_sgm_args[%d]);\n"
+             pname i);
+        Hashtbl.replace current_cells pname
+          (Printf.sprintf "(sgm_cell_%s->u.%s)" pname (c_val_union_field pty))
+      end else
+        Buffer.add_string buf
+          (Printf.sprintf "  %s %s = _sgm_args[%d].u.%s;\n" (c_type_of_ty pty)
+             (mangle_ident pname) i (c_val_union_field pty)))
     fd.tf_params;
   List.iter (emit_stmt buf "  ") fd.tf_body;
   Buffer.add_string buf "  return sgm_val_i64(0);\n}\n\n"
@@ -1858,8 +1970,6 @@ let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
       | _ -> [])
     prog
 
-(* Em programas com funções, as variáveis de nível superior viram variáveis
-   estáticas de arquivo (visíveis às funções) e são apenas atribuídas em [main]. *)
 let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
@@ -1881,10 +1991,46 @@ let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) :
                indent (mangle_ident name) tmp_obj i (c_val_union_field bind.ty)))
       d.bindings
   | Typed_ast.TStmtFunDecl fd ->
-    Buffer.add_string buf
-      (Printf.sprintf "%s%s = sgm_fn_make(sgm_fn_%s, INT64_C(%d));\n"
-         indent (mangle_ident fd.tf_name) fd.tf_name (List.length fd.tf_params))
+    let c_fn_name =
+      match Hashtbl.find_opt fun_c_names fd.tf_name_span with
+      | Some n -> n
+      | None -> "sgm_fn_" ^ fd.tf_name
+    in
+    let n_caps = List.length fd.tf_captures in
+    if n_caps = 0 then
+      Buffer.add_string buf
+        (Printf.sprintf "%s%s = sgm_fn_make(%s, INT64_C(%d), NULL);\n"
+           indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params))
+    else begin
+      incr chain_counter;
+      let env_var = Printf.sprintf "_sgm_env_%d" !chain_counter in
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_val_t **%s = (sgm_val_t**)malloc(%d * sizeof(sgm_val_t*));\n"
+           indent env_var n_caps);
+      List.iteri
+        (fun j (cap_name, _) ->
+          Buffer.add_string buf
+            (Printf.sprintf "%s%s[%d] = sgm_cell_%s;\n" indent env_var j cap_name))
+        fd.tf_captures;
+      Buffer.add_string buf
+        (Printf.sprintf "%s%s = sgm_fn_make(%s, INT64_C(%d), %s);\n"
+           indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params) env_var)
+    end
   | _ -> emit_stmt buf indent s
+
+let rec collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
+  match s.desc with
+  | Typed_ast.TStmtFunDecl fd ->
+    fd :: List.concat_map collect_all_funs fd.tf_body
+  | Typed_ast.TStmtBlock stmts -> List.concat_map collect_all_funs stmts
+  | Typed_ast.TStmtIf { then_branch; else_branch; _ } ->
+    collect_all_funs then_branch
+    @ (match else_branch with Some b -> collect_all_funs b | None -> [])
+  | Typed_ast.TStmtWhile { body; _ }
+  | Typed_ast.TStmtFor { body; _ }
+  | Typed_ast.TStmtForeach { body; _ } ->
+    collect_all_funs body
+  | _ -> []
 
 let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
   let buf = Buffer.create 512 in
@@ -1900,29 +2046,36 @@ let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
     buf
     (Printf.sprintf "__attribute__((unused)) static bool sgm_test_mode = %s;\n\n"
        (if test_mode then "true" else "false"));
-  let has_funs =
-    List.exists
-      (fun (s : Typed_ast.stmt) ->
-        match s.desc with Typed_ast.TStmtFunDecl _ -> true | _ -> false)
-      prog
-  in
-  if has_funs then begin
+  let all_funs = List.concat_map collect_all_funs prog in
+  Hashtbl.clear fun_c_names;
+  let fn_counter = ref 0 in
+  List.iter
+    (fun (fd : Typed_ast.fun_decl) ->
+      incr fn_counter;
+      let c_name = Printf.sprintf "sgm_fn_%s_%d" fd.tf_name !fn_counter in
+      Hashtbl.replace fun_c_names fd.tf_name_span c_name)
+    all_funs;
+  if all_funs <> [] then begin
+    List.iter
+      (fun (fd : Typed_ast.fun_decl) ->
+        let c_name = Hashtbl.find fun_c_names fd.tf_name_span in
+        Buffer.add_string buf
+          (Printf.sprintf "static sgm_val_t %s(sgm_val_t *_sgm_args, sgm_fn_t *_sgm_self);\n" c_name))
+      all_funs;
+    Buffer.add_string buf "\n";
     List.iter
       (fun (name, ty) ->
         Buffer.add_string buf
           (Printf.sprintf "static %s %s;\n" (c_type_of_ty ty) (mangle_ident name)))
       (toplevel_decls prog);
     Buffer.add_string buf "\n";
-    List.iter
-      (fun (s : Typed_ast.stmt) ->
-        match s.desc with
-        | Typed_ast.TStmtFunDecl fd -> emit_fun_def buf fd
-        | _ -> ())
-      prog
+    List.iter (emit_fun_def buf) all_funs
   end;
   Buffer.add_string buf "int main(void) {\n";
+  Hashtbl.clear current_cells;
+  Hashtbl.clear current_boxed;
   List.iter
-    (if has_funs then emit_toplevel_stmt buf "  " else emit_stmt buf "  ")
+    (if all_funs <> [] then emit_toplevel_stmt buf "  " else emit_stmt buf "  ")
     prog;
   Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n";
   Buffer.contents buf

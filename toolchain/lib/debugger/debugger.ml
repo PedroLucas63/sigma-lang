@@ -1,11 +1,11 @@
 open Sigma_ir
 open Sigma_interp
 
-let format_globals globals =
+let format_globals (globals : (string, Vm.value ref) Hashtbl.t) =
   let pairs =
     Hashtbl.fold
-      (fun k v acc ->
-        if String.starts_with ~prefix:"$" k then acc else (k, v) :: acc)
+      (fun k r acc ->
+        if String.starts_with ~prefix:"$" k then acc else (k, !r) :: acc)
       globals []
     |> List.sort (fun (a, _) (b, _) -> String.compare a b)
   in

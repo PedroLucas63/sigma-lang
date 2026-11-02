@@ -167,6 +167,7 @@ and fun_decl = {
   tf_name_span : Span.t;
   tf_params : (string * Ty.t) list;
   tf_ret : Ty.t;  (** [Ty.Void] para [act] *)
+  tf_captures : (string * Ty.t) list;  (** Variáveis livres capturadas de escopos léxicos externos *)
   tf_body : stmt list;
 }
 
