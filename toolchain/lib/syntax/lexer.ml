@@ -180,6 +180,9 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "in" -> Token.KW_IN
           | "break" -> Token.KW_BREAK
           | "continue" -> Token.KW_CONTINUE
+          | "fun" -> Token.KW_FUN
+          | "act" -> Token.KW_ACT
+          | "return" -> Token.KW_RETURN
           | "input" -> Token.KW_INPUT
           | "prompt" -> Token.KW_PROMPT
           | "print" -> Token.KW_PRINT

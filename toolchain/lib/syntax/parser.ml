@@ -545,6 +545,13 @@ and parse_postfix st : (Ast.expr, Diagnostic.t) result =
                    ~span:close_tok.span
                    (Printf.sprintf "expected ']' after index expression, found %s"
                       (Token.kind_to_string close_tok.kind)))))
+      | Token.LPAREN ->
+        bump st;
+        (match parse_fn_call_args st with
+         | Error e -> Error e
+         | Ok (args, close_span) ->
+           let span = Span.merge acc.span close_span in
+           loop { Ast.desc = Ast.ExprCall (acc, args); span })
       | Token.PLUS_PLUS | Token.MINUS_MINUS ->
         let inc_op =
           if tok.kind = Token.PLUS_PLUS then Ast.PostInc else Ast.PostDec
@@ -566,6 +573,43 @@ and parse_postfix st : (Ast.expr, Diagnostic.t) result =
       | _ -> Ok acc
     in
     loop lhs
+
+and parse_fn_call_args st : (Ast.call_arg list * Span.t, Diagnostic.t) result =
+  let rec loop acc =
+    let tok = cur st in
+    if tok.kind = Token.RPAREN then begin
+      bump st;
+      Ok (List.rev acc, tok.span)
+    end else begin
+      let named =
+        match tok.kind with
+        | Token.IDENT n when (peek_next st).kind = Token.EQUAL ->
+          bump st;
+          bump st;
+          Some (n, tok.span)
+        | _ -> None
+      in
+      match parse_expr st with
+      | Error e -> Error e
+      | Ok v ->
+        let acc = { Ast.arg_name = named; arg_value = v } :: acc in
+        let nt = cur st in
+        if nt.kind = Token.COMMA then begin
+          bump st;
+          loop acc
+        end else if nt.kind = Token.RPAREN then begin
+          bump st;
+          Ok (List.rev acc, nt.span)
+        end else
+          Error
+            (Diagnostic.error
+               ~code:"E0002"
+               ~span:nt.span
+               (Printf.sprintf "expected ')' or ',' in call arguments, found %s"
+                  (Token.kind_to_string nt.kind)))
+    end
+  in
+  loop []
 
 and parse_collection_item st : (Ast.collection_item, Diagnostic.t) result =
   let tok = cur st in
@@ -899,7 +943,48 @@ let expect_semi st start_span : (Span.t, Diagnostic.t) result =
 let rec parse_type_expr st : (Ast.type_expr, Diagnostic.t) result =
   match parse_base_type st with
   | Error e -> Error e
-  | Ok base ->
+  | Ok base0 ->
+    (match parse_fn_suffixes st base0 with
+     | Error e -> Error e
+     | Ok base -> parse_type_dims st base)
+
+and parse_fn_suffixes st (base : Ast.type_expr) : (Ast.type_expr, Diagnostic.t) result =
+  match base with
+  | (Ast.TypeNamed _ | Ast.TypeFun _) when (cur st).kind = Token.LPAREN ->
+    bump st;
+    let rec params acc =
+      let t = cur st in
+      if t.kind = Token.RPAREN then begin
+        bump st;
+        Ok (List.rev acc, t.span)
+      end else
+        match parse_type_expr st with
+        | Error e -> Error e
+        | Ok te ->
+          let acc = te :: acc in
+          let nt = cur st in
+          if nt.kind = Token.COMMA then begin
+            bump st;
+            params acc
+          end else if nt.kind = Token.RPAREN then begin
+            bump st;
+            Ok (List.rev acc, nt.span)
+          end else
+            Error
+              (Diagnostic.error
+                 ~code:"E0002"
+                 ~span:nt.span
+                 (Printf.sprintf "expected ')' or ',' in function type annotation, found %s"
+                    (Token.kind_to_string nt.kind)))
+    in
+    (match params [] with
+     | Error e -> Error e
+     | Ok (ps, close_span) ->
+       parse_fn_suffixes st
+         (Ast.TypeFun (base, ps, Span.merge (Ast.type_expr_span base) close_span)))
+  | _ -> Ok base
+
+and parse_type_dims st (base : Ast.type_expr) : (Ast.type_expr, Diagnostic.t) result =
     let base_span = Ast.type_expr_span base in
     let rec parse_dims acc =
       let tok = cur st in
@@ -1393,7 +1478,124 @@ let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_CONST ->
     bump st;
     parse_decl st tok ~is_const:true
+  | Token.KW_FUN ->
+    bump st;
+    parse_fun_decl st tok ~is_act:false
+  | Token.KW_ACT ->
+    bump st;
+    parse_fun_decl st tok ~is_act:true
   | _ -> parse_non_decl_stmt st
+
+and parse_fun_decl st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
+  let kw_name = if is_act then "act" else "fun" in
+  let err_at (tok : Token.t) msg =
+    Error (Diagnostic.error ~code:"E0002" ~span:tok.span msg)
+  in
+  let name_tok = cur st in
+  match name_tok.kind with
+  | Token.IDENT name ->
+    bump st;
+    let lp = cur st in
+    if lp.kind <> Token.LPAREN then
+      err_at lp
+        (Printf.sprintf "expected '(' after %s name '%s', found %s" kw_name name
+           (Token.kind_to_string lp.kind))
+    else begin
+      bump st;
+      let rec params acc =
+        let t = cur st in
+        if t.kind = Token.RPAREN then begin
+          bump st;
+          Ok (List.rev acc)
+        end else
+          match t.kind with
+          | Token.IDENT pname ->
+            bump st;
+            if (cur st).kind <> Token.COLON then
+              err_at (cur st)
+                (Printf.sprintf "expected ':' and a type after parameter '%s'" pname)
+            else begin
+              bump st;
+              match parse_type_expr st with
+              | Error e -> Error e
+              | Ok te ->
+                let acc = (pname, t.span, te) :: acc in
+                let nt = cur st in
+                if nt.kind = Token.COMMA then begin
+                  bump st;
+                  params acc
+                end else if nt.kind = Token.RPAREN then begin
+                  bump st;
+                  Ok (List.rev acc)
+                end else
+                  err_at nt
+                    (Printf.sprintf "expected ')' or ',' in parameter list, found %s"
+                       (Token.kind_to_string nt.kind))
+            end
+          | _ ->
+            err_at t
+              (Printf.sprintf "expected parameter name, found %s" (Token.kind_to_string t.kind))
+      in
+      match params [] with
+      | Error e -> Error e
+      | Ok ps ->
+        let ret_res =
+          if is_act then Ok None
+          else if (cur st).kind = Token.COLON then begin
+            bump st;
+            match parse_type_expr st with
+            | Ok te -> Ok (Some te)
+            | Error e -> Error e
+          end else
+            err_at (cur st)
+              (Printf.sprintf "expected ':' and a return type after the parameters of 'fun %s'" name)
+        in
+        (match ret_res with
+         | Error e -> Error e
+         | Ok ret ->
+           let ob = cur st in
+           if ob.kind <> Token.LBRACE then
+             err_at ob
+               (Printf.sprintf "expected '{' to start the body of '%s %s', found %s" kw_name name
+                  (Token.kind_to_string ob.kind))
+           else begin
+             bump st;
+             match parse_block_stmt st ob with
+             | Error e -> Error e
+             | Ok { Ast.desc = Ast.StmtBlock body; span } ->
+               Ok
+                 {
+                   Ast.desc =
+                     Ast.StmtFunDecl
+                       {
+                         Ast.fd_name = name;
+                         fd_name_span = name_tok.span;
+                         fd_params = ps;
+                         fd_ret = ret;
+                         fd_body = body;
+                       };
+                   span = Span.merge kw_tok.Token.span span;
+                 }
+             | Ok _ -> err_at ob "internal error: function body must be a block"
+           end)
+    end
+  | _ ->
+    err_at name_tok
+      (Printf.sprintf "expected %s name after '%s', found %s" kw_name kw_name
+         (Token.kind_to_string name_tok.kind))
+
+and parse_return_stmt st kw_tok : (Ast.stmt, Diagnostic.t) result =
+  let t = cur st in
+  if t.kind = Token.SEMI then begin
+    bump st;
+    Ok { Ast.desc = Ast.StmtReturn None; span = Span.merge kw_tok.Token.span t.span }
+  end else
+    match parse_expr st with
+    | Error e -> Error e
+    | Ok e ->
+      (match expect_semi st kw_tok.Token.span with
+       | Error err -> Error err
+       | Ok full_span -> Ok { Ast.desc = Ast.StmtReturn (Some e); span = full_span })
 
 and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
@@ -1407,6 +1609,17 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
          ~code:"E0002"
          ~span:tok.span
          (Printf.sprintf "%s is not allowed directly inside an unbraced branch" kw_str))
+  | Token.KW_FUN | Token.KW_ACT ->
+    let kw = if tok.kind = Token.KW_FUN then "fun" else "act" in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "wrap the declaration in braces, e.g. 'if (cond) { %s f(...) ... }'" kw)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "'%s' declaration is not allowed directly inside an unbraced branch" kw))
+  | Token.KW_RETURN ->
+    bump st;
+    parse_return_stmt st tok
   | Token.KW_IF ->
     bump st;
     parse_if_stmt st tok

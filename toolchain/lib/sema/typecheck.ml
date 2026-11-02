@@ -11,6 +11,38 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
+(* Contexto de função durante a checagem: retorno esperado da função atual
+   ([Some Ty.Void] em [act]), nomes de escopo externo que podem ser
+   escondidos (shadowing) por parâmetros/locais e o escopo raiz do programa. *)
+let current_fun : Ty.t option ref = ref None
+let fn_outer : (string, unit) Hashtbl.t option ref = ref None
+let root_scope_ref : string list ref option ref = ref None
+
+(* Nomes dos parâmetros de cada função declarada ou valor parcial (chave: span ou identificador), usados
+   para resolver argumentos nomeados em chamadas. *)
+let fun_param_names : (Span.t, string list) Hashtbl.t = Hashtbl.create 16
+let var_param_names : (string, string list) Hashtbl.t = Hashtbl.create 16
+let expr_param_names : (Span.t, string list) Hashtbl.t = Hashtbl.create 16
+
+(* Conflito de redeclaração no mesmo escopo; parâmetros e locais de funções
+   podem esconder nomes declarados fora do corpo da função. *)
+let find_conflict (env : env) (name : string) : symbol_info option =
+  match Hashtbl.find_opt env name with
+  | None -> None
+  | Some prev ->
+    (match !fn_outer with
+     | Some outer when Hashtbl.mem outer name ->
+       Hashtbl.remove outer name;
+       None
+     | _ -> Some prev)
+
+let rec ty_contains_fun (ty : Ty.t) : bool =
+  match ty with
+  | Ty.Fun _ -> true
+  | Ty.Tuple tys -> List.exists ty_contains_fun tys
+  | Ty.Array (t, _) -> ty_contains_fun t
+  | _ -> false
+
 let rec eval_const_int (env : env) (e : Typed_ast.expr) : int64 option =
   match e.desc with
   | Typed_ast.TExprInt n -> Some n
@@ -159,6 +191,17 @@ let resolve_input_type (ty_name : string) (sp : Span.t) : (Ty.t, Diagnostic.t) r
          (Printf.sprintf "unknown or unsupported input type '%s'" ty_name))
 
 let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
+  match check_expr_any env e with
+  | Ok (te : Typed_ast.expr) when te.ty = Ty.Void ->
+    Error
+      (Diagnostic.error
+         ~hint:"'act' procedures do not produce a value; call them as a standalone statement, e.g. 'my_act(...);'"
+         ~code:"E0113"
+         ~span:e.span
+         "the result of an 'act' call cannot be used as a value")
+  | r -> r
+
+and check_expr_any (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match e.desc with
   | Ast.ExprInt n ->
     Ok { Typed_ast.desc = Typed_ast.TExprInt n; ty = Ty.Int; span = e.span }
@@ -309,6 +352,19 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
             ~code:"E0102"
             ~span:e.span
             (Printf.sprintf "use of undeclared variable '%s'" name)))
+  | Ast.ExprCall (callee, args) ->
+    (match check_expr env callee with
+     | Error err -> Error err
+     | Ok tcallee ->
+       (match tcallee.ty with
+        | Ty.Fun (ptys, ret) -> check_call env e tcallee ptys ret callee args
+        | other ->
+          Error
+            (Diagnostic.error
+               ~hint:"only values of function type ('fun'/'act') can be called"
+               ~code:"E0112"
+               ~span:callee.span
+               (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))
   | Ast.ExprTuple items ->
     (match check_collection_items env items with
      | Error err -> Error err
@@ -629,7 +685,7 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
               ty = lval_ty;
               span = e.span;
             }
-        | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ ->
+        | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void ->
           Error
             (Diagnostic.error
                ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"
@@ -637,6 +693,108 @@ let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                ~span:e.span
                (Printf.sprintf "invalid operator '%s' for %s of type '%s'"
                   op_str lval_label (Ty.to_string lval_ty)))))
+
+and check_call (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr) (ptys : Ty.t list)
+    (ret : Ty.t) (callee : Ast.expr) (args : Ast.call_arg list)
+    : (Typed_ast.expr, Diagnostic.t) result =
+  let n = List.length ptys in
+  let ptys_a = Array.of_list ptys in
+  let names_opt =
+    match callee.desc with
+    | Ast.ExprIdent name ->
+      (match Hashtbl.find_opt var_param_names name with
+       | Some pnames -> Some pnames
+       | None ->
+         (match Hashtbl.find_opt env name with
+          | Some info -> Hashtbl.find_opt fun_param_names info.decl_span
+          | None -> None))
+    | _ -> Hashtbl.find_opt expr_param_names callee.span
+  in
+  let used = Array.make (max n 1) false in
+  let next_pos = ref 0 in
+  let seen_named = ref false in
+  let call_err ~hint span msg = Error (Diagnostic.error ~hint ~code:"E0110" ~span msg) in
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | (a : Ast.call_arg) :: rest ->
+      let idx_res =
+        match a.arg_name with
+        | None ->
+          if !seen_named then
+            call_err ~hint:"pass positional arguments first, then named ones, e.g. 'f(1, b=2)'"
+              a.arg_value.span "positional argument after a named argument"
+          else begin
+            let i = !next_pos in
+            incr next_pos;
+            if i >= n then
+              call_err
+                ~hint:(Printf.sprintf "the callee accepts at most %d more argument(s)" n)
+                a.arg_value.span
+                (Printf.sprintf "too many arguments: expected at most %d, found more" n)
+            else Ok i
+          end
+        | Some (nm, nsp) ->
+          seen_named := true;
+          (match names_opt with
+           | None ->
+             call_err
+               ~hint:"named arguments are only available when calling a declared 'fun'/'act' directly by its name"
+               nsp
+               (Printf.sprintf "cannot use named argument '%s' here" nm)
+           | Some names ->
+             let rec find_idx i = function
+               | [] -> None
+               | x :: tl -> if x = nm then Some i else find_idx (i + 1) tl
+             in
+             (match find_idx 0 names with
+              | None ->
+                call_err
+                  ~hint:(Printf.sprintf "parameters are: %s" (String.concat ", " names))
+                  nsp
+                  (Printf.sprintf "unknown parameter name '%s'" nm)
+              | Some i -> Ok i))
+      in
+      (match idx_res with
+       | Error err -> Error err
+       | Ok i ->
+         if used.(i) then
+           call_err ~hint:"each parameter can be bound only once" a.arg_value.span
+             (Printf.sprintf "parameter #%d is bound more than once" (i + 1))
+         else begin
+           used.(i) <- true;
+           match check_expr env a.arg_value with
+           | Error err -> Error err
+           | Ok targ ->
+             if Ty.equal targ.ty ptys_a.(i) then loop ((i, targ) :: acc) rest
+             else
+               Error
+                 (Diagnostic.error
+                    ~hint:"Sigma is strongly typed: arguments must have exactly the parameter type"
+                    ~code:"E0104"
+                    ~span:targ.span
+                    (Printf.sprintf "type mismatch in argument #%d: expected '%s', found '%s'"
+                       (i + 1) (Ty.to_string ptys_a.(i)) (Ty.to_string targ.ty)))
+         end)
+  in
+  match loop [] args with
+  | Error err -> Error err
+  | Ok targs ->
+    let remaining = List.filteri (fun i _ -> not used.(i)) ptys in
+    let remaining_names =
+      match names_opt with
+      | Some names when List.length names = n ->
+        Some (List.filteri (fun i _ -> not used.(i)) names)
+      | _ -> None
+    in
+    Option.iter (Hashtbl.replace expr_param_names e.span) remaining_names;
+    let full = remaining = [] in
+    let ty = if full then ret else Ty.Fun (remaining, ret) in
+    Ok
+      {
+        Typed_ast.desc = Typed_ast.TExprCall { callee = tcallee; args = targs; full };
+        ty;
+        span = e.span;
+      }
 
 and check_collection_items (env : env) (items : Ast.collection_item list)
     : ((Typed_ast.collection_item * Ty.t list) list, Diagnostic.t) result =
@@ -806,6 +964,13 @@ let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
   | Ast.TypeNamed (ty_name, ty_span) ->
     (match Ty.of_string ty_name with
      | Some ty -> Ok ty
+     | None when ty_name = "void" ->
+       Error
+         (Diagnostic.error
+            ~hint:"'void' only appears as the return type of a function type, e.g. 'void(int)' for an 'act'"
+            ~code:"E0113"
+            ~span:ty_span
+            "'void' cannot be used as the type of a value")
      | None ->
        Error
          (Diagnostic.error
@@ -813,6 +978,25 @@ let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
             ~code:"E0101"
             ~span:ty_span
             (Printf.sprintf "unknown or unsupported type '%s'" ty_name)))
+  | Ast.TypeFun (ret_te, param_tes, _) ->
+    let ret_res =
+      match ret_te with
+      | Ast.TypeNamed ("void", _) -> Ok Ty.Void
+      | _ -> resolve_type_expr ret_te None
+    in
+    (match ret_res with
+     | Error err -> Error err
+     | Ok ret_ty ->
+       let rec params acc = function
+         | [] -> Ok (List.rev acc)
+         | pte :: rest ->
+           (match resolve_type_expr pte None with
+            | Error err -> Error err
+            | Ok pty -> params (pty :: acc) rest)
+       in
+       (match params [] param_tes with
+        | Error err -> Error err
+        | Ok ptys -> Ok (Ty.Fun (ptys, ret_ty))))
   | Ast.TypeTuple (sub_tes, _) ->
     let init_subs =
       match init_ty_opt with
@@ -896,6 +1080,62 @@ let rec default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
       List.init n (fun _ -> Typed_ast.TItemExpr (default_expr_for_type elem_ty span))
     in
     { Typed_ast.desc = Typed_ast.TExprArray items; ty; span }
+  | Ty.Fun _ | Ty.Void ->
+    (* Inalcançável: declarações sem inicializador de tipo função são rejeitadas (E0106). *)
+    { Typed_ast.desc = Typed_ast.TExprInt 0L; ty = Ty.Int; span }
+
+let rec stmt_always_returns (s : Typed_ast.stmt) : bool =
+  match s.desc with
+  | Typed_ast.TStmtReturn _ -> true
+  | Typed_ast.TStmtBlock ss -> List.exists stmt_always_returns ss
+  | Typed_ast.TStmtIf { then_branch; else_branch = Some eb; _ } ->
+    stmt_always_returns then_branch && stmt_always_returns eb
+  | _ -> false
+
+let resolve_fun_signature (fd : Ast.fun_decl)
+    : ((string * Ty.t) list * Ty.t, Diagnostic.t list) result =
+  let errs = ref [] in
+  let seen : (string, unit) Hashtbl.t = Hashtbl.create 8 in
+  let params =
+    List.filter_map
+      (fun (pname, psp, pte) ->
+        if Hashtbl.mem seen pname then
+          errs :=
+            Diagnostic.error
+              ~code:"E0103"
+              ~span:psp
+              (Printf.sprintf "duplicate parameter '%s'" pname)
+            :: !errs;
+        Hashtbl.replace seen pname ();
+        match resolve_type_expr pte None with
+        | Ok ty -> Some (pname, ty)
+        | Error err ->
+          errs := err :: !errs;
+          None)
+      fd.fd_params
+  in
+  let ret =
+    match fd.fd_ret with
+    | None -> Some Ty.Void
+    | Some (Ast.TypeNamed ("void", sp)) ->
+      errs :=
+        Diagnostic.error
+          ~hint:"use 'act' to declare a procedure without a return value"
+          ~code:"E0113"
+          ~span:sp
+          "a 'fun' must declare a value return type, not 'void'"
+        :: !errs;
+      None
+    | Some te ->
+      (match resolve_type_expr te None with
+       | Ok ty -> Some ty
+       | Error err ->
+         errs := err :: !errs;
+         None)
+  in
+  match List.rev !errs, ret with
+  | [], Some r -> Ok (params, r)
+  | es, _ -> Error es
 
 type active_loop = {
   loop_id : int;
@@ -932,9 +1172,134 @@ let rec check_stmt
     (s : Ast.stmt) : (Typed_ast.stmt, Diagnostic.t list) result =
   match s.desc with
   | Ast.StmtExpr e ->
-    (match check_expr env e with
+    (match check_expr_any env e with
      | Ok te -> Ok { Typed_ast.desc = Typed_ast.TStmtExpr te; span = s.span }
      | Error err -> Error [ err ])
+  | Ast.StmtReturn eo ->
+    let ret_err msg hint span =
+      Error [ Diagnostic.error ~hint ~code:"E0111" ~span msg ]
+    in
+    (match !current_fun with
+     | None ->
+       ret_err "'return' used outside of a function"
+         "'return' can only appear inside the body of a 'fun' or 'act'" s.span
+     | Some ret_ty ->
+       (match eo with
+        | None ->
+          if ret_ty = Ty.Void then
+            Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s.span }
+          else
+            ret_err
+              (Printf.sprintf "'return' without a value in a function returning '%s'"
+                 (Ty.to_string ret_ty))
+              "provide a value, e.g. 'return <expr>;'" s.span
+        | Some e ->
+          if ret_ty = Ty.Void then
+            ret_err "an 'act' cannot return a value"
+              "use 'return;' or declare a 'fun' with a return type" e.span
+          else
+            (match check_expr env e with
+             | Error err -> Error [ err ]
+             | Ok te ->
+               if Ty.equal te.ty ret_ty then
+                 Ok { Typed_ast.desc = Typed_ast.TStmtReturn (Some te); span = s.span }
+               else
+                 ret_err
+                   (Printf.sprintf "type mismatch in 'return': expected '%s', found '%s'"
+                      (Ty.to_string ret_ty) (Ty.to_string te.ty))
+                   "the returned value must have exactly the declared return type" te.span)))
+  | Ast.StmtFunDecl fd ->
+    let is_root =
+      match !root_scope_ref with
+      | Some r -> r == scope_vars
+      | None -> false
+    in
+    if (not is_root) || !current_fun <> None then
+      Error
+        [
+          Diagnostic.error
+            ~hint:"declare functions at the top level of the program (nested functions and closures are not supported yet)"
+            ~code:"E0114"
+            ~span:fd.fd_name_span
+            (Printf.sprintf "function '%s' must be declared at the top level" fd.fd_name);
+        ]
+    else begin
+      let conflict_errs =
+        match find_conflict env fd.fd_name with
+        | None -> []
+        | Some prev ->
+          [
+            Diagnostic.error
+              ~hint:(Printf.sprintf "previously declared at %s" (Span.to_string prev.decl_span))
+              ~code:"E0103"
+              ~span:fd.fd_name_span
+              (Printf.sprintf "'%s' is already declared in this scope" fd.fd_name);
+          ]
+      in
+      match resolve_fun_signature fd with
+      | Error es -> Error (conflict_errs @ es)
+      | Ok (params, ret) ->
+        if conflict_errs <> [] then Error conflict_errs
+        else begin
+          let fty = Ty.Fun (List.map snd params, ret) in
+          Hashtbl.replace env fd.fd_name
+            { ty = fty; decl_span = fd.fd_name_span; is_const = true; const_int = None };
+          scope_vars := fd.fd_name :: !scope_vars;
+          Hashtbl.replace fun_param_names fd.fd_name_span (List.map fst params);
+          let body_env : env = Hashtbl.copy env in
+          let outer : (string, unit) Hashtbl.t = Hashtbl.create 16 in
+          Hashtbl.iter (fun k _ -> Hashtbl.replace outer k ()) env;
+          let saved_fun = !current_fun in
+          let saved_outer = !fn_outer in
+          current_fun := Some ret;
+          fn_outer := Some outer;
+          List.iter2
+            (fun (pname, psp, _) (_, pty) ->
+              Hashtbl.remove outer pname;
+              Hashtbl.replace body_env pname
+                { ty = pty; decl_span = psp; is_const = false; const_int = None })
+            fd.fd_params params;
+          let body_scope = ref [] in
+          let tbody = ref [] in
+          let berrs = ref [] in
+          List.iter
+            (fun sub ->
+              match check_stmt body_env body_scope [] next_loop_id sub with
+              | Ok ts -> tbody := ts :: !tbody
+              | Error es -> berrs := List.rev_append es !berrs)
+            fd.fd_body;
+          current_fun := saved_fun;
+          fn_outer := saved_outer;
+          match List.rev !berrs with
+          | _ :: _ as errors -> Error errors
+          | [] ->
+            let tbody = List.rev !tbody in
+            if ret <> Ty.Void && not (List.exists stmt_always_returns tbody) then
+              Error
+                [
+                  Diagnostic.error
+                    ~hint:"add a 'return <expr>;' on every path that reaches the end of the function"
+                    ~code:"E0111"
+                    ~span:fd.fd_name_span
+                    (Printf.sprintf "function '%s' may reach its end without returning a value"
+                       fd.fd_name);
+                ]
+            else
+              Ok
+                {
+                  Typed_ast.desc =
+                    Typed_ast.TStmtFunDecl
+                      {
+                        Typed_ast.tf_name = fd.fd_name;
+                        tf_name_span = fd.fd_name_span;
+                        tf_params = params;
+                        tf_ret = ret;
+                        tf_body = tbody;
+                      };
+                  span = s.span;
+                }
+        end
+    end
   | Ast.StmtBlock stmts ->
     let block_vars = ref [] in
     let tstmts = ref [] in
@@ -1194,7 +1559,7 @@ let rec check_stmt
                  (Typed_ast.TForeachVar
                     { name = None; name_span; is_const = head.is_const; ty = elem_ty })
              else begin
-               (match Hashtbl.find_opt env name with
+               (match find_conflict env name with
                 | None -> ()
                 | Some prev ->
                   let entity = if prev.is_const then "constant" else "variable" in
@@ -1220,7 +1585,7 @@ let rec check_stmt
              List.iter
                (fun (name, name_span) ->
                  if name <> "_" then begin
-                   (match Hashtbl.find_opt env name with
+                   (match find_conflict env name with
                     | None -> ()
                     | Some prev ->
                       let entity = if prev.is_const then "constant" else "variable" in
@@ -1586,7 +1951,7 @@ let rec check_stmt
     List.iter
       (fun (name, name_span) ->
         if name <> "_" then begin
-          (match Hashtbl.find_opt env name with
+          (match find_conflict env name with
            | None -> ()
            | Some prev ->
              let entity = if prev.is_const then "constant" else "variable" in
@@ -1712,7 +2077,7 @@ let rec check_stmt
                  })))
   | Ast.StmtVarDecl v ->
     let errs = ref [] in
-    (match Hashtbl.find_opt env v.name with
+    (match find_conflict env v.name with
      | None -> ()
      | Some prev ->
        let entity = if prev.is_const then "constant" else "variable" in
@@ -1723,6 +2088,19 @@ let rec check_stmt
            ~span:v.name_span
            (Printf.sprintf "%s '%s' is already declared in this scope" entity v.name)
          :: !errs);
+    (match v.ty_annot with
+     | Some annot when Option.is_none v.init ->
+       (match resolve_type_expr annot None with
+        | Ok ty when ty_contains_fun ty ->
+          errs :=
+            Diagnostic.error
+              ~hint:"initialize it with a function, e.g. 'var f : int(int) = my_fun;'"
+              ~code:"E0106"
+              ~span:v.name_span
+              (Printf.sprintf "variable '%s' of function type requires an initializing expression" v.name)
+            :: !errs
+        | _ -> ())
+     | _ -> ());
     if v.is_const && Option.is_none v.init then
       errs :=
         Diagnostic.error
@@ -1791,6 +2169,22 @@ let rec check_stmt
           in
           Hashtbl.replace env v.name
             { ty = final_ty; decl_span = v.name_span; is_const = v.is_const; const_int };
+          (match v.init with
+           | Some { Ast.desc = Ast.ExprIdent orig_name; _ } ->
+             (match Hashtbl.find_opt var_param_names orig_name with
+              | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+              | None ->
+                (match Hashtbl.find_opt env orig_name with
+                 | Some info ->
+                   (match Hashtbl.find_opt fun_param_names info.decl_span with
+                    | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+                    | None -> ())
+                 | None -> ()))
+           | Some ie ->
+             (match Hashtbl.find_opt expr_param_names ie.span with
+              | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+              | None -> ())
+           | None -> ());
           scope_vars := v.name :: !scope_vars;
           let tdecl =
             {
@@ -1810,12 +2204,21 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   let next_loop_id = ref 0 in
   let tstmts = ref [] in
   let all_errors = ref [] in
+  let saved_root = !root_scope_ref in
+  let saved_fun = !current_fun in
+  let saved_outer = !fn_outer in
+  root_scope_ref := Some root_scope;
+  current_fun := None;
+  fn_outer := None;
   List.iter
     (fun stmt ->
       match check_stmt env root_scope [] next_loop_id stmt with
       | Ok ts -> tstmts := ts :: !tstmts
       | Error errs -> all_errors := List.rev_append errs !all_errors)
     prog;
+  root_scope_ref := saved_root;
+  current_fun := saved_fun;
+  fn_outer := saved_outer;
   match List.rev !all_errors with
   | [] -> Ok (List.rev !tstmts)
   | errs -> Error errs

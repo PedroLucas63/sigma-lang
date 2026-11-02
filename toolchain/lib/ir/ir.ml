@@ -146,6 +146,14 @@ type opcode =
   | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
+  | OP_MAKE_FUN of {
+      entry : int;
+      fname : string;
+      params : string list;
+    }
+  | OP_CALL of int list
+  | OP_RETURN
+  | OP_RETURN_VOID
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
@@ -306,6 +314,12 @@ let pp_opcode fmt = function
   | OP_SET_GLOBAL_OBJ name -> Format.fprintf fmt "OP_SET_GLOBAL_OBJ %s" name
   | OP_UNDEF_GLOBAL name -> Format.fprintf fmt "OP_UNDEF_GLOBAL %s" name
   | OP_POP -> Format.fprintf fmt "OP_POP"
+  | OP_MAKE_FUN { entry; fname; params } ->
+    Format.fprintf fmt "OP_MAKE_FUN %s(%s) @%04d" fname (String.concat ", " params) entry
+  | OP_CALL idxs ->
+    Format.fprintf fmt "OP_CALL [%s]" (String.concat "; " (List.map string_of_int idxs))
+  | OP_RETURN -> Format.fprintf fmt "OP_RETURN"
+  | OP_RETURN_VOID -> Format.fprintf fmt "OP_RETURN_VOID"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
   | OP_PRINT_F32 -> Format.fprintf fmt "OP_PRINT_F32"
   | OP_PRINT_F64 -> Format.fprintf fmt "OP_PRINT_F64"

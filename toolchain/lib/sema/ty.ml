@@ -10,6 +10,8 @@ type t =
   | String
   | Tuple of t list
   | Array of t * int
+  | Fun of t list * t
+  | Void
 
 let rec equal a b =
   match a, b with
@@ -24,7 +26,10 @@ let rec equal a b =
     List.length xs = List.length ys && List.for_all2 equal xs ys
   | Array (ta, na), Array (tb, nb) ->
     na = nb && equal ta tb
-  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _), _ -> false
+  | Fun (pa, ra), Fun (pb, rb) ->
+    List.length pa = List.length pb && List.for_all2 equal pa pb && equal ra rb
+  | Void, Void -> true
+  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | Fun _ | Void), _ -> false
 
 let rec to_string = function
   | Int -> "int"
@@ -36,6 +41,9 @@ let rec to_string = function
   | String -> "string"
   | Tuple tys ->
     "(" ^ String.concat ", " (List.map to_string tys) ^ ")"
+  | Void -> "void"
+  | Fun (params, ret) ->
+    to_string ret ^ "(" ^ String.concat ", " (List.map to_string params) ^ ")"
   | Array _ as arr_ty ->
     let rec collect_dims acc = function
       | Array (inner, n) ->

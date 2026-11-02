@@ -76,6 +76,7 @@ type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
   | TypeArray of type_expr * int option * Span.t
+  | TypeFun of type_expr * type_expr list * Span.t
 
 type collection_item =
   | ItemExpr of expr
@@ -98,6 +99,7 @@ and expr_desc =
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
+  | ExprCall of expr * call_arg list
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
@@ -107,6 +109,11 @@ and expr_desc =
       prompt : expr option;
       mode : input_mode;
     }
+
+and call_arg = {
+  arg_name : (string * Span.t) option;
+  arg_value : expr;
+}
 
 and interp_part =
   | InterpLit of string
@@ -192,11 +199,21 @@ type stmt_desc =
       snippet_span : Span.t;
       message : expr option;
     }
+  | StmtFunDecl of fun_decl
+  | StmtReturn of expr option
   | StmtExpr of expr
 
 and stmt = {
   desc : stmt_desc;
   span : Span.t;
+}
+
+and fun_decl = {
+  fd_name : string;
+  fd_name_span : Span.t;
+  fd_params : (string * Span.t * type_expr) list;
+  fd_ret : type_expr option;
+  fd_body : stmt list;
 }
 
 type program = stmt list

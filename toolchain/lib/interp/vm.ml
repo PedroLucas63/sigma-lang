@@ -13,6 +13,20 @@ type value =
   | VString of string
   | VTuple of value array
   | VArray of value array
+  | VFun of fun_value
+
+and fun_value = {
+  entry : int;
+  fname : string;
+  pnames : string array;
+  bound : value option array;
+}
+
+type frame = {
+  vars : (string, value) Hashtbl.t;
+  ret_ip : int;
+  saved_stack : value list;
+}
 
 let round_f32 (f : float) : float =
   Int32.float_of_bits (Int32.bits_of_float f)
@@ -29,6 +43,7 @@ let rec value_to_string = function
     "(" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ ")"
   | VArray arr ->
     "[" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ "]"
+  | VFun _ -> "<function>"
 
 let decode_utf8 (s : string) : int =
   let len = String.length s in
@@ -129,6 +144,7 @@ let rec value_equal (a : value) (b : value) : bool =
   | VBool x, VBool y -> x = y
   | VChar x, VChar y -> decode_utf8 x = decode_utf8 y
   | VString x, VString y -> String.equal x y
+  | VFun x, VFun y -> x == y
   | VTuple xs, VTuple ys | VArray xs, VArray ys ->
     let len = Array.length xs in
     if len <> Array.length ys then false
@@ -318,6 +334,7 @@ type state = {
   mutable assertions_rev : assertion_result list;
   mutable stdin_lines : string list option;
   mutable stream_stdout : bool;
+  mutable frames : frame list;
 }
 
 let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = false) () =
@@ -330,7 +347,28 @@ let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = fa
     assertions_rev = [];
     stdin_lines;
     stream_stdout;
+    frames = [];
   }
+
+let cur_vars (st : state) : (string, value) Hashtbl.t =
+  match st.frames with
+  | f :: _ -> f.vars
+  | [] -> st.globals
+
+let find_var (st : state) (name : string) : value option =
+  match st.frames with
+  | f :: _ ->
+    (match Hashtbl.find_opt f.vars name with
+     | Some v -> Some v
+     | None -> Hashtbl.find_opt st.globals name)
+  | [] -> Hashtbl.find_opt st.globals name
+
+let set_var (st : state) (name : string) (v : value) : unit =
+  match st.frames with
+  | f :: _ when Hashtbl.mem f.vars name -> Hashtbl.replace f.vars name v
+  | _ -> Hashtbl.replace st.globals name v
+
+let max_call_depth = 100_000
 
 let emit_output (st : state) (out_buf : Buffer.t) (s : string) : unit =
   Buffer.add_string out_buf s;
@@ -420,7 +458,7 @@ let parse_prim_value (ty : Ty.t) (raw : string) : (value, string) result =
       if utf8_code_point_len trimmed = 1 then Ok (VChar trimmed)
       else Error (Printf.sprintf "Runtime error: failed to parse %S as 'char' (expected a single character)" raw)
   | Ty.String -> Ok (VString raw)
-  | Ty.Tuple _ | Ty.Array _ ->
+  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void ->
     Error "Runtime error: composite types are not supported in primitive input parsing"
 
 let split_whitespace_tokens (s : string) : string list =
@@ -1189,11 +1227,11 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
-         Hashtbl.replace st.globals (Printf.sprintf "$tmp_%d" id) v;
+         Hashtbl.replace (cur_vars st) (Printf.sprintf "$tmp_%d" id) v;
          Ok ()
        | [] -> Error "VM stack underflow on OP_SET_TEMP")
     | Ir.OP_GET_TEMP id ->
-      (match Hashtbl.find_opt st.globals (Printf.sprintf "$tmp_%d" id) with
+      (match Hashtbl.find_opt (cur_vars st) (Printf.sprintf "$tmp_%d" id) with
        | Some v ->
          st.stack <- v :: st.stack;
          Ok ()
@@ -1205,7 +1243,13 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_DEF_GLOBAL_BOOL name
     | Ir.OP_DEF_GLOBAL_CHAR name
     | Ir.OP_DEF_GLOBAL_STR name
-    | Ir.OP_DEF_GLOBAL_OBJ name
+    | Ir.OP_DEF_GLOBAL_OBJ name ->
+      (match st.stack with
+       | v :: rest ->
+         st.stack <- rest;
+         Hashtbl.replace (cur_vars st) name v;
+         Ok ()
+       | [] -> Error "VM stack underflow on OP_DEF_GLOBAL")
     | Ir.OP_SET_GLOBAL_I64 name
     | Ir.OP_SET_GLOBAL_F32 name
     | Ir.OP_SET_GLOBAL_F64 name
@@ -1217,9 +1261,9 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
       (match st.stack with
        | v :: rest ->
          st.stack <- rest;
-         Hashtbl.replace st.globals name v;
+         set_var st name v;
          Ok ()
-       | [] -> Error "VM stack underflow on OP_DEF/SET_GLOBAL")
+       | [] -> Error "VM stack underflow on OP_SET_GLOBAL")
     | Ir.OP_GET_GLOBAL_I64 name
     | Ir.OP_GET_GLOBAL_F32 name
     | Ir.OP_GET_GLOBAL_F64 name
@@ -1228,14 +1272,75 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
     | Ir.OP_GET_GLOBAL_CHAR name
     | Ir.OP_GET_GLOBAL_STR name
     | Ir.OP_GET_GLOBAL_OBJ name ->
-      (match Hashtbl.find_opt st.globals name with
+      (match find_var st name with
        | Some v ->
          st.stack <- v :: st.stack;
          Ok ()
        | None -> Error (Printf.sprintf "VM undefined global '%s'" name))
     | Ir.OP_UNDEF_GLOBAL name ->
-      Hashtbl.remove st.globals name;
+      Hashtbl.remove (cur_vars st) name;
       Ok ()
+    | Ir.OP_MAKE_FUN { entry; fname; params } ->
+      let n = List.length params in
+      st.stack <-
+        VFun { entry; fname; pnames = Array.of_list params; bound = Array.make n None }
+        :: st.stack;
+      Ok ()
+    | Ir.OP_CALL idxs ->
+      let n = List.length idxs in
+      let rec pop k acc stack =
+        if k = 0 then Some (acc, stack)
+        else
+          match stack with
+          | v :: rest -> pop (k - 1) (v :: acc) rest
+          | [] -> None
+      in
+      (match pop n [] st.stack with
+       | Some (argv, VFun f :: rest) ->
+         let len = Array.length f.bound in
+         let remaining =
+           Array.of_list
+             (List.filter (fun k -> Option.is_none f.bound.(k)) (List.init len Fun.id))
+         in
+         let bound = Array.copy f.bound in
+         List.iter2 (fun idx v -> bound.(remaining.(idx)) <- Some v) idxs argv;
+         if Array.for_all Option.is_some bound then begin
+           if List.length st.frames >= max_call_depth then
+             Error "Runtime error: call stack overflow (recursion too deep)"
+           else begin
+             let vars = Hashtbl.create 8 in
+             Array.iteri
+               (fun k nm ->
+                 match bound.(k) with
+                 | Some v -> Hashtbl.replace vars nm v
+                 | None -> ())
+               f.pnames;
+             st.frames <- { vars; ret_ip = st.ip; saved_stack = rest } :: st.frames;
+             st.stack <- rest;
+             st.ip <- f.entry;
+             Ok ()
+           end
+         end else begin
+           st.stack <- VFun { f with bound } :: rest;
+           Ok ()
+         end
+       | _ -> Error "VM type error or stack underflow on OP_CALL")
+    | Ir.OP_RETURN ->
+      (match st.stack, st.frames with
+       | v :: _, fr :: rest_frames ->
+         st.frames <- rest_frames;
+         st.stack <- v :: fr.saved_stack;
+         st.ip <- fr.ret_ip;
+         Ok ()
+       | _ -> Error "VM stack underflow or 'return' outside of a call on OP_RETURN")
+    | Ir.OP_RETURN_VOID ->
+      (match st.frames with
+       | fr :: rest_frames ->
+         st.frames <- rest_frames;
+         st.stack <- VInt 0L :: fr.saved_stack;
+         st.ip <- fr.ret_ip;
+         Ok ()
+       | [] -> Error "'return' outside of a call on OP_RETURN_VOID")
     | Ir.OP_POP ->
       (match st.stack with
        | _ :: rest ->
@@ -1300,7 +1405,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
        | [] -> Error "VM stack underflow on OP_PRINT_STR")
     | Ir.OP_PRINT_OBJ ->
       (match st.stack with
-       | ((VTuple _ | VArray _) as v) :: rest ->
+       | ((VTuple _ | VArray _ | VFun _) as v) :: rest ->
          st.stack <- rest;
          emit_output st out_buf (value_to_string v);
          Ok ()

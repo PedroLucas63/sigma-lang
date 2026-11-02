@@ -13,6 +13,20 @@ type value =
   | VString of string
   | VTuple of value array
   | VArray of value array
+  | VFun of fun_value
+
+and fun_value = {
+  entry : int;
+  fname : string;
+  pnames : string array;
+  bound : value option array;
+}
+
+type frame = {
+  vars : (string, value) Hashtbl.t;
+  ret_ip : int;
+  saved_stack : value list;
+}
 
 val value_to_string : value -> string
 
@@ -40,6 +54,7 @@ type state = {
   mutable assertions_rev : assertion_result list;
   mutable stdin_lines : string list option;
   mutable stream_stdout : bool;
+  mutable frames : frame list;
 }
 
 val create_state :

@@ -107,7 +107,7 @@ let def_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_DEF_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_DEF_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_DEF_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_DEF_GLOBAL_OBJ name
 
 let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
@@ -118,7 +118,7 @@ let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_GET_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_GET_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_GET_GLOBAL_OBJ name
 
 let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
@@ -129,7 +129,7 @@ let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_SET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_SET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_SET_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ -> Ir.OP_SET_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_SET_GLOBAL_OBJ name
 
 let binop_of_assign_op = function
   | Ast.AssignEq -> None
@@ -231,6 +231,10 @@ let rec lower_expr b (e : Typed_ast.expr) =
     lower_expr b target;
     lower_expr b idx;
     ignore (emit b Ir.OP_INDEX_GET e.span)
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    lower_expr b callee;
+    List.iter (fun (_, a) -> lower_expr b a) args;
+    ignore (emit b (Ir.OP_CALL (List.map fst args)) e.span)
   | Typed_ast.TExprUnary (unop, sub) ->
     lower_expr b sub;
     (match unop with
@@ -831,7 +835,7 @@ let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
-          | Ty.Tuple _ | Ty.Array _ -> Ir.OP_PRINT_OBJ
+          | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;
@@ -848,6 +852,26 @@ let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
      | Some m -> lower_expr b m
      | None -> ignore (emit b (Ir.OP_CONST_STR "") s.span));
     ignore (emit b (Ir.OP_ASSERT_ERR { expected_code; actual_codes; passed }) s.span)
+  | Typed_ast.TStmtFunDecl fd ->
+    let j_over = emit b (Ir.OP_JUMP 0) s.span in
+    let entry = cur_ip b in
+    List.iter (lower_stmt b []) fd.tf_body;
+    ignore (emit b Ir.OP_RETURN_VOID s.span);
+    patch b j_over (Ir.OP_JUMP (cur_ip b));
+    ignore
+      (emit b
+         (Ir.OP_MAKE_FUN
+            { entry; fname = fd.tf_name; params = List.map fst fd.tf_params })
+         s.span);
+    ignore
+      (emit b
+         (def_global_opcode (Ty.Fun (List.map snd fd.tf_params, fd.tf_ret)) fd.tf_name)
+         s.span)
+  | Typed_ast.TStmtReturn None ->
+    ignore (emit b Ir.OP_RETURN_VOID s.span)
+  | Typed_ast.TStmtReturn (Some e) ->
+    lower_expr b e;
+    ignore (emit b Ir.OP_RETURN s.span)
   | Typed_ast.TStmtExpr e ->
     lower_expr b e;
     ignore (emit b Ir.OP_POP s.span)

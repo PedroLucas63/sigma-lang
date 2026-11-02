@@ -13,6 +13,9 @@ type kind =
   | KW_IN
   | KW_BREAK
   | KW_CONTINUE
+  | KW_FUN
+  | KW_ACT
+  | KW_RETURN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

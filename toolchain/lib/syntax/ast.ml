@@ -74,6 +74,7 @@ type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
   | TypeArray of type_expr * int option * Span.t
+  | TypeFun of type_expr * type_expr list * Span.t
 
 type collection_item =
   | ItemExpr of expr
@@ -96,6 +97,7 @@ and expr_desc =
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
+  | ExprCall of expr * call_arg list
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
@@ -105,6 +107,11 @@ and expr_desc =
       prompt : expr option;
       mode : input_mode;
     }
+
+and call_arg = {
+  arg_name : (string * Span.t) option;
+  arg_value : expr;
+}
 
 and interp_part =
   | InterpLit of string
@@ -190,6 +197,8 @@ type stmt_desc =
       snippet_span : Span.t;
       message : expr option;
     }
+  | StmtFunDecl of fun_decl
+  | StmtReturn of expr option
   | StmtExpr of expr
 
 and stmt = {
@@ -197,15 +206,25 @@ and stmt = {
   span : Span.t;
 }
 
+and fun_decl = {
+  fd_name : string;
+  fd_name_span : Span.t;
+  fd_params : (string * Span.t * type_expr) list;
+  fd_ret : type_expr option;
+  fd_body : stmt list;
+}
+
 type program = stmt list
 
 let type_expr_span = function
-  | TypeNamed (_, sp) | TypeTuple (_, sp) | TypeArray (_, _, sp) -> sp
+  | TypeNamed (_, sp) | TypeTuple (_, sp) | TypeArray (_, _, sp) | TypeFun (_, _, sp) -> sp
 
 let rec type_expr_to_string = function
   | TypeNamed (name, _) -> name
   | TypeTuple (tys, _) ->
     "(" ^ String.concat ", " (List.map type_expr_to_string tys) ^ ")"
+  | TypeFun (ret, params, _) ->
+    type_expr_to_string ret ^ "(" ^ String.concat ", " (List.map type_expr_to_string params) ^ ")"
   | TypeArray _ as arr ->
     let rec collect_dims acc = function
       | TypeArray (inner, Some n, _) ->
@@ -328,6 +347,15 @@ and pp_expr fmt (e : expr) =
       items
   | ExprIndex (base, idx) ->
     Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
+  | ExprCall (callee, args) ->
+    let pp_arg fmt (a : call_arg) =
+      match a.arg_name with
+      | None -> pp_expr fmt a.arg_value
+      | Some (n, _) -> Format.fprintf fmt "%s=%a" n pp_expr a.arg_value
+    in
+    Format.fprintf fmt "%a(%a)" pp_expr callee
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
+      args
   | ExprUnary (op, sub) ->
     Format.fprintf fmt "(%s %a)" (unop_to_string op) pp_expr sub
   | ExprBinary (op, lhs, rhs) ->
@@ -452,6 +480,22 @@ let rec pp_stmt fmt (s : stmt) =
     (match message with
      | None -> Format.fprintf fmt "assert_error(%S, %S);" expected_code snippet
      | Some msg -> Format.fprintf fmt "assert_error(%S, %S, %a);" expected_code snippet pp_expr msg)
+  | StmtFunDecl fd ->
+    let params_s =
+      String.concat ", "
+        (List.map (fun (n, _, te) -> n ^ ": " ^ type_expr_to_string te) fd.fd_params)
+    in
+    (match fd.fd_ret with
+     | Some ret ->
+       Format.fprintf fmt "fun %s(%s): %s { %a }" fd.fd_name params_s (type_expr_to_string ret)
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
+         fd.fd_body
+     | None ->
+       Format.fprintf fmt "act %s(%s) { %a }" fd.fd_name params_s
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
+         fd.fd_body)
+  | StmtReturn None -> Format.fprintf fmt "return;"
+  | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
   | StmtExpr e ->
     Format.fprintf fmt "%a;" pp_expr e
 

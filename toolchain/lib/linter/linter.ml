@@ -38,6 +38,9 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   | Typed_ast.TExprIndex (target, idx) ->
     mark_expr_usage tbl target;
     mark_expr_usage tbl idx
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    mark_expr_usage tbl callee;
+    List.iter (fun (_, a) -> mark_expr_usage tbl a) args
   | Typed_ast.TExprUnary (_, sub) ->
     mark_expr_usage tbl sub
   | Typed_ast.TExprBinary (_, lhs, rhs) ->
@@ -169,6 +172,14 @@ let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     Option.iter (mark_expr_usage tbl) message
   | Typed_ast.TStmtAssertError { message; _ } ->
     Option.iter (mark_expr_usage tbl) message
+  | Typed_ast.TStmtFunDecl fd ->
+    let saved = Hashtbl.copy tbl in
+    List.iter (fun (pname, _) -> Hashtbl.remove tbl pname) fd.tf_params;
+    List.iter (lint_stmt tbl decl_order) fd.tf_body;
+    (* Restaura entradas escondidas por parâmetros/locais da função. *)
+    Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
+  | Typed_ast.TStmtReturn eo ->
+    Option.iter (mark_expr_usage tbl) eo
   | Typed_ast.TStmtExpr e ->
     mark_expr_usage tbl e
 

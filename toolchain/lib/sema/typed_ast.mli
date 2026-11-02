@@ -33,6 +33,11 @@ and expr_desc =
   | TExprTuple of collection_item list
   | TExprArray of collection_item list
   | TExprIndex of expr * expr
+  | TExprCall of {
+      callee : expr;
+      args : (int * expr) list;  (** (índice entre os parâmetros restantes do callee, valor), em ordem de avaliação *)
+      full : bool;  (** [true] quando todos os parâmetros ficam ligados e a função é executada *)
+    }
   | TExprUnary of Ast.unop * expr
   | TExprBinary of Ast.binop * expr * expr
   | TExprChainCmp of expr * Ast.binop * expr * Ast.binop * expr
@@ -148,11 +153,21 @@ type stmt_desc =
       passed : bool;
       message : expr option;
     }
+  | TStmtFunDecl of fun_decl
+  | TStmtReturn of expr option
   | TStmtExpr of expr
 
 and stmt = {
   desc : stmt_desc;
   span : Span.t;
+}
+
+and fun_decl = {
+  tf_name : string;
+  tf_name_span : Span.t;
+  tf_params : (string * Ty.t) list;
+  tf_ret : Ty.t;  (** [Ty.Void] para [act] *)
+  tf_body : stmt list;
 }
 
 type program = stmt list

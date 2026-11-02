@@ -40,6 +40,8 @@ let c_type_of_ty = function
   | Ty.Bool -> "bool"
   | Ty.Char | Ty.String -> "const char*"
   | Ty.Tuple _ | Ty.Array _ -> "sgm_obj_t*"
+  | Ty.Fun _ -> "sgm_fn_t*"
+  | Ty.Void -> "void"
 
 let c_val_union_field = function
   | Ty.Int -> "i64"
@@ -49,6 +51,8 @@ let c_val_union_field = function
   | Ty.Bool -> "b"
   | Ty.Char | Ty.String -> "str"
   | Ty.Tuple _ | Ty.Array _ -> "obj"
+  | Ty.Fun _ -> "fn"
+  | Ty.Void -> "i64"
 
 let emit_box_val (ty : Ty.t) (c_expr : string) : string =
   match ty with
@@ -60,6 +64,8 @@ let emit_box_val (ty : Ty.t) (c_expr : string) : string =
   | Ty.Char -> Printf.sprintf "sgm_val_char(%s)" c_expr
   | Ty.String -> Printf.sprintf "sgm_val_str(%s)" c_expr
   | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_val_obj(%s)" c_expr
+  | Ty.Fun _ -> Printf.sprintf "sgm_val_fn(%s)" c_expr
+  | Ty.Void -> Printf.sprintf "((void)(%s), sgm_val_i64(0))" c_expr
 
 let is_rel_op = function
   | Ast.BinEq | Ast.BinNe | Ast.BinLt | Ast.BinGt | Ast.BinLe | Ast.BinGe -> true
@@ -123,6 +129,8 @@ let c_tag_of_ty = function
   | Ty.Char -> "SGM_TAG_CHAR"
   | Ty.String -> "SGM_TAG_STR"
   | Ty.Tuple _ | Ty.Array _ -> "SGM_TAG_OBJ"
+  | Ty.Fun _ -> "SGM_TAG_FN"
+  | Ty.Void -> "SGM_TAG_I64"
 
 let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   match ty with
@@ -133,6 +141,8 @@ let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" c_val
   | Ty.Char | Ty.String -> c_val
   | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_fmt_obj(%s)" c_val
+  | Ty.Fun _ -> Printf.sprintf "sgm_fmt_fn(%s)" c_val
+  | Ty.Void -> "\"\""
 
 let emit_fmt_spec_c_val (ty : Ty.t) (c_val : string) (spec : Ast.format_spec) : string =
   let align_code =
@@ -268,6 +278,36 @@ let rec emit_expr (e : Typed_ast.expr) : string =
     Printf.sprintf
       "__extension__ ({ sgm_obj_t *%s = sgm_obj_alloc(false, INT64_C(%d)); int64_t %s = 0; (void)%s; %s %s; })"
       obj_var total_len idx_var idx_var item_stmts obj_var
+  | Typed_ast.TExprCall { callee; args; full } ->
+    incr chain_counter;
+    let id = !chain_counter in
+    let fv = Printf.sprintf "_sgm_cf_%d" id in
+    let av = Printf.sprintf "_sgm_ca_%d" id in
+    let n = List.length args in
+    let sets =
+      String.concat " "
+        (List.mapi
+           (fun j ((_, a) : int * Typed_ast.expr) ->
+             Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.ty (emit_expr a)))
+           args)
+    in
+    let idxs =
+      if n = 0 then "(const int64_t[]){ 0 }"
+      else
+        "(const int64_t[]){ "
+        ^ String.concat ", " (List.map (fun (i, _) -> Printf.sprintf "INT64_C(%d)" i) args)
+        ^ " }"
+    in
+    let bound = Printf.sprintf "sgm_fn_bind(%s, INT64_C(%d), %s, %s)" fv n idxs av in
+    let tail =
+      if not full then bound
+      else
+        match e.ty with
+        | Ty.Void -> Printf.sprintf "(void)sgm_fn_invoke(%s)" bound
+        | ty -> Printf.sprintf "sgm_fn_invoke(%s).u.%s" bound (c_val_union_field ty)
+    in
+    Printf.sprintf "__extension__ ({ sgm_fn_t *%s = %s; sgm_val_t %s[%d]; %s %s; })"
+      fv (emit_expr callee) av (max n 1) sets tail
   | Typed_ast.TExprIndex (target, idx) ->
     Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s)"
       (emit_expr target)
@@ -880,10 +920,12 @@ typedef enum {
   SGM_TAG_BOOL,
   SGM_TAG_CHAR,
   SGM_TAG_STR,
-  SGM_TAG_OBJ
+  SGM_TAG_OBJ,
+  SGM_TAG_FN
 } sgm_tag_t;
 
 typedef struct sgm_obj sgm_obj_t;
+typedef struct sgm_fn sgm_fn_t;
 
 typedef struct {
   sgm_tag_t tag;
@@ -895,6 +937,7 @@ typedef struct {
     bool b;
     const char *str;
     sgm_obj_t *obj;
+    sgm_fn_t *fn;
   } u;
 } sgm_val_t;
 
@@ -912,6 +955,51 @@ __attribute__((unused)) static sgm_val_t sgm_val_bool(bool v) { return (sgm_val_
 __attribute__((unused)) static sgm_val_t sgm_val_char(const char *v) { return (sgm_val_t){ SGM_TAG_CHAR, { .str = v } }; }
 __attribute__((unused)) static sgm_val_t sgm_val_str(const char *v) { return (sgm_val_t){ SGM_TAG_STR, { .str = v } }; }
 __attribute__((unused)) static sgm_val_t sgm_val_obj(sgm_obj_t *v) { return (sgm_val_t){ SGM_TAG_OBJ, { .obj = v } }; }
+
+struct sgm_fn {
+  sgm_val_t (*fp)(sgm_val_t *args);
+  int64_t nparams;
+  bool *has;
+  sgm_val_t *vals;
+};
+
+__attribute__((unused)) static sgm_val_t sgm_val_fn(sgm_fn_t *v) { return (sgm_val_t){ SGM_TAG_FN, { .fn = v } }; }
+
+__attribute__((unused)) static sgm_fn_t* sgm_fn_make(sgm_val_t (*fp)(sgm_val_t *), int64_t n) {
+  sgm_fn_t *f = (sgm_fn_t*)malloc(sizeof(sgm_fn_t));
+  f->fp = fp;
+  f->nparams = n;
+  f->has = (bool*)calloc((size_t)(n > 0 ? n : 1), sizeof(bool));
+  f->vals = (sgm_val_t*)calloc((size_t)(n > 0 ? n : 1), sizeof(sgm_val_t));
+  return f;
+}
+
+__attribute__((unused)) static sgm_fn_t* sgm_fn_bind(sgm_fn_t *f, int64_t n, const int64_t *idxs, const sgm_val_t *argv) {
+  sgm_fn_t *g = sgm_fn_make(f->fp, f->nparams);
+  for (int64_t k = 0; k < f->nparams; k++) {
+    g->has[k] = f->has[k];
+    g->vals[k] = f->vals[k];
+  }
+  for (int64_t j = 0; j < n; j++) {
+    int64_t want = idxs[j];
+    int64_t seen = 0;
+    for (int64_t k = 0; k < f->nparams; k++) {
+      if (!f->has[k]) {
+        if (seen == want) {
+          g->has[k] = true;
+          g->vals[k] = argv[j];
+          break;
+        }
+        seen++;
+      }
+    }
+  }
+  return g;
+}
+
+__attribute__((unused)) static sgm_val_t sgm_fn_invoke(sgm_fn_t *g) { return g->fp(g->vals); }
+
+__attribute__((unused)) static const char* sgm_fmt_fn(sgm_fn_t *f) { (void)f; return "<function>"; }
 
 __attribute__((unused)) static sgm_obj_t* sgm_obj_alloc(bool is_tuple, int64_t len) {
   sgm_obj_t *o = (sgm_obj_t*)malloc(sizeof(sgm_obj_t));
@@ -965,6 +1053,7 @@ __attribute__((unused)) static bool sgm_val_eq(sgm_val_t a, sgm_val_t b) {
     case SGM_TAG_CHAR: return sgm_decode_utf8(a.u.str) == sgm_decode_utf8(b.u.str);
     case SGM_TAG_STR: return strcmp(a.u.str, b.u.str) == 0;
     case SGM_TAG_OBJ: return sgm_obj_eq(a.u.obj, b.u.obj);
+    case SGM_TAG_FN: return a.u.fn == b.u.fn;
   }
   return false;
 }
@@ -991,6 +1080,7 @@ __attribute__((unused)) static const char* sgm_fmt_val(sgm_val_t v) {
     case SGM_TAG_CHAR:
     case SGM_TAG_STR: return v.u.str;
     case SGM_TAG_OBJ: return sgm_fmt_obj(v.u.obj);
+    case SGM_TAG_FN: return sgm_fmt_fn(v.u.fn);
   }
   return "";
 }
@@ -1465,6 +1555,8 @@ let c_decl_type_and_qual ~is_const (ty : Ty.t) : string * string =
     match ty with
     | Ty.Char | Ty.String -> ("const char* const", "")
     | Ty.Tuple _ | Ty.Array _ -> ("sgm_obj_t* const", "")
+    | Ty.Fun _ -> ("sgm_fn_t* const", "")
+    | Ty.Void -> ("void", "")
     | _ -> (c_type_of_ty ty, "const ")
   else
     (c_type_of_ty ty, "")
@@ -1653,7 +1745,13 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
           Buffer.add_string
             buf
             (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n"
-               indent (emit_expr e)))
+               indent (emit_expr e))
+        | Ty.Fun _ ->
+          Buffer.add_string
+            buf
+            (Printf.sprintf "%s(void)(%s);\n%sfputs(\"<function>\", stdout);\n"
+               indent (emit_expr e) indent)
+        | Ty.Void -> ())
       args;
     if newline then Buffer.add_string buf (indent ^ "putchar('\\n');\n")
   | Typed_ast.TStmtAssert { actual; expected; message } ->
@@ -1675,7 +1773,7 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
     Buffer.add_string
       buf
       (Printf.sprintf
-         "%s{\n%s  %s %s = %s;\n%s  %s %s = %s;\n%s  const char* %s = %s;\n%s  if (%s) {\n%s    sgm_test_passed++;\n%s  } else {\n%s    sgm_test_failed++;\n%s    fprintf(stderr, \"assertion failed at %%s%%s%%s%%s: expected %%s, got %%s\\n\", %s, (%s[0] ? \" (\" : \"\"), %s, (%s[0] ? \")\" : \"\"), %s, %s);\n%s    if (!sgm_test_mode) return 1;\n%s  }\n%s}\n"
+         "%s{\n%s  %s %s = %s;\n%s  %s %s = %s;\n%s  const char* %s = %s;\n%s  if (%s) {\n%s    sgm_test_passed++;\n%s  } else {\n%s    sgm_test_failed++;\n%s    fprintf(stderr, \"assertion failed at %%s%%s%%s%%s: expected %%s, got %%s\\n\", %s, (%s[0] ? \" (\" : \"\"), %s, (%s[0] ? \")\" : \"\"), %s, %s);\n%s    if (!sgm_test_mode) exit(1);\n%s  }\n%s}\n"
          indent
          indent c_ty va (emit_expr actual)
          indent c_ty ve (emit_expr expected)
@@ -1711,17 +1809,82 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
       Buffer.add_string
         buf
         (Printf.sprintf
-           "%s{\n%s  const char* %s = %s;\n%s  sgm_test_failed++;\n%s  fprintf(stderr, \"assert_error failed at %%s%%s%%s%%s: expected '%%s', got %%s\\n\", %s, (%s[0] ? \" (\" : \"\"), %s, (%s[0] ? \")\" : \"\"), %s, %s);\n%s  if (!sgm_test_mode) return 1;\n%s}\n"
+           "%s{\n%s  const char* %s = %s;\n%s  sgm_test_failed++;\n%s  fprintf(stderr, \"assert_error failed at %%s%%s%%s%%s: expected '%%s', got %%s\\n\", %s, (%s[0] ? \" (\" : \"\"), %s, (%s[0] ? \")\" : \"\"), %s, %s);\n%s  if (!sgm_test_mode) exit(1);\n%s}\n"
            indent
            indent vm c_msg
            indent
            indent loc_str vm vm vm exp_str act_str
            indent
            indent)
+  | Typed_ast.TStmtReturn eo ->
+    (match eo with
+     | None -> Buffer.add_string buf (Printf.sprintf "%sreturn sgm_val_i64(0);\n" indent)
+     | Some e ->
+       Buffer.add_string buf
+         (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty (emit_expr e))))
+  | Typed_ast.TStmtFunDecl _ ->
+    (* Funções são emitidas como funções C de nível superior por [emit_c]. *)
+    ()
   | Typed_ast.TStmtExpr e ->
     Buffer.add_string
       buf
       (Printf.sprintf "%s(void)(%s);\n" indent (emit_expr e))
+
+let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
+  Buffer.add_string buf
+    (Printf.sprintf "static sgm_val_t sgm_fn_%s(sgm_val_t *_sgm_args) {\n  (void)_sgm_args;\n"
+       fd.tf_name);
+  List.iteri
+    (fun i (pname, pty) ->
+      Buffer.add_string buf
+        (Printf.sprintf "  %s %s = _sgm_args[%d].u.%s;\n" (c_type_of_ty pty)
+           (mangle_ident pname) i (c_val_union_field pty)))
+    fd.tf_params;
+  List.iter (emit_stmt buf "  ") fd.tf_body;
+  Buffer.add_string buf "  return sgm_val_i64(0);\n}\n\n"
+
+let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
+  List.concat_map
+    (fun (s : Typed_ast.stmt) ->
+      match s.desc with
+      | Typed_ast.TStmtVarDecl v -> [ (v.name, v.ty) ]
+      | Typed_ast.TStmtDestruct d ->
+        List.filter_map
+          (fun (b : Typed_ast.destruct_binding) ->
+            Option.map (fun n -> (n, b.ty)) b.name)
+          d.bindings
+      | Typed_ast.TStmtFunDecl fd ->
+        [ (fd.tf_name, Ty.Fun (List.map snd fd.tf_params, fd.tf_ret)) ]
+      | _ -> [])
+    prog
+
+(* Em programas com funções, as variáveis de nível superior viram variáveis
+   estáticas de arquivo (visíveis às funções) e são apenas atribuídas em [main]. *)
+let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
+  match s.desc with
+  | Typed_ast.TStmtVarDecl v ->
+    Buffer.add_string buf
+      (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident v.name) (emit_expr v.init))
+  | Typed_ast.TStmtDestruct d ->
+    incr chain_counter;
+    let tmp_obj = Printf.sprintf "_sgm_destr_%d" !chain_counter in
+    Buffer.add_string buf
+      (Printf.sprintf "%ssgm_obj_t *%s = %s;\n%s(void)%s;\n"
+         indent tmp_obj (emit_expr d.init) indent tmp_obj);
+    List.iteri
+      (fun i (bind : Typed_ast.destruct_binding) ->
+        match bind.name with
+        | None -> ()
+        | Some name ->
+          Buffer.add_string buf
+            (Printf.sprintf "%s%s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
+               indent (mangle_ident name) tmp_obj i (c_val_union_field bind.ty)))
+      d.bindings
+  | Typed_ast.TStmtFunDecl fd ->
+    Buffer.add_string buf
+      (Printf.sprintf "%s%s = sgm_fn_make(sgm_fn_%s, INT64_C(%d));\n"
+         indent (mangle_ident fd.tf_name) fd.tf_name (List.length fd.tf_params))
+  | _ -> emit_stmt buf indent s
 
 let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
   let buf = Buffer.create 512 in
@@ -1731,14 +1894,36 @@ let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
   Buffer.add_string buf "#include <inttypes.h>\n";
   Buffer.add_string buf "#include <stdio.h>\n\n";
   Buffer.add_string buf c_decimal_runtime;
-  Buffer.add_string buf "\nint main(void) {\n";
-  Buffer.add_string buf "  int sgm_test_passed = 0;\n";
-  Buffer.add_string buf "  int sgm_test_failed = 0;\n";
+  Buffer.add_string buf "\n__attribute__((unused)) static int sgm_test_passed = 0;\n";
+  Buffer.add_string buf "__attribute__((unused)) static int sgm_test_failed = 0;\n";
   Buffer.add_string
     buf
-    (Printf.sprintf "  bool sgm_test_mode = %s;\n" (if test_mode then "true" else "false"));
-  Buffer.add_string buf "  (void)sgm_test_passed;\n  (void)sgm_test_failed;\n  (void)sgm_test_mode;\n";
-  List.iter (emit_stmt buf "  ") prog;
+    (Printf.sprintf "__attribute__((unused)) static bool sgm_test_mode = %s;\n\n"
+       (if test_mode then "true" else "false"));
+  let has_funs =
+    List.exists
+      (fun (s : Typed_ast.stmt) ->
+        match s.desc with Typed_ast.TStmtFunDecl _ -> true | _ -> false)
+      prog
+  in
+  if has_funs then begin
+    List.iter
+      (fun (name, ty) ->
+        Buffer.add_string buf
+          (Printf.sprintf "static %s %s;\n" (c_type_of_ty ty) (mangle_ident name)))
+      (toplevel_decls prog);
+    Buffer.add_string buf "\n";
+    List.iter
+      (fun (s : Typed_ast.stmt) ->
+        match s.desc with
+        | Typed_ast.TStmtFunDecl fd -> emit_fun_def buf fd
+        | _ -> ())
+      prog
+  end;
+  Buffer.add_string buf "int main(void) {\n";
+  List.iter
+    (if has_funs then emit_toplevel_stmt buf "  " else emit_stmt buf "  ")
+    prog;
   Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n";
   Buffer.contents buf
 

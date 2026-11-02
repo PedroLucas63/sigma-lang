@@ -11,6 +11,9 @@ type kind =
   | KW_IN
   | KW_BREAK
   | KW_CONTINUE
+  | KW_FUN
+  | KW_ACT
+  | KW_RETURN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -93,6 +96,9 @@ let kind_to_string = function
   | KW_IN -> "'in'"
   | KW_BREAK -> "'break'"
   | KW_CONTINUE -> "'continue'"
+  | KW_FUN -> "'fun'"
+  | KW_ACT -> "'act'"
+  | KW_RETURN -> "'return'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

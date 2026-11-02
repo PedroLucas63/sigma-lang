@@ -148,6 +148,14 @@ type opcode =
   | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
+  | OP_MAKE_FUN of {
+      entry : int;
+      fname : string;
+      params : string list;
+    }
+  | OP_CALL of int list
+  | OP_RETURN
+  | OP_RETURN_VOID
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64
