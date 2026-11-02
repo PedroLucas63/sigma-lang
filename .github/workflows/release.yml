@@ -3,7 +3,6 @@ name: Release & Deploy — Main
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
@@ -140,6 +139,7 @@ jobs:
   # 4. Deploy no GitHub Pages (Site, Playground e Documentação)
   deploy-pages:
     name: Deploy GitHub Pages
+    if: github.ref == 'refs/heads/main'
     needs: [test]
     runs-on: ubuntu-latest
     environment:

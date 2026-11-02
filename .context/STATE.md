@@ -5,7 +5,7 @@
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
 - **Milestone:** `M2 — Estruturas de Dados, Controle de Fluxo e Ecossistema Sincronizado`
-- **Git Flow:** Branch base `develop` (Release `v0.2.1` publicada em `main` e sincronizada com `develop`).
+- **Git Flow:** Branch base `develop` (Release `v0.2.2` publicada em `main` e sincronizada com `develop`).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -44,4 +44,4 @@
 - **2026-10-27:** Tuplas imutáveis `(T1, T2)`, desempacotamento `var/const (a, b, _) := ...`, arrays estáticos `T[N]` / `T[]` (`+`, `*`), spread `..` e semântica de referência no heap (`feature/tuples-and-arrays`, `ADR-024`).
 - **2026-10-29:** Laços `while`, `for` e `foreach` (com desempacotamento direto), rótulos `<label>:` e `break [<label>];` / `continue [<label>];` (`feature/loops`, `ADR-025`).
 - **2026-10-29:** Entrada estaticamente tipada `input(...)` e `prompt(<msg>, ...)` (com tipos múltiplos e máscaras `"${int}.${int}..."`), especificadores de formatação `"${expr : [fill][<|>|^][+][0][width][.prec]}"`, suíte `08_input_and_format_test.sgm` (249 asserções totais) e sincronização do ecossistema (`feature/input-and-string-format`, `ADR-026`).
-- **2026-11-02:** Streaming de `stdout` em tempo real com `flush stdout` imediato na VM (`~stream_stdout:true` em `sigma run`), exibindo `print`/`println`/`prompt` antes do bloqueio de `input` (`feature/vm-realtime-stdout`).
+- **2026-11-02:** Streaming de `stdout` em tempo real com `flush stdout` imediato na VM (`~stream_stdout:true` em `sigma run`), correção do deploy GitHub Pages em `release.yml` (execução exclusiva em `refs/heads/main`) e substituição atômica (`rm -f` + `chmod 755`) no `install.sh` / `package.sh` (`v0.2.2`).

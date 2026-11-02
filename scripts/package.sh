@@ -35,8 +35,8 @@ TARGET_DIR="${STAGE_DIR}/${PKG_NAME}"
 mkdir -p "$TARGET_DIR"
 
 # 1. Copia binário e aplica strip para reduzir tamanho
-cp "$BIN_PATH" "${TARGET_DIR}/sigma"
-chmod +x "${TARGET_DIR}/sigma"
+cp -f "$BIN_PATH" "${TARGET_DIR}/sigma"
+chmod 755 "${TARGET_DIR}/sigma"
 if command -v strip >/dev/null 2>&1; then
   strip "${TARGET_DIR}/sigma" 2>/dev/null || true
 fi

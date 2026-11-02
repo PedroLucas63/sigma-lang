@@ -111,12 +111,14 @@ mkdir -p "$DEST_DIR" 2>/dev/null || true
 
 echo "Instalando em ${DEST_DIR}/sigma..."
 if [ -w "$DEST_DIR" ]; then
-  cp "$BIN_FILE" "${DEST_DIR}/sigma"
-  chmod +x "${DEST_DIR}/sigma"
+  rm -f "${DEST_DIR}/sigma"
+  cp -f "$BIN_FILE" "${DEST_DIR}/sigma"
+  chmod 755 "${DEST_DIR}/sigma"
 else
   echo "Permissão de administrador necessária para escrever em $DEST_DIR:"
-  sudo cp "$BIN_FILE" "${DEST_DIR}/sigma"
-  sudo chmod +x "${DEST_DIR}/sigma"
+  sudo rm -f "${DEST_DIR}/sigma"
+  sudo cp -f "$BIN_FILE" "${DEST_DIR}/sigma"
+  sudo chmod 755 "${DEST_DIR}/sigma"
 fi
 
 echo ""
