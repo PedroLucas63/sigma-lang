@@ -2,7 +2,7 @@
   "name": "sigma-lang",
   "displayName": "Sigma Language (.sgm)",
   "description": "Official VSCode support for the Sigma scientific and general-purpose programming language",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "engines": {
     "vscode": "^1.85.0"
   },
