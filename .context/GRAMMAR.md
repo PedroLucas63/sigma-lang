@@ -19,6 +19,8 @@
 | Palavra-chave | `KW_FUN` | `fun` |
 | Palavra-chave | `KW_ACT` | `act` |
 | Palavra-chave | `KW_RETURN` | `return` |
+| Palavra-chave | `KW_REF` | `ref` |
+| Palavra-chave | `KW_OUT` | `out` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -128,7 +130,7 @@ block_stmt    ::= "{" stmt* "}" ;
 fun_decl      ::= "fun" IDENT "(" params? ")" ":" type_expr block_stmt ;
 act_decl      ::= "act" IDENT "(" params? ")" block_stmt ;
 params        ::= param ( "," param )* ","? ;
-param         ::= IDENT ":" type_expr ;
+param         ::= ( "ref" | "out" )? IDENT ":" type_expr ;
 
 var_decl      ::= "var" IDENT ( ":" type_expr ( "=" expr )? | ":=" expr ) ;
 const_decl    ::= "const" IDENT ( ":" type_expr "=" expr | ":=" expr ) ;
@@ -169,7 +171,7 @@ unary         ::= ( "+" | "-" | "++" | "--" ) unary
 power         ::= postfix ( "^" unary )? ;
 postfix       ::= primary ( "[" expr "]" | "++" | "--" | "(" call_args? ")" )* ;
 call_args     ::= call_arg ( "," call_arg )* ","? ;
-call_arg      ::= ( IDENT "=" )? expr ;
+call_arg      ::= ( IDENT "=" )? ( "ref" expr | "out" ( "var" IDENT ( ":" type_expr )? | expr ) | expr ) ;
 primary       ::= INT
                 | FLOAT
                 | DOUBLE

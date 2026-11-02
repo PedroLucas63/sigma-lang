@@ -42,6 +42,10 @@
           "match": "\\b(fun|act)\\b"
         },
         {
+          "name": "storage.modifier.parameter.sigma",
+          "match": "\\b(ref|out)\\b"
+        },
+        {
           "name": "keyword.control.flow.return.sigma",
           "match": "\\b(return)\\b"
         },

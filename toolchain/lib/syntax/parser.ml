@@ -589,10 +589,53 @@ and parse_fn_call_args st : (Ast.call_arg list * Span.t, Diagnostic.t) result =
           Some (n, tok.span)
         | _ -> None
       in
-      match parse_expr st with
+      let t = cur st in
+      let (arg_mode_res : (Ast.arg_mode * Ast.expr, Diagnostic.t) result) =
+        if t.kind = Token.KW_REF then begin
+          bump st;
+          match parse_expr st with
+          | Error e -> Error e
+          | Ok e -> Ok (Ast.ArgRef, e)
+        end else if t.kind = Token.KW_OUT then begin
+          bump st;
+          let nt = cur st in
+          if nt.kind = Token.KW_VAR then begin
+            bump st;
+            let id_tok = cur st in
+            match id_tok.kind with
+            | Token.IDENT vname ->
+              bump st;
+              let ty_annot_res =
+                if (cur st).kind = Token.COLON then begin
+                  bump st;
+                  match parse_type_expr st with
+                  | Ok te -> Ok (Some te)
+                  | Error e -> Error e
+                end else Ok None
+              in
+              (match ty_annot_res with
+               | Error e -> Error e
+               | Ok ty_opt ->
+                 let (dummy_expr : Ast.expr) = { desc = Ast.ExprIdent vname; span = id_tok.span } in
+                 Ok (Ast.ArgOutVar { var_name = vname; var_span = id_tok.span; var_type = ty_opt }, dummy_expr))
+            | _ ->
+              Error
+                (Diagnostic.error ~code:"E0002" ~span:id_tok.span
+                   (Printf.sprintf "expected identifier after 'out var', found %s"
+                      (Token.kind_to_string id_tok.kind)))
+          end else
+            match parse_expr st with
+            | Error e -> Error e
+            | Ok e -> Ok (Ast.ArgOut, e)
+        end else
+          match parse_expr st with
+          | Error e -> Error e
+          | Ok e -> Ok (Ast.ArgVal, e)
+      in
+      match arg_mode_res with
       | Error e -> Error e
-      | Ok v ->
-        let acc = { Ast.arg_name = named; arg_value = v } :: acc in
+      | Ok (mode, v) ->
+        let acc = { Ast.arg_name = named; arg_mode = mode; arg_value = v } :: acc in
         let nt = cur st in
         if nt.kind = Token.COMMA then begin
           bump st;
@@ -925,22 +968,7 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
          (Printf.sprintf "expected expression, found %s"
             (Token.kind_to_string tok.kind)))
 
-let expect_semi st start_span : (Span.t, Diagnostic.t) result =
-  let tok = cur st in
-  match tok.kind with
-  | Token.SEMI ->
-    bump st;
-    Ok (Span.merge start_span tok.span)
-  | _ ->
-    Error
-      (Diagnostic.error
-         ~hint:"every statement in Sigma must end with ';'"
-         ~code:"E0003"
-         ~span:tok.span
-         (Printf.sprintf "expected ';' at end of statement, found %s"
-            (Token.kind_to_string tok.kind)))
-
-let rec parse_type_expr st : (Ast.type_expr, Diagnostic.t) result =
+and parse_type_expr st : (Ast.type_expr, Diagnostic.t) result =
   match parse_base_type st with
   | Error e -> Error e
   | Ok base0 ->
@@ -958,10 +986,16 @@ and parse_fn_suffixes st (base : Ast.type_expr) : (Ast.type_expr, Diagnostic.t) 
         bump st;
         Ok (List.rev acc, t.span)
       end else
+        let pmode =
+          let tok = cur st in
+          if tok.kind = Token.KW_REF then (bump st; Ast.ParamRef)
+          else if tok.kind = Token.KW_OUT then (bump st; Ast.ParamOut)
+          else Ast.ParamVal
+        in
         match parse_type_expr st with
         | Error e -> Error e
         | Ok te ->
-          let acc = te :: acc in
+          let acc = (pmode, te) :: acc in
           let nt = cur st in
           if nt.kind = Token.COMMA then begin
             bump st;
@@ -1099,6 +1133,21 @@ and parse_base_type st : (Ast.type_expr, Diagnostic.t) result =
          ~code:"E0002"
          ~span:tok.span
          (Printf.sprintf "expected type name after ':', found %s"
+            (Token.kind_to_string tok.kind)))
+
+let expect_semi st start_span : (Span.t, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.SEMI ->
+    bump st;
+    Ok (Span.merge start_span tok.span)
+  | _ ->
+    Error
+      (Diagnostic.error
+         ~hint:"every statement in Sigma must end with ';'"
+         ~code:"E0003"
+         ~span:tok.span
+         (Printf.sprintf "expected ';' at end of statement, found %s"
             (Token.kind_to_string tok.kind)))
 
 let parse_destruct_names st open_tok : ((string * Span.t) list, Diagnostic.t) result =
@@ -1508,6 +1557,13 @@ and parse_fun_decl st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
           bump st;
           Ok (List.rev acc)
         end else
+          let pmode =
+            let tok = cur st in
+            if tok.kind = Token.KW_REF then (bump st; Ast.ParamRef)
+            else if tok.kind = Token.KW_OUT then (bump st; Ast.ParamOut)
+            else Ast.ParamVal
+          in
+          let t = cur st in
           match t.kind with
           | Token.IDENT pname ->
             bump st;
@@ -1519,7 +1575,15 @@ and parse_fun_decl st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
               match parse_type_expr st with
               | Error e -> Error e
               | Ok te ->
-                let acc = (pname, t.span, te) :: acc in
+                let acc =
+                  {
+                    Ast.param_name = pname;
+                    param_span = t.span;
+                    param_mode = pmode;
+                    param_type = te;
+                  }
+                  :: acc
+                in
                 let nt = cur st in
                 if nt.kind = Token.COMMA then begin
                   bump st;

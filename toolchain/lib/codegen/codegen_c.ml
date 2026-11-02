@@ -294,15 +294,29 @@ let rec emit_expr (e : Typed_ast.expr) : string =
     let sets =
       String.concat " "
         (List.mapi
-           (fun j ((_, a) : int * Typed_ast.expr) ->
-             Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.ty (emit_expr a)))
+           (fun j (a : Typed_ast.typed_call_arg) ->
+             match a.tca_mode with
+             | Ty.ParamRef | Ty.ParamOut ->
+               let vname =
+                 match a.tca_expr.desc with
+                 | Typed_ast.TExprIdent n -> n
+                 | _ -> "tmp"
+               in
+               let c_var =
+                 match Hashtbl.find_opt current_cells vname with
+                 | Some cell_expr -> cell_expr
+                 | None -> mangle_ident vname
+               in
+               Printf.sprintf "%s[%d] = sgm_val_ref(&(%s));" av j c_var
+             | Ty.ParamVal ->
+               Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.tca_expr.ty (emit_expr a.tca_expr)))
            args)
     in
     let idxs =
       if n = 0 then "(const int64_t[]){ 0 }"
       else
         "(const int64_t[]){ "
-        ^ String.concat ", " (List.map (fun (i, _) -> Printf.sprintf "INT64_C(%d)" i) args)
+        ^ String.concat ", " (List.map (fun a -> Printf.sprintf "INT64_C(%d)" a.Typed_ast.tca_idx) args)
         ^ " }"
     in
     let bound = Printf.sprintf "sgm_fn_bind(%s, INT64_C(%d), %s, %s)" fv n idxs av in
@@ -938,7 +952,8 @@ typedef enum {
   SGM_TAG_CHAR,
   SGM_TAG_STR,
   SGM_TAG_OBJ,
-  SGM_TAG_FN
+  SGM_TAG_FN,
+  SGM_TAG_REF
 } sgm_tag_t;
 
 typedef struct sgm_obj sgm_obj_t;
@@ -955,6 +970,7 @@ typedef struct {
     const char *str;
     sgm_obj_t *obj;
     sgm_fn_t *fn;
+    void *ref_ptr;
   } u;
 } sgm_val_t;
 
@@ -972,6 +988,7 @@ __attribute__((unused)) static sgm_val_t sgm_val_bool(bool v) { return (sgm_val_
 __attribute__((unused)) static sgm_val_t sgm_val_char(const char *v) { return (sgm_val_t){ SGM_TAG_CHAR, { .str = v } }; }
 __attribute__((unused)) static sgm_val_t sgm_val_str(const char *v) { return (sgm_val_t){ SGM_TAG_STR, { .str = v } }; }
 __attribute__((unused)) static sgm_val_t sgm_val_obj(sgm_obj_t *v) { return (sgm_val_t){ SGM_TAG_OBJ, { .obj = v } }; }
+__attribute__((unused)) static sgm_val_t sgm_val_ref(void *p) { return (sgm_val_t){ SGM_TAG_REF, { .ref_ptr = p } }; }
 
 struct sgm_fn {
   sgm_val_t (*fp)(sgm_val_t *args, sgm_fn_t *self);
@@ -1082,6 +1099,7 @@ __attribute__((unused)) static bool sgm_val_eq(sgm_val_t a, sgm_val_t b) {
     case SGM_TAG_STR: return strcmp(a.u.str, b.u.str) == 0;
     case SGM_TAG_OBJ: return sgm_obj_eq(a.u.obj, b.u.obj);
     case SGM_TAG_FN: return a.u.fn == b.u.fn;
+    case SGM_TAG_REF: return a.u.ref_ptr == b.u.ref_ptr;
   }
   return false;
 }
@@ -1109,6 +1127,7 @@ __attribute__((unused)) static const char* sgm_fmt_val(sgm_val_t v) {
     case SGM_TAG_STR: return v.u.str;
     case SGM_TAG_OBJ: return sgm_fmt_obj(v.u.obj);
     case SGM_TAG_FN: return sgm_fmt_fn(v.u.fn);
+    case SGM_TAG_REF: return "<ref>";
   }
   return "";
 }
@@ -1914,6 +1933,68 @@ let rec collect_inner_captures (s : Typed_ast.stmt) : string list =
     collect_inner_captures body
   | _ -> []
 
+let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
+  match e.desc with
+  | Typed_ast.TExprCall { args; _ } ->
+    List.concat_map
+      (fun (a : Typed_ast.typed_call_arg) ->
+        let here =
+          if a.tca_is_out_var then
+            match a.tca_expr.desc with
+            | Typed_ast.TExprIdent n -> [ (n, a.tca_expr.ty) ]
+            | _ -> []
+          else []
+        in
+        here @ collect_out_vars_expr a.tca_expr)
+      args
+  | Typed_ast.TExprUnary (_, sub) -> collect_out_vars_expr sub
+  | Typed_ast.TExprBinary (_, lhs, rhs) -> collect_out_vars_expr lhs @ collect_out_vars_expr rhs
+  | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
+    collect_out_vars_expr e1 @ collect_out_vars_expr e2 @ collect_out_vars_expr e3
+  | Typed_ast.TExprAssign (_, _, rhs) -> collect_out_vars_expr rhs
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_out_vars_expr sub) items
+  | Typed_ast.TExprIndex (b, i) -> collect_out_vars_expr b @ collect_out_vars_expr i
+  | Typed_ast.TExprInterp parts ->
+    List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_out_vars_expr sub) parts
+  | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_out_vars_expr p
+  | _ -> []
+
+let rec collect_out_vars_stmt (s : Typed_ast.stmt) : (string * Ty.t) list =
+  match s.desc with
+  | Typed_ast.TStmtVarDecl v -> collect_out_vars_expr v.init
+  | Typed_ast.TStmtDestruct d -> collect_out_vars_expr d.init
+  | Typed_ast.TStmtBlock ss -> List.concat_map collect_out_vars_stmt ss
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    collect_out_vars_expr cond @ collect_out_vars_stmt then_branch
+    @ (match else_branch with Some eb -> collect_out_vars_stmt eb | None -> [])
+  | Typed_ast.TStmtWhile { cond; body; _ } ->
+    collect_out_vars_expr cond @ collect_out_vars_stmt body
+  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+    (match init with Typed_ast.TForInitExpr e -> collect_out_vars_expr e | _ -> [])
+    @ collect_out_vars_expr cond @ collect_out_vars_expr step @ collect_out_vars_stmt body
+  | Typed_ast.TStmtForeach { collection; body; _ } ->
+    collect_out_vars_expr collection @ collect_out_vars_stmt body
+  | Typed_ast.TStmtPrint { args; _ } -> List.concat_map collect_out_vars_expr args
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    collect_out_vars_expr actual @ collect_out_vars_expr expected
+    @ (match message with Some m -> collect_out_vars_expr m | None -> [])
+  | Typed_ast.TStmtAssertError { message; _ } ->
+    (match message with Some m -> collect_out_vars_expr m | None -> [])
+  | Typed_ast.TStmtReturn (Some e) -> collect_out_vars_expr e
+  | Typed_ast.TStmtExpr e -> collect_out_vars_expr e
+  | Typed_ast.TStmtFunDecl _ | Typed_ast.TStmtReturn None
+  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> []
+
+let emit_default_c_val = function
+  | Ty.Int -> "INT64_C(0)"
+  | Ty.Float -> "0.0f"
+  | Ty.Double -> "0.0"
+  | Ty.Decimal -> "sgm_dec_from_i64(INT64_C(0))"
+  | Ty.Bool -> "false"
+  | Ty.Char | Ty.String -> "\"\""
+  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> "NULL"
+
 let compute_boxed_vars_in_fun (fd : Typed_ast.fun_decl) : string list =
   List.concat_map collect_inner_captures fd.tf_body
 
@@ -1931,6 +2012,12 @@ let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
   Hashtbl.replace current_cells fd.tf_name "(_sgm_self->orig)";
   let boxed = compute_boxed_vars_in_fun fd in
   List.iter (fun name -> Hashtbl.replace current_boxed name ()) boxed;
+  let local_out_vars = List.concat_map collect_out_vars_stmt fd.tf_body in
+  List.iter
+    (fun (name, ty) ->
+      Buffer.add_string buf
+        (Printf.sprintf "  %s %s = %s;\n" (c_type_of_ty ty) (mangle_ident name) (emit_default_c_val ty)))
+    local_out_vars;
   List.iteri
     (fun i (cap_name, cap_ty) ->
       Buffer.add_string buf
@@ -1940,17 +2027,26 @@ let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
         (Printf.sprintf "(sgm_cell_%s->u.%s)" cap_name (c_val_union_field cap_ty)))
     fd.tf_captures;
   List.iteri
-    (fun i (pname, pty) ->
-      if Hashtbl.mem current_boxed pname then begin
+    (fun i (tp : Typed_ast.typed_param) ->
+      match tp.tp_mode with
+      | Ty.ParamRef | Ty.ParamOut ->
+        let c_type = c_type_of_ty tp.tp_ty in
+        let ref_var = Printf.sprintf "_sgm_ref_%s" (mangle_ident tp.tp_name) in
         Buffer.add_string buf
-          (Printf.sprintf "  sgm_val_t *sgm_cell_%s = sgm_cell_make(_sgm_args[%d]);\n"
-             pname i);
-        Hashtbl.replace current_cells pname
-          (Printf.sprintf "(sgm_cell_%s->u.%s)" pname (c_val_union_field pty))
-      end else
-        Buffer.add_string buf
-          (Printf.sprintf "  %s %s = _sgm_args[%d].u.%s;\n" (c_type_of_ty pty)
-             (mangle_ident pname) i (c_val_union_field pty)))
+          (Printf.sprintf "  %s *%s = (%s*)_sgm_args[%d].u.ref_ptr;\n"
+             c_type ref_var c_type i);
+        Hashtbl.replace current_cells tp.tp_name (Printf.sprintf "(*%s)" ref_var)
+      | Ty.ParamVal ->
+        if Hashtbl.mem current_boxed tp.tp_name then begin
+          Buffer.add_string buf
+            (Printf.sprintf "  sgm_val_t *sgm_cell_%s = sgm_cell_make(_sgm_args[%d]);\n"
+               tp.tp_name i);
+          Hashtbl.replace current_cells tp.tp_name
+            (Printf.sprintf "(sgm_cell_%s->u.%s)" tp.tp_name (c_val_union_field tp.tp_ty))
+        end else
+          Buffer.add_string buf
+            (Printf.sprintf "  %s %s = _sgm_args[%d].u.%s;\n" (c_type_of_ty tp.tp_ty)
+               (mangle_ident tp.tp_name) i (c_val_union_field tp.tp_ty)))
     fd.tf_params;
   List.iter (emit_stmt buf "  ") fd.tf_body;
   Buffer.add_string buf "  return sgm_val_i64(0);\n}\n\n"
@@ -1958,16 +2054,20 @@ let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
 let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
   List.concat_map
     (fun (s : Typed_ast.stmt) ->
-      match s.desc with
-      | Typed_ast.TStmtVarDecl v -> [ (v.name, v.ty) ]
-      | Typed_ast.TStmtDestruct d ->
-        List.filter_map
-          (fun (b : Typed_ast.destruct_binding) ->
-            Option.map (fun n -> (n, b.ty)) b.name)
-          d.bindings
-      | Typed_ast.TStmtFunDecl fd ->
-        [ (fd.tf_name, Ty.Fun (List.map snd fd.tf_params, fd.tf_ret)) ]
-      | _ -> [])
+      let out_vars = collect_out_vars_stmt s in
+      let base =
+        match s.desc with
+        | Typed_ast.TStmtVarDecl v -> [ (v.name, v.ty) ]
+        | Typed_ast.TStmtDestruct d ->
+          List.filter_map
+            (fun (b : Typed_ast.destruct_binding) ->
+              Option.map (fun n -> (n, b.ty)) b.name)
+            d.bindings
+        | Typed_ast.TStmtFunDecl fd ->
+          [ (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)) ]
+        | _ -> []
+      in
+      out_vars @ base)
     prog
 
 let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =

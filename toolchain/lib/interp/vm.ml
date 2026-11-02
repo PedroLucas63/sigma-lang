@@ -14,6 +14,7 @@ type value =
   | VTuple of value array
   | VArray of value array
   | VFun of fun_value
+  | VRef of value ref
 
 and fun_value = {
   entry : int;
@@ -47,6 +48,7 @@ let rec value_to_string = function
   | VArray arr ->
     "[" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ "]"
   | VFun _ -> "<function>"
+  | VRef r -> Printf.sprintf "&(%s)" (value_to_string !r)
 
 let decode_utf8 (s : string) : int =
   let len = String.length s in
@@ -1315,6 +1317,12 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
          st.stack <- v :: st.stack;
          Ok ()
        | None -> Error (Printf.sprintf "VM undefined global '%s'" name))
+    | Ir.OP_GET_REF name ->
+      (match find_var_ref st name with
+       | Some r ->
+         st.stack <- VRef r :: st.stack;
+         Ok ()
+       | None -> Error (Printf.sprintf "VM undefined variable for ref '%s'" name))
     | Ir.OP_UNDEF_GLOBAL name ->
       Hashtbl.remove (cur_vars st) name;
       Ok ()
@@ -1364,6 +1372,7 @@ let step ~out_buf (prog : Ir.program) (st : state) : (unit, string) result =
              Array.iteri
                (fun k nm ->
                  match bound.(k) with
+                 | Some (VRef r) -> Hashtbl.replace vars nm r
                  | Some v -> Hashtbl.replace vars nm (ref v)
                  | None -> ())
                f.pnames;

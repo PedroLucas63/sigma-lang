@@ -1,6 +1,16 @@
 open Sigma_common
 
-type t =
+type param_mode =
+  | ParamVal
+  | ParamRef
+  | ParamOut
+
+type fun_param = {
+  pty : t;
+  pmode : param_mode;
+}
+
+and t =
   | Int
   | Float
   | Double
@@ -10,7 +20,7 @@ type t =
   | String
   | Tuple of t list
   | Array of t * int
-  | Fun of t list * t
+  | Fun of fun_param list * t
   | Void
 
 let rec equal a b =
@@ -27,7 +37,9 @@ let rec equal a b =
   | Array (ta, na), Array (tb, nb) ->
     na = nb && equal ta tb
   | Fun (pa, ra), Fun (pb, rb) ->
-    List.length pa = List.length pb && List.for_all2 equal pa pb && equal ra rb
+    List.length pa = List.length pb
+    && List.for_all2 (fun p1 p2 -> p1.pmode = p2.pmode && equal p1.pty p2.pty) pa pb
+    && equal ra rb
   | Void, Void -> true
   | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | Fun _ | Void), _ -> false
 
@@ -43,7 +55,19 @@ let rec to_string = function
     "(" ^ String.concat ", " (List.map to_string tys) ^ ")"
   | Void -> "void"
   | Fun (params, ret) ->
-    to_string ret ^ "(" ^ String.concat ", " (List.map to_string params) ^ ")"
+    let p_strs =
+      List.map
+        (fun p ->
+          let pfx =
+            match p.pmode with
+            | ParamVal -> ""
+            | ParamRef -> "ref "
+            | ParamOut -> "out "
+          in
+          pfx ^ to_string p.pty)
+        params
+    in
+    to_string ret ^ "(" ^ String.concat ", " p_strs ^ ")"
   | Array _ as arr_ty ->
     let rec collect_dims acc = function
       | Array (inner, n) ->

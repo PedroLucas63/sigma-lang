@@ -70,11 +70,26 @@ type input_mode =
   | InputTypes of (string * Span.t) list
   | InputMask of mask_part list
 
+type param_mode =
+  | ParamVal
+  | ParamRef
+  | ParamOut
+
 type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
   | TypeArray of type_expr * int option * Span.t
-  | TypeFun of type_expr * type_expr list * Span.t
+  | TypeFun of type_expr * (param_mode * type_expr) list * Span.t
+
+type arg_mode =
+  | ArgVal
+  | ArgRef
+  | ArgOut
+  | ArgOutVar of {
+      var_name : string;
+      var_span : Span.t;
+      var_type : type_expr option;
+    }
 
 type collection_item =
   | ItemExpr of expr
@@ -110,6 +125,7 @@ and expr_desc =
 
 and call_arg = {
   arg_name : (string * Span.t) option;
+  arg_mode : arg_mode;
   arg_value : expr;
 }
 
@@ -150,6 +166,13 @@ type foreach_head = {
   binding : foreach_binding;
   is_const : bool;
   ty_annot : type_expr option;
+}
+
+type fun_param = {
+  param_name : string;
+  param_span : Span.t;
+  param_mode : param_mode;
+  param_type : type_expr;
 }
 
 type stmt_desc =
@@ -209,7 +232,7 @@ and stmt = {
 and fun_decl = {
   fd_name : string;
   fd_name_span : Span.t;
-  fd_params : (string * Span.t * type_expr) list;
+  fd_params : fun_param list;
   fd_ret : type_expr option;
   fd_body : stmt list;
 }
@@ -224,7 +247,19 @@ let rec type_expr_to_string = function
   | TypeTuple (tys, _) ->
     "(" ^ String.concat ", " (List.map type_expr_to_string tys) ^ ")"
   | TypeFun (ret, params, _) ->
-    type_expr_to_string ret ^ "(" ^ String.concat ", " (List.map type_expr_to_string params) ^ ")"
+    let p_strs =
+      List.map
+        (fun (m, te) ->
+          let pfx =
+            match m with
+            | ParamVal -> ""
+            | ParamRef -> "ref "
+            | ParamOut -> "out "
+          in
+          pfx ^ type_expr_to_string te)
+        params
+    in
+    type_expr_to_string ret ^ "(" ^ String.concat ", " p_strs ^ ")"
   | TypeArray _ as arr ->
     let rec collect_dims acc = function
       | TypeArray (inner, Some n, _) ->
@@ -349,9 +384,23 @@ and pp_expr fmt (e : expr) =
     Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
   | ExprCall (callee, args) ->
     let pp_arg fmt (a : call_arg) =
-      match a.arg_name with
-      | None -> pp_expr fmt a.arg_value
-      | Some (n, _) -> Format.fprintf fmt "%s=%a" n pp_expr a.arg_value
+      let prefix =
+        match a.arg_name with
+        | None -> ""
+        | Some (n, _) -> n ^ "="
+      in
+      let mode_prefix =
+        match a.arg_mode with
+        | ArgVal -> ""
+        | ArgRef -> "ref "
+        | ArgOut -> "out "
+        | ArgOutVar { var_name; var_type = None; _ } -> Printf.sprintf "out var %s " var_name
+        | ArgOutVar { var_name; var_type = Some te; _ } ->
+          Printf.sprintf "out var %s: %s " var_name (type_expr_to_string te)
+      in
+      match a.arg_mode with
+      | ArgOutVar _ -> Format.fprintf fmt "%s%s" prefix (String.trim mode_prefix)
+      | _ -> Format.fprintf fmt "%s%s%a" prefix mode_prefix pp_expr a.arg_value
     in
     Format.fprintf fmt "%a(%a)" pp_expr callee
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
@@ -483,7 +532,16 @@ let rec pp_stmt fmt (s : stmt) =
   | StmtFunDecl fd ->
     let params_s =
       String.concat ", "
-        (List.map (fun (n, _, te) -> n ^ ": " ^ type_expr_to_string te) fd.fd_params)
+        (List.map
+           (fun (p : fun_param) ->
+             let pfx =
+               match p.param_mode with
+               | ParamVal -> ""
+               | ParamRef -> "ref "
+               | ParamOut -> "out "
+             in
+             pfx ^ p.param_name ^ ": " ^ type_expr_to_string p.param_type)
+           fd.fd_params)
     in
     (match fd.fd_ret with
      | Some ret ->

@@ -146,6 +146,26 @@ let binop_of_assign_op = function
   | Ast.AssignShl -> Some Ast.BinShl
   | Ast.AssignShr -> Some Ast.BinShr
 
+let rec emit_default_value b span (ty : Ty.t) : unit =
+  match ty with
+  | Ty.Int -> ignore (emit b (Ir.OP_CONST_I64 0L) span)
+  | Ty.Float -> ignore (emit b (Ir.OP_CONST_F32 0.0) span)
+  | Ty.Double -> ignore (emit b (Ir.OP_CONST_F64 0.0) span)
+  | Ty.Decimal -> ignore (emit b (Ir.OP_CONST_DEC Decimal.zero) span)
+  | Ty.Bool -> ignore (emit b (Ir.OP_CONST_BOOL false) span)
+  | Ty.Char -> ignore (emit b (Ir.OP_CONST_CHAR "") span)
+  | Ty.String -> ignore (emit b (Ir.OP_CONST_STR "") span)
+  | Ty.Tuple tys ->
+    List.iter (emit_default_value b span) tys;
+    ignore (emit b (Ir.OP_MAKE_TUPLE (List.length tys)) span)
+  | Ty.Array (elem_ty, len) ->
+    for _ = 1 to len do
+      emit_default_value b span elem_ty
+    done;
+    ignore (emit b (Ir.OP_MAKE_ARRAY len) span)
+  | Ty.Fun _ | Ty.Void ->
+    ignore (emit b (Ir.OP_CONST_I64 0L) span)
+
 let rec lower_expr b (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt n ->
@@ -233,8 +253,24 @@ let rec lower_expr b (e : Typed_ast.expr) =
     ignore (emit b Ir.OP_INDEX_GET e.span)
   | Typed_ast.TExprCall { callee; args; _ } ->
     lower_expr b callee;
-    List.iter (fun (_, a) -> lower_expr b a) args;
-    ignore (emit b (Ir.OP_CALL (List.map fst args)) e.span)
+    List.iter
+      (fun (a : Typed_ast.typed_call_arg) ->
+        if a.tca_is_out_var then begin
+          match a.tca_expr.desc with
+          | Typed_ast.TExprIdent vname ->
+            emit_default_value b a.tca_expr.span a.tca_expr.ty;
+            ignore (emit b (def_global_opcode a.tca_expr.ty vname) a.tca_expr.span)
+          | _ -> ()
+        end;
+        match a.tca_mode with
+        | Ty.ParamRef | Ty.ParamOut ->
+          (match a.tca_expr.desc with
+           | Typed_ast.TExprIdent vname ->
+             ignore (emit b (Ir.OP_GET_REF vname) a.tca_expr.span)
+           | _ -> lower_expr b a.tca_expr)
+        | Ty.ParamVal -> lower_expr b a.tca_expr)
+      args;
+    ignore (emit b (Ir.OP_CALL (List.map (fun a -> a.Typed_ast.tca_idx) args)) e.span)
   | Typed_ast.TExprUnary (unop, sub) ->
     lower_expr b sub;
     (match unop with
@@ -864,14 +900,16 @@ let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
             {
               entry;
               fname = fd.tf_name;
-              params = List.map fst fd.tf_params;
+              params = List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_name) fd.tf_params;
               captures = List.map fst fd.tf_captures;
             })
          s.span);
-    ignore
-      (emit b
-         (def_global_opcode (Ty.Fun (List.map snd fd.tf_params, fd.tf_ret)) fd.tf_name)
-         s.span)
+    let fty =
+      Ty.Fun
+        (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params,
+         fd.tf_ret)
+    in
+    ignore (emit b (def_global_opcode fty fd.tf_name) s.span)
   | Typed_ast.TStmtReturn None ->
     ignore (emit b Ir.OP_RETURN_VOID s.span)
   | Typed_ast.TStmtReturn (Some e) ->

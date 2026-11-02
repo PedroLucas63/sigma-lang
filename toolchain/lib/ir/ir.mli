@@ -138,6 +138,7 @@ type opcode =
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
   | OP_GET_GLOBAL_OBJ of string
+  | OP_GET_REF of string
   | OP_SET_GLOBAL_I64 of string
   | OP_SET_GLOBAL_F32 of string
   | OP_SET_GLOBAL_F64 of string

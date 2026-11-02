@@ -183,6 +183,8 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           | "fun" -> Token.KW_FUN
           | "act" -> Token.KW_ACT
           | "return" -> Token.KW_RETURN
+          | "ref" -> Token.KW_REF
+          | "out" -> Token.KW_OUT
           | "input" -> Token.KW_INPUT
           | "prompt" -> Token.KW_PROMPT
           | "print" -> Token.KW_PRINT

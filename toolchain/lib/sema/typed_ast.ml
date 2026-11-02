@@ -1,6 +1,12 @@
 open Sigma_common
 open Sigma_syntax
 
+type typed_param = {
+  tp_name : string;
+  tp_mode : Ty.param_mode;
+  tp_ty : Ty.t;
+}
+
 type collection_item =
   | TItemExpr of expr
   | TItemSpread of expr
@@ -18,6 +24,13 @@ and lvalue =
   | TLValIdent of string
   | TLValIndex of expr * expr
 
+and typed_call_arg = {
+  tca_idx : int;
+  tca_expr : expr;
+  tca_mode : Ty.param_mode;
+  tca_is_out_var : bool;
+}
+
 and expr_desc =
   | TExprInt of int64
   | TExprFloat of float
@@ -33,8 +46,8 @@ and expr_desc =
   | TExprIndex of expr * expr
   | TExprCall of {
       callee : expr;
-      args : (int * expr) list;  (** (índice entre os parâmetros restantes do callee, valor), em ordem de avaliação *)
-      full : bool;  (** [true] quando todos os parâmetros ficam ligados e a função é executada *)
+      args : typed_call_arg list;
+      full : bool;
     }
   | TExprUnary of Ast.unop * expr
   | TExprBinary of Ast.binop * expr * expr
@@ -163,7 +176,7 @@ and stmt = {
 and fun_decl = {
   tf_name : string;
   tf_name_span : Span.t;
-  tf_params : (string * Ty.t) list;
+  tf_params : typed_param list;
   tf_ret : Ty.t;  (** [Ty.Void] para [act] *)
   tf_captures : (string * Ty.t) list;
   tf_body : stmt list;

@@ -16,6 +16,8 @@ type kind =
   | KW_FUN
   | KW_ACT
   | KW_RETURN
+  | KW_REF
+  | KW_OUT
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

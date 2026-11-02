@@ -72,11 +72,26 @@ type input_mode =
   | InputTypes of (string * Span.t) list
   | InputMask of mask_part list
 
+type param_mode =
+  | ParamVal
+  | ParamRef
+  | ParamOut
+
 type type_expr =
   | TypeNamed of string * Span.t
   | TypeTuple of type_expr list * Span.t
   | TypeArray of type_expr * int option * Span.t
-  | TypeFun of type_expr * type_expr list * Span.t
+  | TypeFun of type_expr * (param_mode * type_expr) list * Span.t
+
+type arg_mode =
+  | ArgVal
+  | ArgRef
+  | ArgOut
+  | ArgOutVar of {
+      var_name : string;
+      var_span : Span.t;
+      var_type : type_expr option;
+    }
 
 type collection_item =
   | ItemExpr of expr
@@ -112,6 +127,7 @@ and expr_desc =
 
 and call_arg = {
   arg_name : (string * Span.t) option;
+  arg_mode : arg_mode;
   arg_value : expr;
 }
 
@@ -152,6 +168,13 @@ type foreach_head = {
   binding : foreach_binding;
   is_const : bool;
   ty_annot : type_expr option;
+}
+
+type fun_param = {
+  param_name : string;
+  param_span : Span.t;
+  param_mode : param_mode;
+  param_type : type_expr;
 }
 
 type stmt_desc =
@@ -211,7 +234,7 @@ and stmt = {
 and fun_decl = {
   fd_name : string;
   fd_name_span : Span.t;
-  fd_params : (string * Span.t * type_expr) list;
+  fd_params : fun_param list;
   fd_ret : type_expr option;
   fd_body : stmt list;
 }

@@ -14,6 +14,7 @@ type value =
   | VTuple of value array
   | VArray of value array
   | VFun of fun_value
+  | VRef of value ref
 
 and fun_value = {
   entry : int;

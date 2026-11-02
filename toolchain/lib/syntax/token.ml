@@ -14,6 +14,8 @@ type kind =
   | KW_FUN
   | KW_ACT
   | KW_RETURN
+  | KW_REF
+  | KW_OUT
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -99,6 +101,8 @@ let kind_to_string = function
   | KW_FUN -> "'fun'"
   | KW_ACT -> "'act'"
   | KW_RETURN -> "'return'"
+  | KW_REF -> "'ref'"
+  | KW_OUT -> "'out'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

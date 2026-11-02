@@ -136,6 +136,7 @@ type opcode =
   | OP_GET_GLOBAL_CHAR of string
   | OP_GET_GLOBAL_STR of string
   | OP_GET_GLOBAL_OBJ of string
+  | OP_GET_REF of string
   | OP_SET_GLOBAL_I64 of string
   | OP_SET_GLOBAL_F32 of string
   | OP_SET_GLOBAL_F64 of string
@@ -305,6 +306,7 @@ let pp_opcode fmt = function
   | OP_GET_GLOBAL_CHAR name -> Format.fprintf fmt "OP_GET_GLOBAL_CHAR %s" name
   | OP_GET_GLOBAL_STR name -> Format.fprintf fmt "OP_GET_GLOBAL_STR %s" name
   | OP_GET_GLOBAL_OBJ name -> Format.fprintf fmt "OP_GET_GLOBAL_OBJ %s" name
+  | OP_GET_REF name -> Format.fprintf fmt "OP_GET_REF %s" name
   | OP_SET_GLOBAL_I64 name -> Format.fprintf fmt "OP_SET_GLOBAL_I64 %s" name
   | OP_SET_GLOBAL_F32 name -> Format.fprintf fmt "OP_SET_GLOBAL_F32 %s" name
   | OP_SET_GLOBAL_F64 name -> Format.fprintf fmt "OP_SET_GLOBAL_F64 %s" name

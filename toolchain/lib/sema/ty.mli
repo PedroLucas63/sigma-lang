@@ -2,7 +2,17 @@
 
 open Sigma_common
 
-type t =
+type param_mode =
+  | ParamVal
+  | ParamRef
+  | ParamOut
+
+type fun_param = {
+  pty : t;
+  pmode : param_mode;
+}
+
+and t =
   | Int
   | Float
   | Double
@@ -12,7 +22,7 @@ type t =
   | String
   | Tuple of t list
   | Array of t * int
-  | Fun of t list * t  (** Função/procedimento: parâmetros restantes e retorno ([Void] para [act]). *)
+  | Fun of fun_param list * t  (** Função/procedimento: parâmetros restantes e retorno ([Void] para [act]). *)
   | Void  (** Retorno de [act]; só aparece como retorno de [Fun] ou como tipo de chamada de [act]. *)
 
 val equal : t -> t -> bool

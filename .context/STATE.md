@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M2 — Closures, Funções e Procedimentos de Primeira Classe (Concluído)`
-- **Git Flow:** Branch ativa `feature/closures` sobre `develop`.
+- **Milestone:** `M2 — Parâmetros ref, out, out var e Shallow Const (Concluído)`
+- **Git Flow:** Branch ativa `feature/ref-out-parameters` sobre `develop`.
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -26,9 +26,10 @@
 - [x] Tuplas heterogêneas com elementos imutáveis `(e1, e2, ...)` e tipo `(T1, T2, ...)` (zero-init recursivo, indexação constante `tuple[0]` e proibição de mutação posicional `E0107`), desempacotamento `var/const (a, b, _) := ...` com curinga `_`, arrays estáticos `T[N]` e tamanho inferido `T[]` (com mutação por índice, concatenação `+`, repetição `*`), operador spread `..` em literais de tupla/array e semântica de objetos por referência no heap (`E0108`).
 - [x] Estruturas de repetição `while (<bool-expr>) <stmt>`, `for (<init>; <bool-expr>; <step>) <stmt>` (com declaração local simples/desempacotada ou expressão em `<init>`) e `foreach (var/const <binding> [:<type>] in <array>) <stmt>` (com suporte a variável simples e desempacotamento `var (a, b) in l`), além de laços rotulados `<label>:` e `break [<label>];` / `continue [<label>];` (`E0109`).
 - [x] Funções de primeira classe `fun` e procedimentos `act`, aplicação parcial automática (currying), argumentos nomeados (`f(b=10, a=20)`), e closures com captura léxica de escopo e células de referência compartilhadas (`tests/10_closures_test.sgm`).
+- [x] Parâmetros `shallow const` por padrão (reatribuição `a = ...` proibida com `E0107`, mutação de elementos `a[0] = ...` permitida), modificador `ref` para passagem por referência, modificador `out` com atribuição definitiva em todos os caminhos (`E0117`) e declaração inline `out var <name> [:<type>]` (`tests/11_ref_out_parameters_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 301 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (10 suítes).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 334 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (11 suítes).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.

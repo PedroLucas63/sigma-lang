@@ -480,8 +480,27 @@ fun make_counter(start: int): int() {
 
 var c := make_counter(100);
 println("c() =", c());
-println("c() =", c());`,
-        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15\nc() = 101\nc() = 102`
+println("c() =", c());
+
+# Parâmetros por referência (ref) e saída (out / out var)
+act swap(ref a: int, ref b: int) {
+  var t := a;
+  a = b;
+  b = t;
+}
+
+var (x, y) := (10, 20);
+swap(ref x, ref y);
+println("swap:", x, y);
+
+fun dividir(a: int, b: int, out resto: int): int {
+  resto = a % b;
+  return a // b;
+}
+
+var q := dividir(10, 3, out var r);
+println("dividir 10 / 3: quociente =", q, "resto =", r);`,
+        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15\nc() = 101\nc() = 102\nswap: 20 10\ndividir 10 / 3: quociente = 3 resto = 1`
       },
       input_format: {
         code: `# @stdin: 123.456.789-07
