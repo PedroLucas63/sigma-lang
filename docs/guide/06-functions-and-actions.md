@@ -123,3 +123,51 @@ A sintaxe de tipo de função é `<tipo_retorno>(<tipos_parametros>)`:
 var operacao: int(int, int) = mult;
 var logger: void(string) = print;
 ```
+
+---
+
+## 6. Funções Aninhadas e Closures (Captura Léxica)
+
+Funções e procedimentos podem ser declarados no interior de blocos ou de outras funções. Quando uma função interna acessa variáveis do escopo onde foi definida, ela atua como uma **closure**, capturando essas variáveis por referência:
+
+```sigma
+fun make_counter(start: int): int() {
+    var count := start;
+    fun inc(): int {
+        count += 1;
+        return count;
+    }
+    return inc;
+}
+
+var c1 := make_counter(0);
+var c2 := make_counter(100);
+
+assert(c1(), 1);
+assert(c1(), 2);
+assert(c2(), 101);
+assert(c1(), 3);
+```
+
+### Escopo Léxico e Semântica de Objeto
+Como funções são objetos de primeira classe, o escopo utilizado para resolver variáveis é estritamente o local onde a função foi **definida**, e não o ponto onde ela é chamada:
+
+```sigma
+fun example(a: int, b: int): int(int) {
+    var c := a + b;
+    var d := 10;
+    fun op(a: int): int {
+        return a * d + c;
+    }
+    return op;
+}
+
+var (a, b, c, d) := (5, 5, 5, 0);
+
+var op := example(a, b);
+var r := op(6);
+
+assert(r, 70); # 6 * 10 + 10 = 70
+```
+
+Neste exemplo, mesmo que variáveis globais `c` e `d` existam com valores `5` e `0`, a closure `op` retém e utiliza `c = 10` e `d = 10` do escopo de `example` onde foi concebida.

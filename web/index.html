@@ -466,8 +466,22 @@ act adicionar(qtd: int) {
 
 adicionar(5);
 adicionar(10);
-println("Contador final:", contador);`,
-        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15`
+println("Contador final:", contador);
+
+# Closures com captura léxica de escopo
+fun make_counter(start: int): int() {
+  var count := start;
+  fun inc(): int {
+    count += 1;
+    return count;
+  }
+  return inc;
+}
+
+var c := make_counter(100);
+println("c() =", c());
+println("c() =", c());`,
+        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15\nc() = 101\nc() = 102`
       },
       input_format: {
         code: `# @stdin: 123.456.789-07
