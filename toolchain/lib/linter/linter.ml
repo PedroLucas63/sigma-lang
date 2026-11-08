@@ -8,6 +8,8 @@ type var_usage = {
   mutable used : bool;
 }
 
+let current_decl_order : var_usage list ref ref = ref (ref [])
+
 let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt _
@@ -71,8 +73,13 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
      | Typed_ast.TLValIndex (target, idx) ->
        mark_expr_usage tbl target;
        mark_expr_usage tbl idx)
+  | Typed_ast.TExprLambda fd ->
+    let saved = Hashtbl.copy tbl in
+    List.iter (fun (tp : Typed_ast.typed_param) -> Hashtbl.remove tbl tp.tp_name) fd.tf_params;
+    List.iter (lint_stmt tbl !current_decl_order) fd.tf_body;
+    Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
 
-let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
+and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     mark_expr_usage tbl v.init;
@@ -186,6 +193,7 @@ let rec lint_stmt tbl decl_order (s : Typed_ast.stmt) =
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in
   let decl_order = ref [] in
+  current_decl_order := decl_order;
   List.iter (lint_stmt tbl decl_order) prog;
   List.rev !decl_order
   |> List.filter_map (fun u ->

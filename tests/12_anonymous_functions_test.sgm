@@ -1,0 +1,161 @@
+# ==============================================================================
+# Suite 12: Anonymous Functions & Procedures (`fun(...) => ...`, `act(...) => ...`)
+# ==============================================================================
+
+# 1. Anonymous `fun` with explicit return type and expression body
+var mul := fun(a: int, b: int): int => a * b;
+assert(mul(6, 7), 42, "anonymous fun with explicit return type and expression body");
+
+var mul_typed : int(int, int) = fun(a: int, b: int): int => a * b;
+assert(mul_typed(8, 9), 72, "anonymous fun assigned to explicitly typed function variable");
+
+# 2. Anonymous `fun` with inferred return type
+var add_inferred := fun(a: int, b: int) => a + b;
+assert(add_inferred(15, 27), 42, "anonymous fun with inferred return type from expression");
+
+var greet := fun(name: string) => "Hello, ${name}!";
+assert(greet("Sigma"), "Hello, Sigma!", "anonymous fun returning interpolated string");
+
+var make_pair := fun(x: int) => (x, x * 2);
+assert(make_pair(21), (21, 42), "anonymous fun returning tuple");
+
+# 3. Anonymous `fun` with inline statement body (`=> return ...`, `=> if (...) ...`)
+var square_ret := fun(x: int): int => return x * x;
+assert(square_ret(12), 144, "anonymous fun with inline return statement");
+
+var abs_fn := fun(x: int) => if (x >= 0) return x; else return -x;
+assert(abs_fn(19), 19, "anonymous fun with inline if/else return (positive)");
+assert(abs_fn(-19), 19, "anonymous fun with inline if/else return (negative)");
+
+# 4. Anonymous `fun` with braced block body (`=> { ... }`)
+var sum_up_to := fun(n: int) => {
+  var acc := 0;
+  for (var i := 1; i <= n; i++) {
+    acc += i;
+  }
+  return acc;
+};
+assert(sum_up_to(10), 55, "anonymous fun with braced block body and inferred return type");
+
+var classify := fun(n: int): string => {
+  if (n < 0) return "neg";
+  else if (n == 0) return "zero";
+  else return "pos";
+};
+assert(classify(-5), "neg", "anonymous fun block classify (-5)");
+assert(classify(0), "zero", "anonymous fun block classify (0)");
+assert(classify(9), "pos", "anonymous fun block classify (9)");
+
+# 5. Anonymous `act` with inline command, expression command, and braced block
+var log_acc := 0;
+var bump := act(delta: int) => log_acc += delta;
+bump(10);
+bump(25);
+assert(log_acc, 35, "anonymous act with inline expression command");
+
+var bump_if := act(cond: bool, delta: int) => if (cond) log_acc += delta;
+bump_if(false, 100);
+bump_if(true, 7);
+assert(log_acc, 42, "anonymous act with inline if statement");
+
+var reset_and_add : void(int, int) = act(a: int, b: int) => {
+  log_acc = 0;
+  log_acc += a;
+  log_acc += b;
+};
+reset_and_add(100, 23);
+assert(log_acc, 123, "anonymous act with braced block body");
+
+# 6. Immediate Invocation (IIFE) for `fun` and `act`
+var iife_val := (fun(x: int, y: int) => x * 10 + y)(4, 2);
+assert(iife_val, 42, "immediately invoked anonymous fun expression");
+
+var iife_side := 0;
+(act(v: int) => { iife_side = v * 3; })(14);
+assert(iife_side, 42, "immediately invoked anonymous act expression");
+
+# 7. Higher-Order Functions: passing and returning anonymous functions
+fun apply_twice(f: int(int), x: int): int {
+  return f(f(x));
+}
+assert(apply_twice(fun(n: int) => n + 5, 10), 20, "passing anonymous fun directly as argument");
+assert(apply_twice(fun(n: int): int => { return n * 3; }, 2), 18, "passing block anonymous fun as argument");
+
+var make_multiplier := fun(factor: int) => fun(x: int) => x * factor;
+var times10 := make_multiplier(10);
+var times3 := make_multiplier(3);
+assert(times10(7), 70, "nested anonymous fun returning closure (times10)");
+assert(times3(7), 21, "nested anonymous fun returning closure (times3)");
+assert(make_multiplier(6)(7), 42, "chained call on anonymous fun returning anonymous fun");
+
+# 8. Lexical Closures with mutable state captured by reference
+fun make_counter(start: int): (int(), void(int)) {
+  var count := start;
+  var next := fun(): int => {
+    count++;
+    return count;
+  };
+  var add := act(step: int) => count += step;
+  return (next, add);
+}
+var (next_c, add_c) := make_counter(10);
+assert(next_c(), 11, "closure counter first next()");
+add_c(9);
+assert(next_c(), 21, "closure counter after add(9)");
+
+# 9. Partial Application (Currying) and Named Arguments on Anonymous Functions
+var linear := fun(m: int, x: int, b: int) => m * x + b;
+var line2 := linear(2);
+assert(line2(10, 5), 25, "partial application of anonymous fun (1 arg bound)");
+
+var with_b := linear(b=100);
+assert(with_b(3, 10), 130, "named argument partial application on anonymous fun");
+assert(linear(b=2, m=4, x=10), 42, "out-of-order named arguments on anonymous fun variable");
+assert((fun(a: int, b: int) => a - b)(b=10, a=52), 42, "named arguments on direct IIFE lambda");
+
+# 10. `ref`, `out`, and `out var` parameters in Anonymous `fun` and `act`
+var swap_act := act(ref a: int, ref b: int) => {
+  var tmp := a;
+  a = b;
+  b = tmp;
+};
+var p := 10;
+var q := 99;
+swap_act(ref p, ref q);
+assert((p, q), (99, 10), "anonymous act with ref parameters");
+
+var divmod_lam := fun(a: int, b: int, out rem: int): int => {
+  rem = a % b;
+  return a // b;
+};
+var quot := divmod_lam(17, 5, out var rem_val);
+assert((quot, rem_val), (3, 2), "anonymous fun with out parameter and inline out var");
+
+# 11. Shallow const parameter semantics on anonymous functions (mutable array elements allowed)
+var fill_first := act(arr: int[3], v: int) => arr[0] = v;
+var my_arr := [1, 2, 3];
+fill_first(my_arr, 99);
+assert(my_arr, [99, 2, 3], "anonymous act mutating element of shallow-const array parameter");
+
+# 12. Arrays and Tuples of Anonymous Functions
+var ops := [
+  fun(a: int, b: int) => a + b,
+  fun(a: int, b: int) => a - b,
+  fun(a: int, b: int) => a * b
+];
+assert(ops[0](10, 5), 15, "array of anonymous functions [0]");
+assert(ops[1](10, 5), 5, "array of anonymous functions [1]");
+assert(ops[2](10, 5), 50, "array of anonymous functions [2]");
+
+# 13. Compile-time negative diagnostics (`assert_error`)
+assert_error("E0113", "var f := fun(x: int): void => { return; };", "anonymous fun cannot declare : void");
+assert_error("E0113", "var a := act(x: int): int => x;", "anonymous act cannot declare a return type");
+assert_error("E0113", "var a := act(x: int) => {}; var v := a(1);", "calling anonymous act cannot be used as a value");
+assert_error("E0111", "var f := fun(x: int): int => { var y := x + 1; };", "anonymous fun with block body missing return");
+assert_error("E0111", "var f := fun(x: int) => { if (x > 0) return x; };", "anonymous fun not returning on all paths");
+assert_error("E0111", "var f := fun(x: int) => { if (x > 0) return 1; else return \"no\"; };", "anonymous fun with mismatched return types across branches");
+assert_error("E0111", "var a := act(x: int) => return x;", "anonymous act cannot return a value");
+assert_error("E0107", "var f := fun(x: int) => { x = 10; return x; };", "value parameter in anonymous fun is shallow const");
+assert_error("E0117", "var a := act(out x: int) => { var y := 1; };", "out parameter in anonymous act must be assigned before end");
+assert_error("E0118", "act outer(ref r: int) { var f := fun() => r; }", "anonymous fun cannot capture ref parameter");
+assert_error("E0103", "var f := fun(a: int, a: int) => a;", "duplicate parameter name in anonymous fun");

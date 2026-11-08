@@ -854,6 +854,12 @@ and parse_primary st : (Ast.expr, Diagnostic.t) result =
   | Token.IDENT name ->
     bump st;
     Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
+  | Token.KW_FUN ->
+    bump st;
+    parse_lambda_expr st tok ~is_act:false
+  | Token.KW_ACT ->
+    bump st;
+    parse_lambda_expr st tok ~is_act:true
   | Token.LPAREN ->
     bump st;
     if (cur st).kind = Token.RPAREN then begin
@@ -1135,7 +1141,7 @@ and parse_base_type st : (Ast.type_expr, Diagnostic.t) result =
          (Printf.sprintf "expected type name after ':', found %s"
             (Token.kind_to_string tok.kind)))
 
-let expect_semi st start_span : (Span.t, Diagnostic.t) result =
+and expect_semi st start_span : (Span.t, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.SEMI ->
@@ -1150,7 +1156,19 @@ let expect_semi st start_span : (Span.t, Diagnostic.t) result =
          (Printf.sprintf "expected ';' at end of statement, found %s"
             (Token.kind_to_string tok.kind)))
 
-let parse_destruct_names st open_tok : ((string * Span.t) list, Diagnostic.t) result =
+and finish_inline_stmt st start_span (end_span : Span.t) ~(require_semi : bool) : (Span.t, Diagnostic.t) result =
+  if require_semi then expect_semi st start_span
+  else begin
+    let full = Span.merge start_span end_span in
+    if (cur st).kind = Token.SEMI && (peek_next st).kind = Token.KW_ELSE then begin
+      let s_tok = cur st in
+      bump st;
+      Ok (Span.merge start_span s_tok.span)
+    end else
+      Ok full
+  end
+
+and parse_destruct_names st open_tok : ((string * Span.t) list, Diagnostic.t) result =
   let rec loop acc =
     if (cur st).kind = Token.RPAREN then begin
       bump st;
@@ -1194,7 +1212,7 @@ let parse_destruct_names st open_tok : ((string * Span.t) list, Diagnostic.t) re
          "destructuring pattern cannot be empty '()'")
   | Ok names -> Ok names
 
-let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
+and parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
   let kw_name = if is_const then "const" else "var" in
   let entity_name = if is_const then "constant" else "variable" in
   let name_tok = cur st in
@@ -1353,7 +1371,7 @@ let parse_decl st kw_tok ~is_const : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected %s name after '%s', found %s"
             entity_name kw_name (Token.kind_to_string name_tok.kind)))
 
-let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
+and parse_print_stmt st fn_tok ~newline ~require_semi : (Ast.stmt, Diagnostic.t) result =
   let fn_name = if newline then "println" else "print" in
   let open_tok = cur st in
   match open_tok.kind with
@@ -1371,7 +1389,7 @@ let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
            parse_args acc
          | Token.RPAREN ->
            bump st;
-           Ok (List.rev acc)
+           Ok (List.rev acc, next_tok.span)
          | _ ->
            Error
              (Diagnostic.error
@@ -1383,15 +1401,16 @@ let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
     in
     let args_res =
       if (cur st).kind = Token.RPAREN then begin
+        let close_tok = cur st in
         bump st;
-        Ok []
+        Ok ([], close_tok.span)
       end else
         parse_args []
     in
     (match args_res with
      | Error e -> Error e
-     | Ok args ->
-       (match expect_semi st fn_tok.Token.span with
+     | Ok (args, close_sp) ->
+       (match finish_inline_stmt st fn_tok.Token.span close_sp ~require_semi with
         | Error e -> Error e
         | Ok full_span ->
           Ok { Ast.desc = Ast.StmtPrint { newline; args }; span = full_span }))
@@ -1404,7 +1423,7 @@ let parse_print_stmt st fn_tok ~newline : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after '%s', found %s"
             fn_name (Token.kind_to_string open_tok.kind)))
 
-let parse_call_args st fn_name fn_tok : (Ast.expr list * Span.t, Diagnostic.t) result =
+and parse_call_args st fn_name fn_tok ~require_semi : (Ast.expr list * Span.t, Diagnostic.t) result =
   let open_tok = cur st in
   match open_tok.kind with
   | Token.LPAREN ->
@@ -1421,7 +1440,7 @@ let parse_call_args st fn_name fn_tok : (Ast.expr list * Span.t, Diagnostic.t) r
            parse_args acc
          | Token.RPAREN ->
            bump st;
-           Ok (List.rev acc)
+           Ok (List.rev acc, next_tok.span)
          | _ ->
            Error
              (Diagnostic.error
@@ -1433,15 +1452,16 @@ let parse_call_args st fn_name fn_tok : (Ast.expr list * Span.t, Diagnostic.t) r
     in
     let args_res =
       if (cur st).kind = Token.RPAREN then begin
+        let close_tok = cur st in
         bump st;
-        Ok []
+        Ok ([], close_tok.span)
       end else
         parse_args []
     in
     (match args_res with
      | Error e -> Error e
-     | Ok args ->
-       (match expect_semi st fn_tok.Token.span with
+     | Ok (args, close_sp) ->
+       (match finish_inline_stmt st fn_tok.Token.span close_sp ~require_semi with
         | Error e -> Error e
         | Ok full_span -> Ok (args, full_span)))
   | _ ->
@@ -1453,8 +1473,8 @@ let parse_call_args st fn_name fn_tok : (Ast.expr list * Span.t, Diagnostic.t) r
          (Printf.sprintf "expected '(' after '%s', found %s"
             fn_name (Token.kind_to_string open_tok.kind)))
 
-let parse_assert_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
-  match parse_call_args st "assert" fn_tok with
+and parse_assert_stmt st fn_tok ~require_semi : (Ast.stmt, Diagnostic.t) result =
+  match parse_call_args st "assert" fn_tok ~require_semi with
   | Error e -> Error e
   | Ok (args, full_span) ->
     (match args with
@@ -1472,8 +1492,8 @@ let parse_assert_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
             ~span:full_span
             (Printf.sprintf "'assert' expects 1, 2, or 3 arguments, found %d" (List.length args))))
 
-let parse_assert_error_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
-  match parse_call_args st "assert_error" fn_tok with
+and parse_assert_error_stmt st fn_tok ~require_semi : (Ast.stmt, Diagnostic.t) result =
+  match parse_call_args st "assert_error" fn_tok ~require_semi with
   | Error e -> Error e
   | Ok (args, full_span) ->
     let extract_str (e : Ast.expr) (arg_desc : string) =
@@ -1518,7 +1538,7 @@ let parse_assert_error_stmt st fn_tok : (Ast.stmt, Diagnostic.t) result =
             ~span:full_span
             (Printf.sprintf "'assert_error' expects 2 or 3 arguments, found %d" (List.length args))))
 
-let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
+and parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   let tok = cur st in
   match tok.kind with
   | Token.KW_VAR ->
@@ -1527,13 +1547,245 @@ let rec parse_stmt st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_CONST ->
     bump st;
     parse_decl st tok ~is_const:true
-  | Token.KW_FUN ->
+  | Token.KW_FUN when (peek_next st).kind <> Token.LPAREN ->
     bump st;
     parse_fun_decl st tok ~is_act:false
-  | Token.KW_ACT ->
+  | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
     bump st;
     parse_fun_decl st tok ~is_act:true
   | _ -> parse_non_decl_stmt st
+
+and parse_fun_params st : (Ast.fun_param list, Diagnostic.t) result =
+  let err_at (tok : Token.t) msg =
+    Error (Diagnostic.error ~code:"E0002" ~span:tok.span msg)
+  in
+  let rec params acc =
+    let t = cur st in
+    if t.kind = Token.RPAREN then begin
+      bump st;
+      Ok (List.rev acc)
+    end else
+      let pmode =
+        let tok = cur st in
+        if tok.kind = Token.KW_REF then (bump st; Ast.ParamRef)
+        else if tok.kind = Token.KW_OUT then (bump st; Ast.ParamOut)
+        else Ast.ParamVal
+      in
+      let t = cur st in
+      match t.kind with
+      | Token.IDENT pname ->
+        bump st;
+        if (cur st).kind <> Token.COLON then
+          err_at (cur st)
+            (Printf.sprintf "expected ':' and a type after parameter '%s'" pname)
+        else begin
+          bump st;
+          match parse_type_expr st with
+          | Error e -> Error e
+          | Ok te ->
+            let acc =
+              {
+                Ast.param_name = pname;
+                param_span = t.span;
+                param_mode = pmode;
+                param_type = te;
+              }
+              :: acc
+            in
+            let nt = cur st in
+            if nt.kind = Token.COMMA then begin
+              bump st;
+              params acc
+            end else if nt.kind = Token.RPAREN then begin
+              bump st;
+              Ok (List.rev acc)
+            end else
+              err_at nt
+                (Printf.sprintf "expected ')' or ',' in parameter list, found %s"
+                   (Token.kind_to_string nt.kind))
+        end
+      | _ ->
+        err_at t
+          (Printf.sprintf "expected parameter name, found %s" (Token.kind_to_string t.kind))
+  in
+  params []
+
+and parse_lambda_expr st kw_tok ~is_act : (Ast.expr, Diagnostic.t) result =
+  let kw_name = if is_act then "act" else "fun" in
+  let err_at (tok : Token.t) msg =
+    Error (Diagnostic.error ~code:"E0002" ~span:tok.span msg)
+  in
+  let lp = cur st in
+  if lp.kind <> Token.LPAREN then
+    err_at lp
+      (Printf.sprintf "expected '(' after anonymous '%s', found %s" kw_name
+         (Token.kind_to_string lp.kind))
+  else begin
+    bump st;
+    match parse_fun_params st with
+    | Error e -> Error e
+    | Ok ps ->
+      let ret_res =
+        if (cur st).kind = Token.COLON then begin
+          bump st;
+          match parse_type_expr st with
+          | Ok te -> Ok (Some te)
+          | Error e -> Error e
+        end else
+          Ok None
+      in
+      (match ret_res with
+       | Error e -> Error e
+       | Ok ret ->
+         let arrow_tok = cur st in
+         if arrow_tok.kind <> Token.FAT_ARROW then
+           err_at arrow_tok
+             (Printf.sprintf "expected '=>' in anonymous '%s', found %s" kw_name
+                (Token.kind_to_string arrow_tok.kind))
+         else begin
+           bump st;
+           if (cur st).kind = Token.LBRACE then begin
+             let ob = cur st in
+             bump st;
+             match parse_block_stmt st ob with
+             | Error e -> Error e
+             | Ok { Ast.desc = Ast.StmtBlock body; span } ->
+               Ok
+                 {
+                   Ast.desc =
+                     Ast.ExprLambda
+                       {
+                         Ast.lam_is_act = is_act;
+                         lam_params = ps;
+                         lam_ret = ret;
+                         lam_body = body;
+                       };
+                   span = Span.merge kw_tok.Token.span span;
+                 }
+             | Ok _ -> err_at ob "internal error: lambda block must be a block"
+           end else
+             match parse_lambda_inline_stmt st ~is_act with
+             | Error e -> Error e
+             | Ok body_stmt ->
+               Ok
+                 {
+                   Ast.desc =
+                     Ast.ExprLambda
+                       {
+                         Ast.lam_is_act = is_act;
+                         lam_params = ps;
+                         lam_ret = ret;
+                         lam_body = [ body_stmt ];
+                       };
+                   span = Span.merge kw_tok.Token.span body_stmt.span;
+                 }
+         end)
+  end
+
+and parse_lambda_inline_stmt st ~is_act : (Ast.stmt, Diagnostic.t) result =
+  let tok = cur st in
+  let inline_parser s = parse_lambda_inline_stmt s ~is_act in
+  match tok.kind with
+  | Token.LBRACE ->
+    bump st;
+    parse_block_stmt st tok
+  | Token.KW_VAR | Token.KW_CONST ->
+    let kw_str = if tok.kind = Token.KW_VAR then "variable declaration 'var'" else "constant declaration 'const'" in
+    let kw_name = if tok.kind = Token.KW_VAR then "var" else "const" in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "wrap the declaration in braces, e.g. '=> { %s x := ...; }'" kw_name)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "%s is not allowed directly inside an unbraced lambda body" kw_str))
+  | (Token.KW_FUN | Token.KW_ACT) when (peek_next st).kind <> Token.LPAREN ->
+    let kw = if tok.kind = Token.KW_FUN then "fun" else "act" in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "wrap the declaration in braces, e.g. '=> { %s f(...) ... }'" kw)
+         ~code:"E0002"
+         ~span:tok.span
+         (Printf.sprintf "'%s' declaration is not allowed directly inside an unbraced lambda body" kw))
+  | Token.KW_RETURN ->
+    bump st;
+    let nt = cur st in
+    (match nt.kind with
+     | Token.SEMI | Token.COMMA | Token.RPAREN | Token.RBRACE | Token.RBRACKET | Token.KW_ELSE | Token.EOF ->
+       (match finish_inline_stmt st tok.span tok.span ~require_semi:false with
+        | Error err -> Error err
+        | Ok full_span -> Ok { Ast.desc = Ast.StmtReturn None; span = full_span })
+     | _ ->
+       (match parse_expr st with
+        | Error e -> Error e
+        | Ok e ->
+          (match finish_inline_stmt st tok.span e.span ~require_semi:false with
+           | Error err -> Error err
+           | Ok full_span -> Ok { Ast.desc = Ast.StmtReturn (Some e); span = full_span })))
+  | Token.KW_IF ->
+    bump st;
+    parse_if_stmt st tok ~stmt_parser:inline_parser
+  | Token.KW_WHILE ->
+    bump st;
+    parse_while_stmt st tok.span ~label:None ~stmt_parser:inline_parser
+  | Token.KW_FOR ->
+    bump st;
+    parse_for_stmt st tok.span ~label:None ~stmt_parser:inline_parser
+  | Token.KW_FOREACH ->
+    bump st;
+    parse_foreach_stmt st tok.span ~label:None ~stmt_parser:inline_parser
+  | Token.IDENT lbl when (peek_next st).kind = Token.COLON ->
+    bump st;
+    let colon_tok = cur st in
+    bump st;
+    let loop_tok = cur st in
+    let label = Some (lbl, tok.span) in
+    (match loop_tok.kind with
+     | Token.KW_WHILE ->
+       bump st;
+       parse_while_stmt st tok.span ~label ~stmt_parser:inline_parser
+     | Token.KW_FOR ->
+       bump st;
+       parse_for_stmt st tok.span ~label ~stmt_parser:inline_parser
+     | Token.KW_FOREACH ->
+       bump st;
+       parse_foreach_stmt st tok.span ~label ~stmt_parser:inline_parser
+     | _ ->
+       Error
+         (Diagnostic.error
+            ~hint:"labels can only annotate loops, e.g. 'loop1: for (var i := 0; i < 10; i++) { ... }'"
+            ~code:"E0002"
+            ~span:(Span.merge tok.span colon_tok.span)
+            (Printf.sprintf "label '%s:' must be followed by 'while', 'for', or 'foreach', found %s"
+               lbl (Token.kind_to_string loop_tok.kind))))
+  | Token.KW_BREAK ->
+    bump st;
+    parse_break_or_continue_stmt st tok ~is_break:true ~require_semi:false
+  | Token.KW_CONTINUE ->
+    bump st;
+    parse_break_or_continue_stmt st tok ~is_break:false ~require_semi:false
+  | Token.KW_PRINT ->
+    bump st;
+    parse_print_stmt st tok ~newline:false ~require_semi:false
+  | Token.KW_PRINTLN ->
+    bump st;
+    parse_print_stmt st tok ~newline:true ~require_semi:false
+  | Token.KW_ASSERT ->
+    bump st;
+    parse_assert_stmt st tok ~require_semi:false
+  | Token.KW_ASSERT_ERROR ->
+    bump st;
+    parse_assert_error_stmt st tok ~require_semi:false
+  | _ ->
+    (match parse_expr st with
+     | Error e -> Error e
+     | Ok expr ->
+       (match finish_inline_stmt st expr.span expr.span ~require_semi:false with
+        | Error err -> Error err
+        | Ok full_span ->
+          if is_act then
+            Ok { Ast.desc = Ast.StmtExpr expr; span = full_span }
+          else
+            Ok { Ast.desc = Ast.StmtReturn (Some expr); span = full_span }))
 
 and parse_fun_decl st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
   let kw_name = if is_act then "act" else "fun" in
@@ -1551,56 +1803,7 @@ and parse_fun_decl st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
            (Token.kind_to_string lp.kind))
     else begin
       bump st;
-      let rec params acc =
-        let t = cur st in
-        if t.kind = Token.RPAREN then begin
-          bump st;
-          Ok (List.rev acc)
-        end else
-          let pmode =
-            let tok = cur st in
-            if tok.kind = Token.KW_REF then (bump st; Ast.ParamRef)
-            else if tok.kind = Token.KW_OUT then (bump st; Ast.ParamOut)
-            else Ast.ParamVal
-          in
-          let t = cur st in
-          match t.kind with
-          | Token.IDENT pname ->
-            bump st;
-            if (cur st).kind <> Token.COLON then
-              err_at (cur st)
-                (Printf.sprintf "expected ':' and a type after parameter '%s'" pname)
-            else begin
-              bump st;
-              match parse_type_expr st with
-              | Error e -> Error e
-              | Ok te ->
-                let acc =
-                  {
-                    Ast.param_name = pname;
-                    param_span = t.span;
-                    param_mode = pmode;
-                    param_type = te;
-                  }
-                  :: acc
-                in
-                let nt = cur st in
-                if nt.kind = Token.COMMA then begin
-                  bump st;
-                  params acc
-                end else if nt.kind = Token.RPAREN then begin
-                  bump st;
-                  Ok (List.rev acc)
-                end else
-                  err_at nt
-                    (Printf.sprintf "expected ')' or ',' in parameter list, found %s"
-                       (Token.kind_to_string nt.kind))
-            end
-          | _ ->
-            err_at t
-              (Printf.sprintf "expected parameter name, found %s" (Token.kind_to_string t.kind))
-      in
-      match params [] with
+      match parse_fun_params st with
       | Error e -> Error e
       | Ok ps ->
         let ret_res =
@@ -1673,7 +1876,7 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
          ~code:"E0002"
          ~span:tok.span
          (Printf.sprintf "%s is not allowed directly inside an unbraced branch" kw_str))
-  | Token.KW_FUN | Token.KW_ACT ->
+  | (Token.KW_FUN | Token.KW_ACT) when (peek_next st).kind <> Token.LPAREN ->
     let kw = if tok.kind = Token.KW_FUN then "fun" else "act" in
     Error
       (Diagnostic.error
@@ -1686,16 +1889,16 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
     parse_return_stmt st tok
   | Token.KW_IF ->
     bump st;
-    parse_if_stmt st tok
+    parse_if_stmt st tok ~stmt_parser:parse_non_decl_stmt
   | Token.KW_WHILE ->
     bump st;
-    parse_while_stmt st tok.span ~label:None
+    parse_while_stmt st tok.span ~label:None ~stmt_parser:parse_non_decl_stmt
   | Token.KW_FOR ->
     bump st;
-    parse_for_stmt st tok.span ~label:None
+    parse_for_stmt st tok.span ~label:None ~stmt_parser:parse_non_decl_stmt
   | Token.KW_FOREACH ->
     bump st;
-    parse_foreach_stmt st tok.span ~label:None
+    parse_foreach_stmt st tok.span ~label:None ~stmt_parser:parse_non_decl_stmt
   | Token.IDENT lbl when (peek_next st).kind = Token.COLON ->
     bump st;
     let colon_tok = cur st in
@@ -1705,13 +1908,13 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
     (match loop_tok.kind with
      | Token.KW_WHILE ->
        bump st;
-       parse_while_stmt st tok.span ~label
+       parse_while_stmt st tok.span ~label ~stmt_parser:parse_non_decl_stmt
      | Token.KW_FOR ->
        bump st;
-       parse_for_stmt st tok.span ~label
+       parse_for_stmt st tok.span ~label ~stmt_parser:parse_non_decl_stmt
      | Token.KW_FOREACH ->
        bump st;
-       parse_foreach_stmt st tok.span ~label
+       parse_foreach_stmt st tok.span ~label ~stmt_parser:parse_non_decl_stmt
      | _ ->
        Error
          (Diagnostic.error
@@ -1722,25 +1925,25 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
                lbl (Token.kind_to_string loop_tok.kind))))
   | Token.KW_BREAK ->
     bump st;
-    parse_break_or_continue_stmt st tok ~is_break:true
+    parse_break_or_continue_stmt st tok ~is_break:true ~require_semi:true
   | Token.KW_CONTINUE ->
     bump st;
-    parse_break_or_continue_stmt st tok ~is_break:false
+    parse_break_or_continue_stmt st tok ~is_break:false ~require_semi:true
   | Token.LBRACE ->
     bump st;
     parse_block_stmt st tok
   | Token.KW_PRINT ->
     bump st;
-    parse_print_stmt st tok ~newline:false
+    parse_print_stmt st tok ~newline:false ~require_semi:true
   | Token.KW_PRINTLN ->
     bump st;
-    parse_print_stmt st tok ~newline:true
+    parse_print_stmt st tok ~newline:true ~require_semi:true
   | Token.KW_ASSERT ->
     bump st;
-    parse_assert_stmt st tok
+    parse_assert_stmt st tok ~require_semi:true
   | Token.KW_ASSERT_ERROR ->
     bump st;
-    parse_assert_error_stmt st tok
+    parse_assert_error_stmt st tok ~require_semi:true
   | _ ->
     (match parse_expr st with
      | Error e -> Error e
@@ -1750,7 +1953,7 @@ and parse_non_decl_stmt st : (Ast.stmt, Diagnostic.t) result =
         | Ok full_span ->
           Ok { Ast.desc = Ast.StmtExpr expr; span = full_span }))
 
-and parse_if_stmt st if_tok : (Ast.stmt, Diagnostic.t) result =
+and parse_if_stmt st if_tok ~stmt_parser : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   match open_tok.kind with
   | Token.LPAREN ->
@@ -1762,12 +1965,12 @@ and parse_if_stmt st if_tok : (Ast.stmt, Diagnostic.t) result =
        (match close_tok.kind with
         | Token.RPAREN ->
           bump st;
-          (match parse_non_decl_stmt st with
+          (match stmt_parser st with
            | Error e -> Error e
            | Ok then_branch ->
              if (cur st).kind = Token.KW_ELSE then begin
                bump st;
-               match parse_non_decl_stmt st with
+               match stmt_parser st with
                | Error e -> Error e
                | Ok else_stmt ->
                  let full_span = Span.merge if_tok.Token.span else_stmt.span in
@@ -1800,7 +2003,7 @@ and parse_if_stmt st if_tok : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after 'if', found %s"
             (Token.kind_to_string open_tok.kind)))
 
-and parse_while_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+and parse_while_stmt st start_span ~label ~stmt_parser : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   match open_tok.kind with
   | Token.LPAREN ->
@@ -1812,7 +2015,7 @@ and parse_while_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
        (match close_tok.kind with
         | Token.RPAREN ->
           bump st;
-          (match parse_non_decl_stmt st with
+          (match stmt_parser st with
            | Error e -> Error e
            | Ok body ->
              let full_span = Span.merge start_span body.span in
@@ -1837,7 +2040,7 @@ and parse_while_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after 'while', found %s"
             (Token.kind_to_string open_tok.kind)))
 
-and parse_for_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+and parse_for_stmt st start_span ~label ~stmt_parser : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   match open_tok.kind with
   | Token.LPAREN ->
@@ -1905,7 +2108,7 @@ and parse_for_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
                         (Token.kind_to_string close_tok.kind)))
               else begin
                 bump st;
-                match parse_non_decl_stmt st with
+                match stmt_parser st with
                 | Error e -> Error e
                 | Ok body ->
                   let full_span = Span.merge start_span body.span in
@@ -1925,7 +2128,7 @@ and parse_for_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after 'for', found %s"
             (Token.kind_to_string open_tok.kind)))
 
-and parse_foreach_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
+and parse_foreach_stmt st start_span ~label ~stmt_parser : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   match open_tok.kind with
   | Token.LPAREN ->
@@ -1933,79 +2136,79 @@ and parse_foreach_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
     let kw_tok = cur st in
     (match kw_tok.kind with
      | Token.KW_VAR | Token.KW_CONST ->
-       let is_const = kw_tok.kind = Token.KW_CONST in
-       bump st;
-       let bind_tok = cur st in
-       let bind_res : (Ast.foreach_binding, Diagnostic.t) result =
-         match bind_tok.kind with
-         | Token.IDENT name ->
-           bump st;
-           Ok (Ast.ForeachVar (name, bind_tok.span))
-         | Token.LPAREN ->
-           bump st;
-           (match parse_destruct_names st bind_tok with
-            | Error e -> Error e
-            | Ok names -> Ok (Ast.ForeachDestruct names))
-         | _ ->
-           Error
-             (Diagnostic.error
-                ~hint:"use 'foreach (var x in arr)' or 'foreach (var (a, b) in arr)'"
-                ~code:"E0002"
-                ~span:bind_tok.span
-                (Printf.sprintf "expected variable name or destructuring pattern '(a, b)' in 'foreach', found %s"
-                   (Token.kind_to_string bind_tok.kind)))
-       in
-       (match bind_res with
-        | Error e -> Error e
-        | Ok binding ->
-          let annot_res : (Ast.type_expr option, Diagnostic.t) result =
-            if (cur st).kind = Token.COLON then begin
-              bump st;
-              match parse_type_expr st with
-              | Error e -> Error e
-              | Ok te -> Ok (Some te)
-            end else
-              Ok None
-          in
-          (match annot_res with
-           | Error e -> Error e
-           | Ok ty_annot ->
-             let in_tok = cur st in
-             if in_tok.kind <> Token.KW_IN then
-               Error
-                 (Diagnostic.error
-                    ~hint:"use 'in' before the array expression, e.g. 'foreach (var x in arr)'"
-                    ~code:"E0002"
-                    ~span:in_tok.span
-                    (Printf.sprintf "expected 'in' in 'foreach' header, found %s"
-                       (Token.kind_to_string in_tok.kind)))
-             else begin
+        let is_const = kw_tok.kind = Token.KW_CONST in
+        bump st;
+        let bind_tok = cur st in
+        let bind_res : (Ast.foreach_binding, Diagnostic.t) result =
+          match bind_tok.kind with
+          | Token.IDENT name ->
+            bump st;
+            Ok (Ast.ForeachVar (name, bind_tok.span))
+          | Token.LPAREN ->
+            bump st;
+            (match parse_destruct_names st bind_tok with
+             | Error e -> Error e
+             | Ok names -> Ok (Ast.ForeachDestruct names))
+          | _ ->
+            Error
+              (Diagnostic.error
+                 ~hint:"use 'foreach (var x in arr)' or 'foreach (var (a, b) in arr)'"
+                 ~code:"E0002"
+                 ~span:bind_tok.span
+                 (Printf.sprintf "expected variable name or destructuring pattern '(a, b)' in 'foreach', found %s"
+                    (Token.kind_to_string bind_tok.kind)))
+        in
+        (match bind_res with
+         | Error e -> Error e
+         | Ok binding ->
+           let annot_res : (Ast.type_expr option, Diagnostic.t) result =
+             if (cur st).kind = Token.COLON then begin
                bump st;
-               match parse_expr st with
+               match parse_type_expr st with
                | Error e -> Error e
-               | Ok collection ->
-                 let close_tok = cur st in
-                 if close_tok.kind <> Token.RPAREN then
-                   Error
-                     (Diagnostic.error
-                        ~code:"E0002"
-                        ~span:close_tok.span
-                        (Printf.sprintf "expected ')' after 'foreach' collection expression, found %s"
-                           (Token.kind_to_string close_tok.kind)))
-                 else begin
-                   bump st;
-                   match parse_non_decl_stmt st with
-                   | Error e -> Error e
-                   | Ok body ->
-                     let head = { Ast.binding; is_const; ty_annot } in
-                     let full_span = Span.merge start_span body.span in
-                     Ok
-                       {
-                         Ast.desc = Ast.StmtForeach { label; head; collection; body };
-                         span = full_span;
-                       }
-                 end
-             end))
+               | Ok te -> Ok (Some te)
+             end else
+               Ok None
+           in
+           (match annot_res with
+            | Error e -> Error e
+            | Ok ty_annot ->
+              let in_tok = cur st in
+              if in_tok.kind <> Token.KW_IN then
+                Error
+                  (Diagnostic.error
+                     ~hint:"use 'in' before the array expression, e.g. 'foreach (var x in arr)'"
+                     ~code:"E0002"
+                     ~span:in_tok.span
+                     (Printf.sprintf "expected 'in' in 'foreach' header, found %s"
+                        (Token.kind_to_string in_tok.kind)))
+              else begin
+                bump st;
+                match parse_expr st with
+                | Error e -> Error e
+                | Ok collection ->
+                  let close_tok = cur st in
+                  if close_tok.kind <> Token.RPAREN then
+                    Error
+                      (Diagnostic.error
+                         ~code:"E0002"
+                         ~span:close_tok.span
+                         (Printf.sprintf "expected ')' after 'foreach' collection expression, found %s"
+                            (Token.kind_to_string close_tok.kind)))
+                  else begin
+                    bump st;
+                    match stmt_parser st with
+                    | Error e -> Error e
+                    | Ok body ->
+                      let head = { Ast.binding; is_const; ty_annot } in
+                      let full_span = Span.merge start_span body.span in
+                      Ok
+                        {
+                          Ast.desc = Ast.StmtForeach { label; head; collection; body };
+                          span = full_span;
+                        }
+                  end
+              end))
      | _ ->
        Error
          (Diagnostic.error
@@ -2023,16 +2226,16 @@ and parse_foreach_stmt st start_span ~label : (Ast.stmt, Diagnostic.t) result =
          (Printf.sprintf "expected '(' after 'foreach', found %s"
             (Token.kind_to_string open_tok.kind)))
 
-and parse_break_or_continue_stmt st kw_tok ~is_break : (Ast.stmt, Diagnostic.t) result =
-  let label_opt =
+and parse_break_or_continue_stmt st kw_tok ~is_break ~require_semi : (Ast.stmt, Diagnostic.t) result =
+  let label_opt, end_sp =
     let next_tok = cur st in
     match next_tok.kind with
     | Token.IDENT lbl ->
       bump st;
-      Some (lbl, next_tok.span)
-    | _ -> None
+      (Some (lbl, next_tok.span), next_tok.span)
+    | _ -> (None, kw_tok.Token.span)
   in
-  match expect_semi st kw_tok.Token.span with
+  match finish_inline_stmt st kw_tok.Token.span end_sp ~require_semi with
   | Error e -> Error e
   | Ok full_span ->
     let desc =

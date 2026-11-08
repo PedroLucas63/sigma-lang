@@ -1390,6 +1390,29 @@ println("Resultado: ${x * 2}");
       ~msg:(Printf.sprintf "Expected post-input output %S, got %S" "Resultado: 42\n" got_post)
       (got_post = "Resultado: 42\n")
 
+let test_anonymous_functions_parity () =
+  let code =
+    {|var mul : int(int, int) = fun(a: int, b: int): int => a * b;
+var add := fun(a: int, b: int) => a + b;
+var abs_fn := fun(x: int) => if (x >= 0) return x; else return -x;
+var acc := 0;
+var bump := act(d: int) => acc += d;
+bump(15);
+bump(27);
+var swap := act(ref x: int, ref y: int) => {
+  var t := x;
+  x = y;
+  y = t;
+};
+var p := 10;
+var q := 20;
+swap(ref p, ref q);
+println(mul(6, 7), add(b=30, a=12), abs_fn(-99), acc, p, q, (fun(n: int) => n * n)(9));
+|}
+  in
+  let expected_stdout = "42 42 99 42 20 10 81\n" in
+  run_and_check_parity ~name:"anonymous_functions" ~code ~expected_stdout
+
 let () =
   test_valid_declarations_and_parity ();
   test_arithmetic_operations_and_parity ();
@@ -1401,6 +1424,7 @@ let () =
   test_tuples_and_arrays_parity ();
   test_loops_parity ();
   test_input_and_format_parity ();
+  test_anonymous_functions_parity ();
   test_emit_c_source ();
   test_vm_realtime_stdout_before_input ();
   test_assert_and_test_runner_parity ();

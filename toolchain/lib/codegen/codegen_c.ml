@@ -573,6 +573,29 @@ let rec emit_expr (e : Typed_ast.expr) : string =
       | _, _ -> vname_raw
     in
     slot_prefix ^ body ^ slot_suffix
+  | Typed_ast.TExprLambda fd ->
+    let c_fn_name =
+      match Hashtbl.find_opt fun_c_names fd.tf_name_span with
+      | Some n -> n
+      | None -> "sgm_fn_" ^ fd.tf_name
+    in
+    let n_caps = List.length fd.tf_captures in
+    if n_caps = 0 then
+      Printf.sprintf "sgm_fn_make(%s, INT64_C(%d), NULL)"
+        c_fn_name (List.length fd.tf_params)
+    else begin
+      incr chain_counter;
+      let env_var = Printf.sprintf "_sgm_env_%d" !chain_counter in
+      let sets =
+        fd.tf_captures
+        |> List.mapi (fun j (cap_name, _) ->
+             Printf.sprintf "%s[%d] = sgm_cell_%s;" env_var j cap_name)
+        |> String.concat " "
+      in
+      Printf.sprintf
+        "__extension__ ({ sgm_val_t **%s = (sgm_val_t**)malloc(%d * sizeof(sgm_val_t*)); %s sgm_fn_make(%s, INT64_C(%d), %s); })"
+        env_var n_caps sets c_fn_name (List.length fd.tf_params) env_var
+    end
 
 let c_decimal_runtime =
   {|#include <stdlib.h>
@@ -1728,12 +1751,21 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
     (match head with
      | Typed_ast.TForeachVar { name = None; _ } -> ()
      | Typed_ast.TForeachVar { name = Some name; is_const; ty; _ } ->
-       let c_type, const_qualifier = c_decl_type_and_qual ~is_const ty in
        let field = c_val_union_field ty in
-       Buffer.add_string
-         buf
-         (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, %s)->u.%s;\n"
-            body_indent const_qualifier c_type (mangle_ident name) coll_var idx_var field)
+       if Hashtbl.mem current_boxed name then begin
+         Buffer.add_string
+           buf
+           (Printf.sprintf "%ssgm_val_t *sgm_cell_%s = sgm_cell_make(*sgm_obj_slot(%s, %s));\n"
+              body_indent name coll_var idx_var);
+         Hashtbl.replace current_cells name
+           (Printf.sprintf "(sgm_cell_%s->u.%s)" name field)
+       end else begin
+         let c_type, const_qualifier = c_decl_type_and_qual ~is_const ty in
+         Buffer.add_string
+           buf
+           (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, %s)->u.%s;\n"
+              body_indent const_qualifier c_type (mangle_ident name) coll_var idx_var field)
+       end
      | Typed_ast.TForeachDestruct { bindings; is_const; _ } ->
        let elem_var = Printf.sprintf "_sgm_felem_%d" loop_id in
        Buffer.add_string
@@ -1745,12 +1777,21 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
            match bind.name with
            | None -> ()
            | Some name ->
-             let c_type, const_qualifier = c_decl_type_and_qual ~is_const bind.ty in
              let field = c_val_union_field bind.ty in
-             Buffer.add_string
-               buf
-               (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
-                  body_indent const_qualifier c_type (mangle_ident name) elem_var i field))
+             if Hashtbl.mem current_boxed name then begin
+               Buffer.add_string
+                 buf
+                 (Printf.sprintf "%ssgm_val_t *sgm_cell_%s = sgm_cell_make(*sgm_obj_slot(%s, INT64_C(%d)));\n"
+                    body_indent name elem_var i);
+               Hashtbl.replace current_cells name
+                 (Printf.sprintf "(sgm_cell_%s->u.%s)" name field)
+             end else begin
+               let c_type, const_qualifier = c_decl_type_and_qual ~is_const bind.ty in
+               Buffer.add_string
+                 buf
+                 (Printf.sprintf "%s%s%s %s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
+                    body_indent const_qualifier c_type (mangle_ident name) elem_var i field)
+             end)
          bindings);
     Buffer.add_string buf (body_indent ^ "{\n");
     emit_stmt buf (body_indent ^ "  ") body;
@@ -1918,19 +1959,66 @@ let rec emit_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit
       buf
       (Printf.sprintf "%s(void)(%s);\n" indent (emit_expr e))
 
-let rec collect_inner_captures (s : Typed_ast.stmt) : string list =
+let rec collect_inner_captures_expr (e : Typed_ast.expr) : string list =
+  match e.desc with
+  | Typed_ast.TExprLambda inner_fd ->
+    List.map fst inner_fd.tf_captures
+    @ List.concat_map collect_inner_captures inner_fd.tf_body
+  | Typed_ast.TExprUnary (_, sub) -> collect_inner_captures_expr sub
+  | Typed_ast.TExprBinary (_, lhs, rhs) ->
+    collect_inner_captures_expr lhs @ collect_inner_captures_expr rhs
+  | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
+    collect_inner_captures_expr e1 @ collect_inner_captures_expr e2 @ collect_inner_captures_expr e3
+  | Typed_ast.TExprAssign (lval, _, rhs) ->
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (arr, idx) -> collect_inner_captures_expr arr @ collect_inner_captures_expr idx)
+    @ collect_inner_captures_expr rhs
+  | Typed_ast.TExprIncDec (_, lval) ->
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (arr, idx) -> collect_inner_captures_expr arr @ collect_inner_captures_expr idx)
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    collect_inner_captures_expr callee
+    @ List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_inner_captures_expr a.tca_expr) args
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_inner_captures_expr sub) items
+  | Typed_ast.TExprIndex (b, i) ->
+    collect_inner_captures_expr b @ collect_inner_captures_expr i
+  | Typed_ast.TExprInterp parts ->
+    List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_inner_captures_expr sub) parts
+  | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_inner_captures_expr p
+  | _ -> []
+
+and collect_inner_captures (s : Typed_ast.stmt) : string list =
   match s.desc with
+  | Typed_ast.TStmtVarDecl v -> collect_inner_captures_expr v.init
+  | Typed_ast.TStmtDestruct d -> collect_inner_captures_expr d.init
   | Typed_ast.TStmtFunDecl inner_fd ->
     List.map fst inner_fd.tf_captures
     @ List.concat_map collect_inner_captures inner_fd.tf_body
   | Typed_ast.TStmtBlock stmts -> List.concat_map collect_inner_captures stmts
-  | Typed_ast.TStmtIf { then_branch; else_branch; _ } ->
-    collect_inner_captures then_branch
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    collect_inner_captures_expr cond
+    @ collect_inner_captures then_branch
     @ (match else_branch with Some b -> collect_inner_captures b | None -> [])
-  | Typed_ast.TStmtWhile { body; _ }
-  | Typed_ast.TStmtFor { body; _ }
-  | Typed_ast.TStmtForeach { body; _ } ->
-    collect_inner_captures body
+  | Typed_ast.TStmtWhile { cond; body; _ } ->
+    collect_inner_captures_expr cond @ collect_inner_captures body
+  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+    (match init with
+     | Typed_ast.TForInitVarDecl v -> collect_inner_captures_expr v.init
+     | Typed_ast.TForInitDestruct d -> collect_inner_captures_expr d.init
+     | Typed_ast.TForInitExpr e -> collect_inner_captures_expr e)
+    @ collect_inner_captures_expr cond @ collect_inner_captures_expr step @ collect_inner_captures body
+  | Typed_ast.TStmtForeach { collection; body; _ } ->
+    collect_inner_captures_expr collection @ collect_inner_captures body
+  | Typed_ast.TStmtPrint { args; _ } -> List.concat_map collect_inner_captures_expr args
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    collect_inner_captures_expr actual @ collect_inner_captures_expr expected
+    @ (match message with Some m -> collect_inner_captures_expr m | None -> [])
+  | Typed_ast.TStmtAssertError { message = Some m; _ } -> collect_inner_captures_expr m
+  | Typed_ast.TStmtReturn (Some e) -> collect_inner_captures_expr e
+  | Typed_ast.TStmtExpr e -> collect_inner_captures_expr e
   | _ -> []
 
 let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
@@ -2118,18 +2206,64 @@ let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) :
     end
   | _ -> emit_stmt buf indent s
 
-let rec collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
+let rec collect_all_funs_expr (e : Typed_ast.expr) : Typed_ast.fun_decl list =
+  match e.desc with
+  | Typed_ast.TExprLambda fd ->
+    fd :: List.concat_map collect_all_funs fd.tf_body
+  | Typed_ast.TExprUnary (_, sub) -> collect_all_funs_expr sub
+  | Typed_ast.TExprBinary (_, lhs, rhs) ->
+    collect_all_funs_expr lhs @ collect_all_funs_expr rhs
+  | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
+    collect_all_funs_expr e1 @ collect_all_funs_expr e2 @ collect_all_funs_expr e3
+  | Typed_ast.TExprAssign (lval, _, rhs) ->
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (arr, idx) -> collect_all_funs_expr arr @ collect_all_funs_expr idx)
+    @ collect_all_funs_expr rhs
+  | Typed_ast.TExprIncDec (_, lval) ->
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (arr, idx) -> collect_all_funs_expr arr @ collect_all_funs_expr idx)
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    collect_all_funs_expr callee
+    @ List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_all_funs_expr a.tca_expr) args
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_all_funs_expr sub) items
+  | Typed_ast.TExprIndex (b, i) ->
+    collect_all_funs_expr b @ collect_all_funs_expr i
+  | Typed_ast.TExprInterp parts ->
+    List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_all_funs_expr sub) parts
+  | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_all_funs_expr p
+  | _ -> []
+
+and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
   match s.desc with
+  | Typed_ast.TStmtVarDecl v -> collect_all_funs_expr v.init
+  | Typed_ast.TStmtDestruct d -> collect_all_funs_expr d.init
   | Typed_ast.TStmtFunDecl fd ->
     fd :: List.concat_map collect_all_funs fd.tf_body
   | Typed_ast.TStmtBlock stmts -> List.concat_map collect_all_funs stmts
-  | Typed_ast.TStmtIf { then_branch; else_branch; _ } ->
-    collect_all_funs then_branch
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    collect_all_funs_expr cond
+    @ collect_all_funs then_branch
     @ (match else_branch with Some b -> collect_all_funs b | None -> [])
-  | Typed_ast.TStmtWhile { body; _ }
-  | Typed_ast.TStmtFor { body; _ }
-  | Typed_ast.TStmtForeach { body; _ } ->
-    collect_all_funs body
+  | Typed_ast.TStmtWhile { cond; body; _ } ->
+    collect_all_funs_expr cond @ collect_all_funs body
+  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+    (match init with
+     | Typed_ast.TForInitVarDecl v -> collect_all_funs_expr v.init
+     | Typed_ast.TForInitDestruct d -> collect_all_funs_expr d.init
+     | Typed_ast.TForInitExpr e -> collect_all_funs_expr e)
+    @ collect_all_funs_expr cond @ collect_all_funs_expr step @ collect_all_funs body
+  | Typed_ast.TStmtForeach { collection; body; _ } ->
+    collect_all_funs_expr collection @ collect_all_funs body
+  | Typed_ast.TStmtPrint { args; _ } -> List.concat_map collect_all_funs_expr args
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    collect_all_funs_expr actual @ collect_all_funs_expr expected
+    @ (match message with Some m -> collect_all_funs_expr m | None -> [])
+  | Typed_ast.TStmtAssertError { message = Some m; _ } -> collect_all_funs_expr m
+  | Typed_ast.TStmtReturn (Some e) -> collect_all_funs_expr e
+  | Typed_ast.TStmtExpr e -> collect_all_funs_expr e
   | _ -> []
 
 let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
@@ -2174,6 +2308,7 @@ let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
   Buffer.add_string buf "int main(void) {\n";
   Hashtbl.clear current_cells;
   Hashtbl.clear current_boxed;
+  List.iter (fun name -> Hashtbl.replace current_boxed name ()) (List.concat_map collect_inner_captures prog);
   List.iter
     (if all_funs <> [] then emit_toplevel_stmt buf "  " else emit_stmt buf "  ")
     prog;

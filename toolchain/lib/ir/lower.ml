@@ -166,6 +166,35 @@ let rec emit_default_value b span (ty : Ty.t) : unit =
   | Ty.Fun _ | Ty.Void ->
     ignore (emit b (Ir.OP_CONST_I64 0L) span)
 
+type loop_frame = {
+  loop_id : int;
+  header_vars : string list;
+  body_scopes : string list ref list ref;
+  mutable continue_jumps : int list;
+  mutable break_jumps : int list;
+}
+
+let emit_undef_scopes b (scopes : string list ref list) span =
+  List.iter
+    (fun sc ->
+      List.iter
+        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
+        !sc)
+    scopes
+
+let rec emit_cleanup_to_target b (loops : loop_frame list) (target_loop_id : int) span : loop_frame option =
+  match loops with
+  | [] -> None
+  | f :: rest ->
+    emit_undef_scopes b !(f.body_scopes) span;
+    if f.loop_id = target_loop_id then Some f
+    else begin
+      List.iter
+        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
+        f.header_vars;
+      emit_cleanup_to_target b rest target_loop_id span
+    end
+
 let rec lower_expr b (e : Typed_ast.expr) =
   match e.desc with
   | Typed_ast.TExprInt n ->
@@ -614,37 +643,24 @@ let rec lower_expr b (e : Typed_ast.expr) =
          ignore (emit b Ir.OP_POP e.span);
          ignore (emit b (Ir.OP_GET_TEMP t_old) e.span)
        end)
+  | Typed_ast.TExprLambda fd ->
+    let j_over = emit b (Ir.OP_JUMP 0) e.span in
+    let entry = cur_ip b in
+    List.iter (lower_stmt b []) fd.tf_body;
+    ignore (emit b Ir.OP_RETURN_VOID e.span);
+    patch b j_over (Ir.OP_JUMP (cur_ip b));
+    ignore
+      (emit b
+         (Ir.OP_MAKE_FUN
+            {
+              entry;
+              fname = fd.tf_name;
+              params = List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_name) fd.tf_params;
+              captures = List.map fst fd.tf_captures;
+            })
+         e.span)
 
-type loop_frame = {
-  loop_id : int;
-  header_vars : string list;
-  body_scopes : string list ref list ref;
-  mutable continue_jumps : int list;
-  mutable break_jumps : int list;
-}
-
-let emit_undef_scopes b (scopes : string list ref list) span =
-  List.iter
-    (fun sc ->
-      List.iter
-        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
-        !sc)
-    scopes
-
-let rec emit_cleanup_to_target b (loops : loop_frame list) (target_loop_id : int) span : loop_frame option =
-  match loops with
-  | [] -> None
-  | f :: rest ->
-    emit_undef_scopes b !(f.body_scopes) span;
-    if f.loop_id = target_loop_id then Some f
-    else begin
-      List.iter
-        (fun name -> ignore (emit b (Ir.OP_UNDEF_GLOBAL name) span))
-        f.header_vars;
-      emit_cleanup_to_target b rest target_loop_id span
-    end
-
-let rec lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
+and lower_stmt b (loops : loop_frame list) (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     lower_expr b v.init;

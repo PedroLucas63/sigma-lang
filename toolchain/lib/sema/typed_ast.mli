@@ -51,6 +51,7 @@ and expr_desc =
       args : typed_call_arg list;  (** argumentos em ordem de avaliação *)
       full : bool;  (** [true] quando todos os parâmetros ficam ligados e a função é executada *)
     }
+  | TExprLambda of fun_decl
   | TExprUnary of Ast.unop * expr
   | TExprBinary of Ast.binop * expr * expr
   | TExprChainCmp of expr * Ast.binop * expr * Ast.binop * expr
@@ -71,7 +72,7 @@ and expr = {
   span : Span.t;
 }
 
-type var_decl = {
+and var_decl = {
   name : string;
   name_span : Span.t;
   is_const : bool;
@@ -80,25 +81,25 @@ type var_decl = {
   was_default_initialized : bool;
 }
 
-type destruct_binding = {
+and destruct_binding = {
   name : string option;
   name_span : Span.t;
   ty : Ty.t;
 }
 
-type destruct_decl = {
+and destruct_decl = {
   bindings : destruct_binding list;
   is_const : bool;
   ty : Ty.t;
   init : expr;
 }
 
-type for_init =
+and for_init =
   | TForInitVarDecl of var_decl
   | TForInitDestruct of destruct_decl
   | TForInitExpr of expr
 
-type foreach_head =
+and foreach_head =
   | TForeachVar of {
       name : string option;
       name_span : Span.t;
@@ -111,7 +112,7 @@ type foreach_head =
       ty : Ty.t;
     }
 
-type stmt_desc =
+and stmt_desc =
   | TStmtVarDecl of var_decl
   | TStmtDestruct of destruct_decl
   | TStmtBlock of stmt list

@@ -36,6 +36,7 @@ type kind =
   | STRING of string
   | INTERP_STRING of interp_segment list
   | COLON
+  | FAT_ARROW
   | EQUAL
   | COLON_EQUAL
   | PLUS_EQ
@@ -123,6 +124,7 @@ let kind_to_string = function
   | STRING s -> Printf.sprintf "string %S" s
   | INTERP_STRING _ -> "interpolated string"
   | COLON -> "':'"
+  | FAT_ARROW -> "'=>'"
   | EQUAL -> "'='"
   | COLON_EQUAL -> "':='"
   | PLUS_EQ -> "'+='"

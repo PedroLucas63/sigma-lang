@@ -18,13 +18,19 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
+type fun_ret_ctx =
+  | RetNone
+  | RetExplicit of Ty.t
+  | RetInferred of Ty.t option ref
+
 (* Contexto de função durante a checagem: retorno esperado da função atual
-   ([Some Ty.Void] em [act]), nomes de escopo externo que podem ser
+   ([RetExplicit Ty.Void] em [act]), nomes de escopo externo que podem ser
    escondidos (shadowing) por parâmetros/locais e o escopo raiz do programa. *)
-let current_fun : Ty.t option ref = ref None
+let current_fun : fun_ret_ctx ref = ref RetNone
 let fn_outer : (string, unit) Hashtbl.t option ref = ref None
 let root_scope_ref : string list ref option ref = ref None
 let current_scope_vars : string list ref option ref = ref None
+let next_lambda_id : int ref = ref 0
 
 (* Nomes dos parâmetros de cada função declarada ou valor parcial (chave: span ou identificador), usados
    para resolver argumentos nomeados em chamadas. *)
@@ -330,6 +336,398 @@ let rec default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
     (* Inalcançável: declarações sem inicializador de tipo função são rejeitadas (E0106). *)
     { Typed_ast.desc = Typed_ast.TExprInt 0L; ty = Ty.Int; span }
 
+let rec stmt_always_returns (s : Typed_ast.stmt) : bool =
+  match s.desc with
+  | Typed_ast.TStmtReturn _ -> true
+  | Typed_ast.TStmtBlock ss -> List.exists stmt_always_returns ss
+  | Typed_ast.TStmtIf { then_branch; else_branch = Some eb; _ } ->
+    stmt_always_returns then_branch && stmt_always_returns eb
+  | _ -> false
+
+let resolve_fun_params (raw_params : Ast.fun_param list)
+    : (Typed_ast.typed_param list, Diagnostic.t list) result =
+  let errs = ref [] in
+  let seen : (string, unit) Hashtbl.t = Hashtbl.create 8 in
+  let params =
+    List.filter_map
+      (fun (p : Ast.fun_param) ->
+        let pname = p.param_name in
+        let psp = p.param_span in
+        if Hashtbl.mem seen pname then
+          errs :=
+            Diagnostic.error
+              ~code:"E0103"
+              ~span:psp
+              (Printf.sprintf "duplicate parameter '%s'" pname)
+            :: !errs;
+        Hashtbl.replace seen pname ();
+        let pmode =
+          match p.param_mode with
+          | Ast.ParamVal -> Ty.ParamVal
+          | Ast.ParamRef -> Ty.ParamRef
+          | Ast.ParamOut -> Ty.ParamOut
+        in
+        match resolve_type_expr p.param_type None with
+        | Ok ty -> Some { Typed_ast.tp_name = pname; tp_mode = pmode; tp_ty = ty }
+        | Error err ->
+          errs := err :: !errs;
+          None)
+      raw_params
+  in
+  match List.rev !errs with
+  | [] -> Ok params
+  | es -> Error es
+
+let resolve_fun_signature (fd : Ast.fun_decl)
+    : (Typed_ast.typed_param list * Ty.t, Diagnostic.t list) result =
+  let param_errs, params =
+    match resolve_fun_params fd.fd_params with
+    | Ok ps -> ([], ps)
+    | Error es -> (es, [])
+  in
+  let errs = ref (List.rev param_errs) in
+  let ret =
+    match fd.fd_ret with
+    | None -> Some Ty.Void
+    | Some (Ast.TypeNamed ("void", sp)) ->
+      errs :=
+        Diagnostic.error
+          ~hint:"use 'act' to declare a procedure without a return value"
+          ~code:"E0113"
+          ~span:sp
+          "a 'fun' must declare a value return type, not 'void'"
+        :: !errs;
+      None
+    | Some te ->
+      (match resolve_type_expr te None with
+       | Ok ty -> Some ty
+       | Error err ->
+         errs := err :: !errs;
+         None)
+  in
+  match List.rev !errs, ret with
+  | [], Some r -> Ok (params, r)
+  | es, _ -> Error es
+
+type active_loop = {
+  loop_id : int;
+  label : (string * Span.t) option;
+}
+
+let check_loop_label (loop_stack : active_loop list) (label : (string * Span.t) option) : Diagnostic.t option =
+  match label with
+  | None -> None
+  | Some (lbl, lbl_span) ->
+    (match
+       List.find_opt
+         (fun al ->
+           match al.label with
+           | Some (prev_lbl, _) -> prev_lbl = lbl
+           | None -> false)
+         loop_stack
+     with
+     | None -> None
+     | Some { label = Some (_, prev_sp); _ } ->
+       Some
+         (Diagnostic.error
+            ~hint:(Printf.sprintf "previously defined on an enclosing loop at %s" (Span.to_string prev_sp))
+            ~code:"E0103"
+            ~span:lbl_span
+            (Printf.sprintf "loop label '%s' is already defined on an enclosing loop" lbl))
+     | Some _ -> None)
+
+let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr) : unit =
+  match e.desc with
+  | Typed_ast.TExprIdent id -> Hashtbl.replace used id ()
+  | Typed_ast.TExprUnary (_, sub) -> collect_used_expr used sub
+  | Typed_ast.TExprBinary (_, l, r) ->
+    collect_used_expr used l;
+    collect_used_expr used r
+  | Typed_ast.TExprChainCmp (a, _, b, _, c) ->
+    collect_used_expr used a;
+    collect_used_expr used b;
+    collect_used_expr used c
+  | Typed_ast.TExprAssign (lval, _, r) ->
+    (match lval with
+     | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
+     | Typed_ast.TLValIndex (arr, idx) ->
+       collect_used_expr used arr;
+       collect_used_expr used idx);
+    collect_used_expr used r
+  | Typed_ast.TExprIncDec (_, lval) ->
+    (match lval with
+     | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
+     | Typed_ast.TLValIndex (arr, idx) ->
+       collect_used_expr used arr;
+       collect_used_expr used idx)
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    collect_used_expr used callee;
+    List.iter (fun (arg : Typed_ast.typed_call_arg) -> collect_used_expr used arg.tca_expr) args
+  | Typed_ast.TExprLambda inner_fd ->
+    List.iter (fun (cap_name, _) -> Hashtbl.replace used cap_name ()) inner_fd.tf_captures
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.iter
+      (function
+        | Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub ->
+          collect_used_expr used sub)
+      items
+  | Typed_ast.TExprIndex (sub, idx) ->
+    collect_used_expr used sub;
+    collect_used_expr used idx
+  | Typed_ast.TExprInterp parts ->
+    List.iter
+      (function
+        | Typed_ast.TInterpLit _ -> ()
+        | Typed_ast.TInterpExpr (sub, _) -> collect_used_expr used sub)
+      parts
+  | Typed_ast.TExprInput { prompt; _ } ->
+    Option.iter (collect_used_expr used) prompt
+  | Typed_ast.TExprInt _ | Typed_ast.TExprFloat _ | Typed_ast.TExprDouble _
+  | Typed_ast.TExprDecimal _ | Typed_ast.TExprBool _ | Typed_ast.TExprChar _
+  | Typed_ast.TExprString _ -> ()
+
+let rec collect_used_stmt
+    (declared : (string, unit) Hashtbl.t)
+    (used : (string, unit) Hashtbl.t)
+    (s : Typed_ast.stmt) : unit =
+  match s.desc with
+  | Typed_ast.TStmtVarDecl v ->
+    collect_used_expr used v.init;
+    Hashtbl.replace declared v.name ()
+  | Typed_ast.TStmtDestruct d ->
+    collect_used_expr used d.init;
+    List.iter
+      (fun (b : Typed_ast.destruct_binding) ->
+        Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
+      d.bindings
+  | Typed_ast.TStmtFunDecl inner_fd ->
+    Hashtbl.replace declared inner_fd.tf_name ();
+    List.iter (fun (cap_name, _) -> Hashtbl.replace used cap_name ()) inner_fd.tf_captures
+  | Typed_ast.TStmtBlock stmts ->
+    List.iter (collect_used_stmt declared used) stmts
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    collect_used_expr used cond;
+    collect_used_stmt declared used then_branch;
+    Option.iter (collect_used_stmt declared used) else_branch
+  | Typed_ast.TStmtWhile { cond; body; _ } ->
+    collect_used_expr used cond;
+    collect_used_stmt declared used body
+  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+    (match init with
+     | Typed_ast.TForInitVarDecl v ->
+       collect_used_expr used v.init;
+       Hashtbl.replace declared v.name ()
+     | Typed_ast.TForInitDestruct d ->
+       collect_used_expr used d.init;
+       List.iter
+         (fun (b : Typed_ast.destruct_binding) ->
+           Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
+         d.bindings
+     | Typed_ast.TForInitExpr e -> collect_used_expr used e);
+    collect_used_expr used cond;
+    collect_used_expr used step;
+    collect_used_stmt declared used body
+  | Typed_ast.TStmtForeach { head; collection; body; _ } ->
+    collect_used_expr used collection;
+    (match head with
+     | Typed_ast.TForeachVar { name; _ } ->
+       Option.iter (fun n -> Hashtbl.replace declared n ()) name
+     | Typed_ast.TForeachDestruct { bindings; _ } ->
+       List.iter
+         (fun (b : Typed_ast.destruct_binding) ->
+           Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
+         bindings);
+    collect_used_stmt declared used body
+  | Typed_ast.TStmtPrint { args; _ } ->
+    List.iter (collect_used_expr used) args
+  | Typed_ast.TStmtAssert { actual; expected; message } ->
+    collect_used_expr used actual;
+    collect_used_expr used expected;
+    Option.iter (collect_used_expr used) message
+  | Typed_ast.TStmtAssertError { message; _ } ->
+    Option.iter (collect_used_expr used) message
+  | Typed_ast.TStmtReturn eo ->
+    Option.iter (collect_used_expr used) eo
+  | Typed_ast.TStmtExpr e ->
+    collect_used_expr used e
+  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
+
+let compute_captures
+    (env : env)
+    (params : Typed_ast.typed_param list)
+    (self_name : string)
+    (body : Typed_ast.stmt list) : ((string * Ty.t) list, Diagnostic.t list) result =
+  let declared : (string, unit) Hashtbl.t = Hashtbl.create 16 in
+  let used : (string, unit) Hashtbl.t = Hashtbl.create 16 in
+  List.iter (collect_used_stmt declared used) body;
+  let is_param (name : string) : bool =
+    List.exists (fun (tp : Typed_ast.typed_param) -> tp.tp_name = name) params
+  in
+  let is_global (name : string) : bool =
+    match !root_scope_ref with
+    | Some r -> List.mem name !r
+    | None -> false
+  in
+  let caps = ref [] in
+  let cap_errs = ref [] in
+  Hashtbl.iter
+    (fun name () ->
+      if name <> self_name
+         && not (is_param name)
+         && not (Hashtbl.mem declared name)
+         && not (is_global name)
+      then
+        match Hashtbl.find_opt env name with
+        | Some info ->
+          if info.is_ref_param then
+            cap_errs :=
+              Diagnostic.error
+                ~code:"E0118"
+                ~span:info.decl_span
+                (Printf.sprintf "cannot capture 'ref' or 'out' parameter '%s' in a closure" name)
+              :: !cap_errs
+          else
+            caps := (name, info.ty) :: !caps
+        | None -> ())
+    used;
+  if !cap_errs <> [] then Error (List.rev !cap_errs)
+  else Ok (List.sort (fun (a, _) (b, _) -> String.compare a b) !caps)
+
+module OutCheck = struct
+  module SSet = Set.Make(String)
+
+  let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
+    match e.desc with
+    | Typed_ast.TExprAssign (Typed_ast.TLValIdent name, _, rhs) ->
+      let acc' = assigned_in_expr rhs acc in
+      SSet.add name acc'
+    | Typed_ast.TExprAssign (Typed_ast.TLValIndex (base, idx), _, rhs) ->
+      let acc1 = assigned_in_expr base acc in
+      let acc2 = assigned_in_expr idx acc1 in
+      assigned_in_expr rhs acc2
+    | Typed_ast.TExprCall { args; _ } ->
+      List.fold_left
+        (fun s (arg : Typed_ast.typed_call_arg) ->
+          let s' =
+            match arg.tca_mode, arg.tca_expr.desc with
+            | Ty.ParamOut, Typed_ast.TExprIdent nm -> SSet.add nm s
+            | _ -> s
+          in
+          assigned_in_expr arg.tca_expr s')
+        acc args
+    | Typed_ast.TExprUnary (_, sub) -> assigned_in_expr sub acc
+    | Typed_ast.TExprBinary (_, lhs, rhs) ->
+      assigned_in_expr rhs (assigned_in_expr lhs acc)
+    | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
+      assigned_in_expr e3 (assigned_in_expr e2 (assigned_in_expr e1 acc))
+    | Typed_ast.TExprIncDec (_, Typed_ast.TLValIdent name) ->
+      SSet.add name acc
+    | Typed_ast.TExprIncDec (_, Typed_ast.TLValIndex (base, idx)) ->
+      assigned_in_expr idx (assigned_in_expr base acc)
+    | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+      List.fold_left
+        (fun s item ->
+          match item with
+          | Typed_ast.TItemExpr sub -> assigned_in_expr sub s
+          | Typed_ast.TItemSpread sub -> assigned_in_expr sub s)
+        acc items
+    | Typed_ast.TExprIndex (base, idx) ->
+      assigned_in_expr idx (assigned_in_expr base acc)
+    | Typed_ast.TExprInterp parts ->
+      List.fold_left
+        (fun s part ->
+          match part with
+          | Typed_ast.TInterpLit _ -> s
+          | Typed_ast.TInterpExpr (sub, _) -> assigned_in_expr sub s)
+        acc parts
+    | Typed_ast.TExprInput { prompt = Some p; _ } -> assigned_in_expr p acc
+    | _ -> acc
+
+  let check_fun (fn_name : string) (fn_span : Span.t) (params : Typed_ast.typed_param list) (body : Typed_ast.stmt list) : Diagnostic.t list =
+    let required =
+      List.filter_map
+        (fun (p : Typed_ast.typed_param) ->
+          if p.tp_mode = Ty.ParamOut then Some p.tp_name else None)
+        params
+    in
+    if required = [] then []
+    else
+      let errors = ref [] in
+      let check_assigned span current =
+        List.iter
+          (fun p ->
+            if not (SSet.mem p current) then
+              errors :=
+                Diagnostic.error
+                  ~code:"E0117"
+                  ~span
+                  (Printf.sprintf "out parameter '%s' must be assigned before returning from function '%s'" p fn_name)
+                :: !errors)
+          required
+      in
+      let rec check_stmts (stmts : Typed_ast.stmt list) (curr : SSet.t) : SSet.t =
+        List.fold_left check_stmt_flow curr stmts
+      and check_stmt_flow (curr : SSet.t) (s : Typed_ast.stmt) : SSet.t =
+        match s.desc with
+        | Typed_ast.TStmtReturn _ ->
+          check_assigned s.span curr;
+          curr
+        | Typed_ast.TStmtExpr e ->
+          assigned_in_expr e curr
+        | Typed_ast.TStmtBlock ss ->
+          check_stmts ss curr
+        | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+          let curr_cond = assigned_in_expr cond curr in
+          let then_out = check_stmt_flow curr_cond then_branch in
+          (match else_branch with
+           | Some eb ->
+             let else_out = check_stmt_flow curr_cond eb in
+             if stmt_always_returns then_branch && stmt_always_returns eb then
+               curr_cond
+             else if stmt_always_returns then_branch then
+               else_out
+             else if stmt_always_returns eb then
+               then_out
+             else
+               SSet.inter then_out else_out
+           | None ->
+             curr_cond)
+        | Typed_ast.TStmtWhile { cond; body; _ } ->
+          let curr_cond = assigned_in_expr cond curr in
+          ignore (check_stmt_flow curr_cond body);
+          curr_cond
+        | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
+          let curr_init =
+            match init with
+            | Typed_ast.TForInitExpr e -> assigned_in_expr e curr
+            | _ -> curr
+          in
+          let curr_cond = assigned_in_expr cond curr_init in
+          ignore (check_stmt_flow curr_cond body);
+          ignore (assigned_in_expr step curr_cond);
+          curr_cond
+        | Typed_ast.TStmtForeach { collection; body; _ } ->
+          let curr_coll = assigned_in_expr collection curr in
+          ignore (check_stmt_flow curr_coll body);
+          curr_coll
+        | _ -> curr
+      in
+      let final_assigned = check_stmts body SSet.empty in
+      if not (List.exists stmt_always_returns body) then begin
+        List.iter
+          (fun p ->
+            if not (SSet.mem p final_assigned) then
+              errors :=
+                Diagnostic.error
+                  ~code:"E0117"
+                  ~span:fn_span
+                  (Printf.sprintf "out parameter '%s' must be assigned before end of function '%s'" p fn_name)
+                :: !errors)
+          required
+      end;
+      List.rev !errors
+end
+
 let rec check_expr (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
   match check_expr_any env e with
   | Ok (te : Typed_ast.expr) when te.ty = Ty.Void ->
@@ -505,6 +903,139 @@ and check_expr_any (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
                ~code:"E0112"
                ~span:callee.span
                (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))
+  | Ast.ExprLambda lam ->
+    (match resolve_fun_params lam.lam_params with
+     | Error (err :: _) -> Error err
+     | Error [] -> Error (Diagnostic.error ~code:"E0103" ~span:e.span "invalid lambda parameters")
+     | Ok params ->
+       let ret_ctx_res =
+         if lam.lam_is_act then
+           match lam.lam_ret with
+           | None -> Ok (RetExplicit Ty.Void)
+           | Some te ->
+             Error
+               (Diagnostic.error
+                  ~hint:"use 'fun(...) : <type> => ...' to declare an anonymous function that returns a value"
+                  ~code:"E0113"
+                  ~span:(Ast.type_expr_span te)
+                  "an anonymous 'act' cannot declare a return type")
+         else
+           match lam.lam_ret with
+           | None -> Ok (RetInferred (ref None))
+           | Some (Ast.TypeNamed ("void", sp)) ->
+             Error
+               (Diagnostic.error
+                  ~hint:"use 'act(...) => ...' to declare an anonymous procedure without a return value"
+                  ~code:"E0113"
+                  ~span:sp
+                  "a 'fun' must declare a value return type, not 'void'")
+           | Some te ->
+             (match resolve_type_expr te None with
+              | Ok ty -> Ok (RetExplicit ty)
+              | Error err -> Error err)
+       in
+       match ret_ctx_res with
+       | Error err -> Error err
+       | Ok ret_ctx ->
+         incr next_lambda_id;
+         let lam_name = Printf.sprintf "__lambda_%d" !next_lambda_id in
+         let body_env : env = Hashtbl.copy env in
+         let outer : (string, unit) Hashtbl.t = Hashtbl.create 16 in
+         Hashtbl.iter (fun k _ -> Hashtbl.replace outer k ()) env;
+         let saved_fun = !current_fun in
+         let saved_outer = !fn_outer in
+         current_fun := ret_ctx;
+         fn_outer := Some outer;
+         List.iter2
+           (fun (p : Ast.fun_param) (tp : Typed_ast.typed_param) ->
+             Hashtbl.remove outer tp.tp_name;
+             let is_const = tp.tp_mode = Ty.ParamVal in
+             let const_kind = if is_const then ShallowConst else NotConst in
+             let is_ref_param = tp.tp_mode = Ty.ParamRef || tp.tp_mode = Ty.ParamOut in
+             Hashtbl.replace body_env tp.tp_name
+               {
+                 ty = tp.tp_ty;
+                 decl_span = p.param_span;
+                 is_const;
+                 const_kind;
+                 is_ref_param;
+                 const_int = None;
+               })
+           lam.lam_params params;
+         let body_scope = ref [] in
+         let lam_loop_id = ref 0 in
+         let tbody = ref [] in
+         let berrs = ref [] in
+         List.iter
+           (fun sub ->
+             match check_stmt body_env body_scope [] lam_loop_id sub with
+             | Ok ts -> tbody := ts :: !tbody
+             | Error es -> berrs := List.rev_append es !berrs)
+           lam.lam_body;
+         current_fun := saved_fun;
+         fn_outer := saved_outer;
+         (match List.rev !berrs with
+          | err :: _ -> Error err
+          | [] ->
+            let tbody = List.rev !tbody in
+            let final_ret_res =
+              match ret_ctx with
+              | RetExplicit r -> Ok r
+              | RetInferred r_ref ->
+                (match !r_ref with
+                 | Some r -> Ok r
+                 | None ->
+                   Error
+                     (Diagnostic.error
+                        ~hint:"return a value with '=> <expr>' or 'return <expr>;', or use 'act(...) => ...' for a void procedure"
+                        ~code:"E0111"
+                        ~span:e.span
+                        "anonymous 'fun' must return a value"))
+              | RetNone -> Ok Ty.Void
+            in
+            match final_ret_res with
+            | Error err -> Error err
+            | Ok ret ->
+              let out_errs = OutCheck.check_fun "anonymous function" e.span params tbody in
+              (match out_errs with
+               | err :: _ -> Error err
+               | [] ->
+                 if ret <> Ty.Void && not (List.exists stmt_always_returns tbody) then
+                   Error
+                     (Diagnostic.error
+                        ~hint:"add a 'return <expr>;' on every path that reaches the end of the anonymous function"
+                        ~code:"E0111"
+                        ~span:e.span
+                        "anonymous 'fun' may reach its end without returning a value")
+                 else
+                   match compute_captures env params lam_name tbody with
+                   | Error (err :: _) -> Error err
+                   | Error [] -> Error (Diagnostic.error ~code:"E0118" ~span:e.span "invalid closure capture")
+                   | Ok captures ->
+                     Hashtbl.replace expr_param_names e.span
+                       (List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_name) params);
+                     let fty =
+                       Ty.Fun
+                         (List.map
+                            (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode })
+                            params,
+                          ret)
+                     in
+                     Ok
+                       {
+                         Typed_ast.desc =
+                           Typed_ast.TExprLambda
+                             {
+                               Typed_ast.tf_name = lam_name;
+                               tf_name_span = e.span;
+                               tf_params = params;
+                               tf_ret = ret;
+                               tf_captures = captures;
+                               tf_body = tbody;
+                             };
+                         ty = fty;
+                         span = e.span;
+                       })))
   | Ast.ExprTuple items ->
     (match check_collection_items env items with
      | Error err -> Error err
@@ -726,14 +1257,32 @@ and check_expr_any (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) r
         | Ok trhs ->
           (match binop_of_assign_op op with
            | None ->
-             if Ty.equal lval_ty trhs.ty then
+             if Ty.equal lval_ty trhs.ty then begin
+               (match tlval with
+                | Typed_ast.TLValIdent target_name ->
+                  (match rhs.desc with
+                   | Ast.ExprIdent orig_name ->
+                     (match Hashtbl.find_opt var_param_names orig_name with
+                      | Some pnames -> Hashtbl.replace var_param_names target_name pnames
+                      | None ->
+                        (match Hashtbl.find_opt env orig_name with
+                         | Some info ->
+                           (match Hashtbl.find_opt fun_param_names info.decl_span with
+                            | Some pnames -> Hashtbl.replace var_param_names target_name pnames
+                            | None -> Hashtbl.remove var_param_names target_name)
+                         | None -> Hashtbl.remove var_param_names target_name))
+                   | _ ->
+                     (match Hashtbl.find_opt expr_param_names rhs.span with
+                      | Some pnames -> Hashtbl.replace var_param_names target_name pnames
+                      | None -> Hashtbl.remove var_param_names target_name))
+                | _ -> ());
                Ok
                  {
                    Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs);
                    ty = lval_ty;
                    span = e.span;
                  }
-             else
+             end else
                Error
                  (Diagnostic.error
                     ~hint:
@@ -1272,385 +1821,7 @@ and check_lvalue (env : env) ~for_op (lval : Ast.lvalue)
           | None ->
             Ok (Typed_ast.TLValIndex (tbase, tidx), elem_ty, "indexed element")))
 
-let rec stmt_always_returns (s : Typed_ast.stmt) : bool =
-  match s.desc with
-  | Typed_ast.TStmtReturn _ -> true
-  | Typed_ast.TStmtBlock ss -> List.exists stmt_always_returns ss
-  | Typed_ast.TStmtIf { then_branch; else_branch = Some eb; _ } ->
-    stmt_always_returns then_branch && stmt_always_returns eb
-  | _ -> false
-
-let resolve_fun_signature (fd : Ast.fun_decl)
-    : (Typed_ast.typed_param list * Ty.t, Diagnostic.t list) result =
-  let errs = ref [] in
-  let seen : (string, unit) Hashtbl.t = Hashtbl.create 8 in
-  let params =
-    List.filter_map
-      (fun (p : Ast.fun_param) ->
-        let pname = p.param_name in
-        let psp = p.param_span in
-        if Hashtbl.mem seen pname then
-          errs :=
-            Diagnostic.error
-              ~code:"E0103"
-              ~span:psp
-              (Printf.sprintf "duplicate parameter '%s'" pname)
-            :: !errs;
-        Hashtbl.replace seen pname ();
-        let pmode =
-          match p.param_mode with
-          | Ast.ParamVal -> Ty.ParamVal
-          | Ast.ParamRef -> Ty.ParamRef
-          | Ast.ParamOut -> Ty.ParamOut
-        in
-        match resolve_type_expr p.param_type None with
-        | Ok ty -> Some { Typed_ast.tp_name = pname; tp_mode = pmode; tp_ty = ty }
-        | Error err ->
-          errs := err :: !errs;
-          None)
-      fd.fd_params
-  in
-  let ret =
-    match fd.fd_ret with
-    | None -> Some Ty.Void
-    | Some (Ast.TypeNamed ("void", sp)) ->
-      errs :=
-        Diagnostic.error
-          ~hint:"use 'act' to declare a procedure without a return value"
-          ~code:"E0113"
-          ~span:sp
-          "a 'fun' must declare a value return type, not 'void'"
-        :: !errs;
-      None
-    | Some te ->
-      (match resolve_type_expr te None with
-       | Ok ty -> Some ty
-       | Error err ->
-         errs := err :: !errs;
-         None)
-  in
-  match List.rev !errs, ret with
-  | [], Some r -> Ok (params, r)
-  | es, _ -> Error es
-
-type active_loop = {
-  loop_id : int;
-  label : (string * Span.t) option;
-}
-
-let check_loop_label (loop_stack : active_loop list) (label : (string * Span.t) option) : Diagnostic.t option =
-  match label with
-  | None -> None
-  | Some (lbl, lbl_span) ->
-    (match
-       List.find_opt
-         (fun al ->
-           match al.label with
-           | Some (prev_lbl, _) -> prev_lbl = lbl
-           | None -> false)
-         loop_stack
-     with
-     | None -> None
-     | Some { label = Some (_, prev_sp); _ } ->
-       Some
-         (Diagnostic.error
-            ~hint:(Printf.sprintf "previously defined on an enclosing loop at %s" (Span.to_string prev_sp))
-            ~code:"E0103"
-            ~span:lbl_span
-            (Printf.sprintf "loop label '%s' is already defined on an enclosing loop" lbl))
-     | Some _ -> None)
-
-let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr) : unit =
-  match e.desc with
-  | Typed_ast.TExprIdent id -> Hashtbl.replace used id ()
-  | Typed_ast.TExprUnary (_, sub) -> collect_used_expr used sub
-  | Typed_ast.TExprBinary (_, l, r) ->
-    collect_used_expr used l;
-    collect_used_expr used r
-  | Typed_ast.TExprChainCmp (a, _, b, _, c) ->
-    collect_used_expr used a;
-    collect_used_expr used b;
-    collect_used_expr used c
-  | Typed_ast.TExprAssign (lval, _, r) ->
-    (match lval with
-     | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
-     | Typed_ast.TLValIndex (arr, idx) ->
-       collect_used_expr used arr;
-       collect_used_expr used idx);
-    collect_used_expr used r
-  | Typed_ast.TExprIncDec (_, lval) ->
-    (match lval with
-     | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
-     | Typed_ast.TLValIndex (arr, idx) ->
-       collect_used_expr used arr;
-       collect_used_expr used idx)
-  | Typed_ast.TExprCall { callee; args; _ } ->
-    collect_used_expr used callee;
-    List.iter (fun (arg : Typed_ast.typed_call_arg) -> collect_used_expr used arg.tca_expr) args
-  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
-    List.iter
-      (function
-        | Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub ->
-          collect_used_expr used sub)
-      items
-  | Typed_ast.TExprIndex (sub, idx) ->
-    collect_used_expr used sub;
-    collect_used_expr used idx
-  | Typed_ast.TExprInterp parts ->
-    List.iter
-      (function
-        | Typed_ast.TInterpLit _ -> ()
-        | Typed_ast.TInterpExpr (sub, _) -> collect_used_expr used sub)
-      parts
-  | Typed_ast.TExprInput { prompt; _ } ->
-    Option.iter (collect_used_expr used) prompt
-  | Typed_ast.TExprInt _ | Typed_ast.TExprFloat _ | Typed_ast.TExprDouble _
-  | Typed_ast.TExprDecimal _ | Typed_ast.TExprBool _ | Typed_ast.TExprChar _
-  | Typed_ast.TExprString _ -> ()
-
-let rec collect_used_stmt
-    (declared : (string, unit) Hashtbl.t)
-    (used : (string, unit) Hashtbl.t)
-    (s : Typed_ast.stmt) : unit =
-  match s.desc with
-  | Typed_ast.TStmtVarDecl v ->
-    collect_used_expr used v.init;
-    Hashtbl.replace declared v.name ()
-  | Typed_ast.TStmtDestruct d ->
-    collect_used_expr used d.init;
-    List.iter
-      (fun (b : Typed_ast.destruct_binding) ->
-        Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
-      d.bindings
-  | Typed_ast.TStmtFunDecl inner_fd ->
-    Hashtbl.replace declared inner_fd.tf_name ();
-    List.iter (fun (cap_name, _) -> Hashtbl.replace used cap_name ()) inner_fd.tf_captures
-  | Typed_ast.TStmtBlock stmts ->
-    List.iter (collect_used_stmt declared used) stmts
-  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
-    collect_used_expr used cond;
-    collect_used_stmt declared used then_branch;
-    Option.iter (collect_used_stmt declared used) else_branch
-  | Typed_ast.TStmtWhile { cond; body; _ } ->
-    collect_used_expr used cond;
-    collect_used_stmt declared used body
-  | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
-    (match init with
-     | Typed_ast.TForInitVarDecl v ->
-       collect_used_expr used v.init;
-       Hashtbl.replace declared v.name ()
-     | Typed_ast.TForInitDestruct d ->
-       collect_used_expr used d.init;
-       List.iter
-         (fun (b : Typed_ast.destruct_binding) ->
-           Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
-         d.bindings
-     | Typed_ast.TForInitExpr e -> collect_used_expr used e);
-    collect_used_expr used cond;
-    collect_used_expr used step;
-    collect_used_stmt declared used body
-  | Typed_ast.TStmtForeach { head; collection; body; _ } ->
-    collect_used_expr used collection;
-    (match head with
-     | Typed_ast.TForeachVar { name; _ } ->
-       Option.iter (fun n -> Hashtbl.replace declared n ()) name
-     | Typed_ast.TForeachDestruct { bindings; _ } ->
-       List.iter
-         (fun (b : Typed_ast.destruct_binding) ->
-           Option.iter (fun n -> Hashtbl.replace declared n ()) b.name)
-         bindings);
-    collect_used_stmt declared used body
-  | Typed_ast.TStmtPrint { args; _ } ->
-    List.iter (collect_used_expr used) args
-  | Typed_ast.TStmtAssert { actual; expected; message } ->
-    collect_used_expr used actual;
-    collect_used_expr used expected;
-    Option.iter (collect_used_expr used) message
-  | Typed_ast.TStmtAssertError { message; _ } ->
-    Option.iter (collect_used_expr used) message
-  | Typed_ast.TStmtReturn eo ->
-    Option.iter (collect_used_expr used) eo
-  | Typed_ast.TStmtExpr e ->
-    collect_used_expr used e
-  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
-
-let compute_captures
-    (env : env)
-    (params : Typed_ast.typed_param list)
-    (self_name : string)
-    (body : Typed_ast.stmt list) : ((string * Ty.t) list, Diagnostic.t list) result =
-  let declared : (string, unit) Hashtbl.t = Hashtbl.create 16 in
-  let used : (string, unit) Hashtbl.t = Hashtbl.create 16 in
-  List.iter (collect_used_stmt declared used) body;
-  let is_param (name : string) : bool =
-    List.exists (fun (tp : Typed_ast.typed_param) -> tp.tp_name = name) params
-  in
-  let is_global (name : string) : bool =
-    match !root_scope_ref with
-    | Some r -> List.mem name !r
-    | None -> false
-  in
-  let caps = ref [] in
-  let cap_errs = ref [] in
-  Hashtbl.iter
-    (fun name () ->
-      if name <> self_name
-         && not (is_param name)
-         && not (Hashtbl.mem declared name)
-         && not (is_global name)
-      then
-        match Hashtbl.find_opt env name with
-        | Some info ->
-          if info.is_ref_param then
-            cap_errs :=
-              Diagnostic.error
-                ~code:"E0118"
-                ~span:info.decl_span
-                (Printf.sprintf "cannot capture 'ref' or 'out' parameter '%s' in a closure" name)
-              :: !cap_errs
-          else
-            caps := (name, info.ty) :: !caps
-        | None -> ())
-    used;
-  if !cap_errs <> [] then Error (List.rev !cap_errs)
-  else Ok (List.sort (fun (a, _) (b, _) -> String.compare a b) !caps)
-
-module OutCheck = struct
-  module SSet = Set.Make(String)
-
-  let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
-    match e.desc with
-    | Typed_ast.TExprAssign (Typed_ast.TLValIdent name, _, rhs) ->
-      let acc' = assigned_in_expr rhs acc in
-      SSet.add name acc'
-    | Typed_ast.TExprAssign (Typed_ast.TLValIndex (base, idx), _, rhs) ->
-      let acc1 = assigned_in_expr base acc in
-      let acc2 = assigned_in_expr idx acc1 in
-      assigned_in_expr rhs acc2
-    | Typed_ast.TExprCall { args; _ } ->
-      List.fold_left
-        (fun s (arg : Typed_ast.typed_call_arg) ->
-          let s' =
-            match arg.tca_mode, arg.tca_expr.desc with
-            | Ty.ParamOut, Typed_ast.TExprIdent nm -> SSet.add nm s
-            | _ -> s
-          in
-          assigned_in_expr arg.tca_expr s')
-        acc args
-    | Typed_ast.TExprUnary (_, sub) -> assigned_in_expr sub acc
-    | Typed_ast.TExprBinary (_, lhs, rhs) ->
-      assigned_in_expr rhs (assigned_in_expr lhs acc)
-    | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
-      assigned_in_expr e3 (assigned_in_expr e2 (assigned_in_expr e1 acc))
-    | Typed_ast.TExprIncDec (_, Typed_ast.TLValIdent name) ->
-      SSet.add name acc
-    | Typed_ast.TExprIncDec (_, Typed_ast.TLValIndex (base, idx)) ->
-      assigned_in_expr idx (assigned_in_expr base acc)
-    | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
-      List.fold_left
-        (fun s item ->
-          match item with
-          | Typed_ast.TItemExpr sub -> assigned_in_expr sub s
-          | Typed_ast.TItemSpread sub -> assigned_in_expr sub s)
-        acc items
-    | Typed_ast.TExprIndex (base, idx) ->
-      assigned_in_expr idx (assigned_in_expr base acc)
-    | Typed_ast.TExprInterp parts ->
-      List.fold_left
-        (fun s part ->
-          match part with
-          | Typed_ast.TInterpLit _ -> s
-          | Typed_ast.TInterpExpr (sub, _) -> assigned_in_expr sub s)
-        acc parts
-    | Typed_ast.TExprInput { prompt = Some p; _ } -> assigned_in_expr p acc
-    | _ -> acc
-
-  let check_fun (fn_name : string) (fn_span : Span.t) (params : Typed_ast.typed_param list) (body : Typed_ast.stmt list) : Diagnostic.t list =
-    let required =
-      List.filter_map
-        (fun (p : Typed_ast.typed_param) ->
-          if p.tp_mode = Ty.ParamOut then Some p.tp_name else None)
-        params
-    in
-    if required = [] then []
-    else
-      let errors = ref [] in
-      let check_assigned span current =
-        List.iter
-          (fun p ->
-            if not (SSet.mem p current) then
-              errors :=
-                Diagnostic.error
-                  ~code:"E0117"
-                  ~span
-                  (Printf.sprintf "out parameter '%s' must be assigned before returning from function '%s'" p fn_name)
-                :: !errors)
-          required
-      in
-      let rec check_stmts (stmts : Typed_ast.stmt list) (curr : SSet.t) : SSet.t =
-        List.fold_left check_stmt_flow curr stmts
-      and check_stmt_flow (curr : SSet.t) (s : Typed_ast.stmt) : SSet.t =
-        match s.desc with
-        | Typed_ast.TStmtReturn _ ->
-          check_assigned s.span curr;
-          curr
-        | Typed_ast.TStmtExpr e ->
-          assigned_in_expr e curr
-        | Typed_ast.TStmtBlock ss ->
-          check_stmts ss curr
-        | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
-          let curr_cond = assigned_in_expr cond curr in
-          let then_out = check_stmt_flow curr_cond then_branch in
-          (match else_branch with
-           | Some eb ->
-             let else_out = check_stmt_flow curr_cond eb in
-             if stmt_always_returns then_branch && stmt_always_returns eb then
-               curr_cond
-             else if stmt_always_returns then_branch then
-               else_out
-             else if stmt_always_returns eb then
-               then_out
-             else
-               SSet.inter then_out else_out
-           | None ->
-             curr_cond)
-        | Typed_ast.TStmtWhile { cond; body; _ } ->
-          let curr_cond = assigned_in_expr cond curr in
-          ignore (check_stmt_flow curr_cond body);
-          curr_cond
-        | Typed_ast.TStmtFor { init; cond; step; body; _ } ->
-          let curr_init =
-            match init with
-            | Typed_ast.TForInitExpr e -> assigned_in_expr e curr
-            | _ -> curr
-          in
-          let curr_cond = assigned_in_expr cond curr_init in
-          ignore (check_stmt_flow curr_cond body);
-          ignore (assigned_in_expr step curr_cond);
-          curr_cond
-        | Typed_ast.TStmtForeach { collection; body; _ } ->
-          let curr_coll = assigned_in_expr collection curr in
-          ignore (check_stmt_flow curr_coll body);
-          curr_coll
-        | _ -> curr
-      in
-      let final_assigned = check_stmts body SSet.empty in
-      if not (List.exists stmt_always_returns body) then begin
-        List.iter
-          (fun p ->
-            if not (SSet.mem p final_assigned) then
-              errors :=
-                Diagnostic.error
-                  ~code:"E0117"
-                  ~span:fn_span
-                  (Printf.sprintf "out parameter '%s' must be assigned before end of function '%s'" p fn_name)
-                :: !errors)
-          required
-      end;
-      List.rev !errors
-end
-
-let rec check_stmt
+and check_stmt
     (env : env)
     (scope_vars : string list ref)
     (loop_stack : active_loop list)
@@ -1678,10 +1849,10 @@ and check_stmt_inner
       Error [ Diagnostic.error ~hint ~code:"E0111" ~span msg ]
     in
     (match !current_fun with
-     | None ->
+     | RetNone ->
        ret_err "'return' used outside of a function"
          "'return' can only appear inside the body of a 'fun' or 'act'" s.span
-     | Some ret_ty ->
+     | RetExplicit ret_ty ->
        (match eo with
         | None ->
           if ret_ty = Ty.Void then
@@ -1705,7 +1876,31 @@ and check_stmt_inner
                  ret_err
                    (Printf.sprintf "type mismatch in 'return': expected '%s', found '%s'"
                       (Ty.to_string ret_ty) (Ty.to_string te.ty))
-                   "the returned value must have exactly the declared return type" te.span)))
+                   "the returned value must have exactly the declared return type" te.span))
+     | RetInferred r_ref ->
+       (match eo with
+        | None ->
+          ret_err
+            "'return' without a value in an anonymous 'fun'"
+            "provide a value, e.g. 'return <expr>;', or use 'act(...) => ...' for a void procedure"
+            s.span
+        | Some e ->
+          (match check_expr env e with
+           | Error err -> Error [ err ]
+           | Ok te ->
+             (match !r_ref with
+              | None ->
+                r_ref := Some te.ty;
+                Ok { Typed_ast.desc = Typed_ast.TStmtReturn (Some te); span = s.span }
+              | Some prev_ty ->
+                if Ty.equal te.ty prev_ty then
+                  Ok { Typed_ast.desc = Typed_ast.TStmtReturn (Some te); span = s.span }
+                else
+                  ret_err
+                    (Printf.sprintf "type mismatch in 'return': expected '%s', found '%s'"
+                       (Ty.to_string prev_ty) (Ty.to_string te.ty))
+                    "all 'return' branches in an anonymous 'fun' must return the exact same type"
+                    te.span))))
   | Ast.StmtFunDecl fd ->
     let conflict_errs =
       match find_conflict env fd.fd_name with
@@ -1746,7 +1941,7 @@ and check_stmt_inner
          Hashtbl.iter (fun k _ -> Hashtbl.replace outer k ()) env;
          let saved_fun = !current_fun in
          let saved_outer = !fn_outer in
-         current_fun := Some ret;
+         current_fun := RetExplicit ret;
          fn_outer := Some outer;
          List.iter2
            (fun (p : Ast.fun_param) (tp : Typed_ast.typed_param) ->
@@ -2746,7 +2941,7 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   let saved_fun = !current_fun in
   let saved_outer = !fn_outer in
   root_scope_ref := Some root_scope;
-  current_fun := None;
+  current_fun := RetNone;
   fn_outer := None;
   List.iter
     (fun stmt ->

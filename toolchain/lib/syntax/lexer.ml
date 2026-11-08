@@ -559,6 +559,9 @@ let rec tokenize_range (src : Source.t) (start_pos : Span.pos) (end_offset : int
           if peek st = '=' then begin
             advance st;
             emit Token.EQ_EQ start_pos (cur_pos st)
+          end else if peek st = '>' then begin
+            advance st;
+            emit Token.FAT_ARROW start_pos (cur_pos st)
           end else
             emit Token.EQUAL start_pos (cur_pos st)
         | '!' when peek_next st = '=' ->

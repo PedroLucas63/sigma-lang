@@ -93,6 +93,13 @@ type arg_mode =
       var_type : type_expr option;
     }
 
+type fun_param = {
+  param_name : string;
+  param_span : Span.t;
+  param_mode : param_mode;
+  param_type : type_expr;
+}
+
 type collection_item =
   | ItemExpr of expr
   | ItemSpread of expr * Span.t
@@ -100,6 +107,13 @@ type collection_item =
 and lvalue =
   | LValIdent of string * Span.t
   | LValIndex of expr * expr * Span.t
+
+and lambda_expr = {
+  lam_is_act : bool;
+  lam_params : fun_param list;
+  lam_ret : type_expr option;
+  lam_body : stmt list;
+}
 
 and expr_desc =
   | ExprInt of int64
@@ -115,6 +129,7 @@ and expr_desc =
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
   | ExprCall of expr * call_arg list
+  | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr
@@ -140,7 +155,7 @@ and expr = {
   span : Span.t;
 }
 
-type var_decl = {
+and var_decl = {
   name : string;
   name_span : Span.t;
   is_const : bool;
@@ -148,36 +163,29 @@ type var_decl = {
   init : expr option;
 }
 
-type destruct_decl = {
+and destruct_decl = {
   names : (string * Span.t) list;
   is_const : bool;
   ty_annot : type_expr option;
   init : expr option;
 }
 
-type for_init =
+and for_init =
   | ForInitVarDecl of var_decl
   | ForInitDestruct of destruct_decl
   | ForInitExpr of expr
 
-type foreach_binding =
+and foreach_binding =
   | ForeachVar of string * Span.t
   | ForeachDestruct of (string * Span.t) list
 
-type foreach_head = {
+and foreach_head = {
   binding : foreach_binding;
   is_const : bool;
   ty_annot : type_expr option;
 }
 
-type fun_param = {
-  param_name : string;
-  param_span : Span.t;
-  param_mode : param_mode;
-  param_type : type_expr;
-}
-
-type stmt_desc =
+and stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
   | StmtBlock of stmt list

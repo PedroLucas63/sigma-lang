@@ -38,6 +38,7 @@ type kind =
   | STRING of string
   | INTERP_STRING of interp_segment list
   | COLON
+  | FAT_ARROW
   | EQUAL
   | COLON_EQUAL
   | PLUS_EQ
