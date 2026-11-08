@@ -239,3 +239,47 @@ assert(resto3, 3);
 - Parâmetros `ref` ou `out` não podem ser capturados por closures aninhadas (`E0118`) por garantia de tempo de vida de memória (*stack safety*).
 - O compilador rejeita incompatibilidades de modo entre o parâmetro e a chamada (`E0116`).
 
+---
+
+## 7. Funções e Procedimentos Anônimos (`fun(...) => ...` / `act(...) => ...`)
+
+A Sigma suporta expressões de funções e procedimentos anônimos (*lambdas*) utilizando o operador `=>`:
+
+- **Sintaxe geral:** `[fun | act]({<parâmetro>})[: <tipo-retorno>] => <comando ou expressão>`
+- Em `fun(...)`, o `: <tipo-retorno>` é **opcional**: quando omitido, o compilador infere automaticamente o tipo a partir da expressão ou das instruções `return` do corpo (`: void` em `fun` é proibido com `E0113`).
+- Em `act(...)`, o retorno é sempre `void` e especificar `: <tipo>` é proibido com `E0113`.
+
+### Formas de Corpo após `=>`
+1. **Expressão direta (`fun` retorna o valor; `act` avalia pelos efeitos colaterais):**
+```sigma
+var mul : int(int, int) = fun(a: int, b: int): int => a * b;
+var soma := fun(a: int, b: int) => a + b; # infere int(int, int)
+
+var total := 0;
+var acumular := act(v: int) => total += v;
+acumular(15);
+```
+
+2. **Comando único sem chaves (`return`, `if`/`else`, `while`, `for`, `foreach`, `print`, `println`, `assert`):**
+```sigma
+var abs_fn := fun(x: int) => if (x >= 0) return x; else return -x;
+var log := act(msg: string) => println("[LOG]", msg);
+```
+
+3. **Bloco com chaves (`{ ... }`):**
+```sigma
+var divmod := fun(a: int, b: int, out resto: int): int => {
+    resto = a % b;
+    return a // b;
+};
+var q := divmod(17, 5, out var r);
+```
+
+### Paridade Completa de Recursos
+Funções e procedimentos anônimos suportam todos os recursos das funções nomeadas:
+- **Closures léxicas** capturando variáveis externas mutáveis por referência;
+- **Aplicação parcial (*currying*)** e **argumentos nomeados** (`soma(b=20, a=10)`);
+- **Parâmetros `shallow const` por padrão**, `ref` e `out` (incluindo `out var` na chamada);
+- **Invocação imediata (IIFE):** `(fun(x: int) => x * x)(9)`.
+
+

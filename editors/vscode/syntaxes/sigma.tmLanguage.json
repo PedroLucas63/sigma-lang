@@ -183,6 +183,10 @@
           "match": "//=|<<=|>>=|\\+=|\\-=|\\*=|/=|%=|\\^="
         },
         {
+          "name": "storage.type.function.arrow.sigma",
+          "match": "=>"
+        },
+        {
           "name": "keyword.operator.comparison.sigma",
           "match": "==|!=|<=|>="
         },

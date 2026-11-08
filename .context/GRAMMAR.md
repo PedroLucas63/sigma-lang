@@ -41,6 +41,7 @@
 | Literal | `STRING of string` | `"..."` (UTF-8 arbitrário com escapes, sem `${...}`) |
 | Literal | `INTERP_STRING of interp_segment list` | `"...${expr}..."` (string formatada/interpolada UTF-8) |
 | Pontuação | `COLON` | `:` |
+| Operador | `FAT_ARROW` | `=>` |
 | Operador | `EQUAL` | `=` |
 | Operador | `COLON_EQUAL` | `:=` |
 | Operador | `PLUS_EQ` | `+=` |
@@ -181,11 +182,18 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
+                | lambda_expr
                 | input_expr
                 | prompt_expr
                 | "(" expr ")"
                 | "(" elem_or_spread ( "," elem_or_spread )* ","? ")"
                 | "[" ( elem_or_spread ( "," elem_or_spread )* ","? )? "]" ;
+
+lambda_expr   ::= "fun" "(" params? ")" ( ":" type_expr )? "=>" lambda_body
+                | "act" "(" params? ")" "=>" lambda_body ;
+lambda_body   ::= block_stmt
+                | inline_stmt
+                | expr ;
 
 input_expr     ::= "input" "(" ( INTERP_STRING | IDENT ( "," IDENT )* )? ")" ;
 prompt_expr    ::= "prompt" "(" expr ( "," ( INTERP_STRING | IDENT ( "," IDENT )* ) )? ")" ;
@@ -309,6 +317,8 @@ and expr_desc =
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
+  | ExprCall of expr * call_arg list
+  | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
   | ExprBinary of binop * expr * expr
   | ExprChainCmp of expr * binop * expr * binop * expr

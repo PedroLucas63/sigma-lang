@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `const`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `input`, `prompt`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `const`, `fun`, `act`, `return`, `ref`, `out`, `void`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `input`, `prompt`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -20,7 +20,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
   - `decimal` (128 bits Base-10 Exato até 38 dígitos): literais com sufixo `m` (`10m`, `10.9m`, `123_456.789_012_345_678_901_234_567_89m`).
 - **Literais de Caractere (`char`):** Aspas simples `'...'`, contendo **1 code point Unicode UTF-8** (`'A'`, `'ç'`, `'Σ'`, `'🚀'`) ou escape (`\n`, `\r`, `\t`, `\\`, `\'`, `\"`, `\0`, `\$`).
 - **Literais de Texto (`string` e Interpolação Formatada):** Aspas duplas `"..."`, suportando UTF-8, escapes e interpolação de expressões arbitrárias com especificadores opcionais de formatação `${expr : [fill][<|>|^][+][0][width][.precision]}`.
-- **Operadores e Delimitadores:** `:`, `=`, `:=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `..`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `[`, `]`, `{`, `}`, `,`, `;`
+- **Operadores e Delimitadores:** `:`, `=`, `:=`, `=>`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `and=`, `or=`, `xor=`, `<<=`, `>>=`, `++`, `--`, `..`, `+`, `-`, `*`, `/`, `//`, `^`, `%`, `<<`, `>>`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `(`, `)`, `[`, `]`, `{`, `}`, `,`, `;`
 
 ---
 
@@ -97,14 +97,28 @@ mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
 power         ::= postfix ( "^" unary )? ;
-postfix       ::= primary ( "[" expr "]" | "++" | "--" )* ;
+postfix       ::= primary ( "[" expr "]" | "(" call_arg_list? ")" | "++" | "--" )* ;
+call_arg_list ::= call_arg ( "," call_arg )* ;
+call_arg      ::= ( IDENT "=" )? ( "ref" expr | "out" "var" IDENT ( ":" type_expr )? | "out" expr | expr ) ;
 primary       ::= INT | FLOAT | DOUBLE | DECIMAL | BOOL | CHAR | STRING | INTERP_STRING
                 | IDENT
+                | lambda_expr
                 | input_expr
                 | prompt_expr
                 | "(" expr ")"
                 | "(" elem_or_spread ( "," elem_or_spread )+ ")"
                 | "[" ( elem_or_spread ( "," elem_or_spread )* )? "]" ;
+lambda_expr   ::= "fun" "(" param_list? ")" ( ":" type_expr )? "=>" lambda_body
+                | "act" "(" param_list? ")" "=>" lambda_body ;
+lambda_body   ::= block_stmt
+                | return_stmt
+                | if_stmt
+                | loop_stmt
+                | break_stmt
+                | continue_stmt
+                | print_stmt
+                | assert_stmt
+                | expr ;
 input_expr    ::= "input" "(" ( PRIM_TYPE ( "," PRIM_TYPE )* | INTERP_MASK )? ")" ;
 prompt_expr   ::= "prompt" "(" expr ( "," ( PRIM_TYPE ( "," PRIM_TYPE )* | INTERP_MASK ) )? ")" ;
 elem_or_spread ::= ".." expr | expr ;

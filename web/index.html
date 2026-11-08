@@ -190,7 +190,7 @@
       <div class="card">
         <div class="toolbar">
           <select id="example-select">
-            <option value="functions_actions">1. Funções (fun), Procedimentos (act), Chamadas Parciais e Argumentos Nomeados</option>
+            <option value="functions_actions">1. Funções (fun/act), Funções Anônimas (=&gt;), Closures, ref/out e Chamadas Parciais</option>
             <option value="input_format">2. Entrada Tipada (input / prompt), Máscaras e Formatação ${expr:spec}</option>
             <option value="loops">3. Laços de Repetição (while, for, foreach), Desempacotamento e Rótulos (break / continue)</option>
             <option value="tuples_arrays">3. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos, Spread (..) e Referências</option>
@@ -390,6 +390,16 @@ var c : int;                    # zero-init -> 0</pre>
           <li><strong>Formatação em Interpolação (<code>"${expr : [fill][&lt;|&gt;|^][+][0][width][.prec]}"</code>):</strong> Alinhamento à esquerda (<code>&lt;</code>), direita (<code>&gt;</code>) ou centralizado (<code>^</code>) com caractere de preenchimento (ex: <code>"${s:-^10}"</code>), sinal <code>+</code>, zero-padding <code>0</code> (ex: <code>"${n:+06}"</code>) e casas decimais <code>.N</code> para <code>float</code>, <code>double</code> e <code>decimal</code> (ex: <code>"${pi:.2}"</code>) ou truncamento de <code>string</code>.</li>
         </ul>
       </article>
+      <article class="card">
+        <h3>14. Funções (<code>fun</code>), Procedimentos (<code>act</code>), Funções Anônimas (<code>=&gt;</code>), Closures e <code>ref</code> / <code>out</code></h3>
+        <p>Funções e procedimentos de primeira classe com captura léxica, aplicação parcial e modos explícitos de passagem de parâmetros:</p>
+        <ul>
+          <li><strong>Declarações Nomeadas e Anônimas (Lambdas):</strong> Além de <code>fun f(a: int): int { ... }</code> e <code>act p(x: int) { ... }</code>, Sigma suporta funções e procedimentos anônimos na forma <code>[fun | act](&lt;params&gt;)[: &lt;ret&gt;] =&gt; &lt;comando ou bloco&gt;</code>, com inferência automática de tipo de retorno em <code>fun</code> quando <code>: &lt;ret&gt;</code> é omitido (ex: <code>var mul := fun(a: int, b: int) =&gt; a * b;</code>).</li>
+          <li><strong>Corpo Flexível após <code>=&gt;</code>:</strong> Aceita expressão direta (<code>=&gt; a * b</code>), comando inline sem chaves (<code>=&gt; return a * b</code>, <code>=&gt; if (x &gt;= 0) return x; else return -x</code>, <code>=&gt; println(x)</code>) ou bloco com chaves <code>=&gt; { ... }</code>.</li>
+          <li><strong>Aplicação Parcial (Currying) e Argumentos Nomeados:</strong> Chamar uma função (nomeada ou anônima) com menos argumentos retorna uma nova função parcial (<code>var dobro := mul(2);</code>), e argumentos podem ser passados por nome em qualquer ordem (<code>mul(b=7, a=6)</code>).</li>
+          <li><strong>Parâmetros <code>shallow const</code>, <code>ref</code> e <code>out</code> / <code>out var</code>:</strong> Parâmetros por valor são imutáveis na referência (<code>E0107</code>); <code>ref</code> permite mutar a variável do chamador (<code>E0115</code>/<code>E0116</code>); <code>out</code> exige atribuição definitiva em todos os fluxos (<code>E0117</code>) e permite declaração inline <code>out var r</code> na chamada.</li>
+        </ul>
+      </article>
     </div>
 
     <!-- TABELA DE PRECEDÊNCIA -->
@@ -499,8 +509,15 @@ fun dividir(a: int, b: int, out resto: int): int {
 }
 
 var q := dividir(10, 3, out var r);
-println("dividir 10 / 3: quociente =", q, "resto =", r);`,
-        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15\nc() = 101\nc() = 102\nswap: 20 10\ndividir 10 / 3: quociente = 3 resto = 1`
+println("dividir 10 / 3: quociente =", q, "resto =", r);
+
+# Funções e procedimentos anônimos (lambdas com '=>')
+var mul := fun(a: int, b: int): int => a * b;
+var abs_fn := fun(x: int) => if (x >= 0) return x; else return -x;
+var acumular := act(v: int) => contador += v;
+acumular(27);
+println("mul(6, 7) =", mul(6, 7), "| abs(-42) =", abs_fn(-42), "| contador =", contador);`,
+        out: `soma(10, 25) = 35\nsoma(b=30, a=70) = 100\nContador final: 15\nc() = 101\nc() = 102\nswap: 20 10\ndividir 10 / 3: quociente = 3 resto = 1\nmul(6, 7) = 42 | abs(-42) = 42 | contador = 42`
       },
       input_format: {
         code: `# @stdin: 123.456.789-07

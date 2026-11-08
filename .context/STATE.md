@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M2 — Parâmetros ref, out, out var e Shallow Const (Concluído)`
-- **Git Flow:** Branch ativa `feature/ref-out-parameters` sobre `develop`.
+- **Milestone:** `M2 — Funções e Procedimentos Anônimos (Concluído)`
+- **Git Flow:** Branch ativa `develop` (`feature/anonymous-functions` mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -27,9 +27,10 @@
 - [x] Estruturas de repetição `while (<bool-expr>) <stmt>`, `for (<init>; <bool-expr>; <step>) <stmt>` (com declaração local simples/desempacotada ou expressão em `<init>`) e `foreach (var/const <binding> [:<type>] in <array>) <stmt>` (com suporte a variável simples e desempacotamento `var (a, b) in l`), além de laços rotulados `<label>:` e `break [<label>];` / `continue [<label>];` (`E0109`).
 - [x] Funções de primeira classe `fun` e procedimentos `act`, aplicação parcial automática (currying), argumentos nomeados (`f(b=10, a=20)`), e closures com captura léxica de escopo e células de referência compartilhadas (`tests/10_closures_test.sgm`).
 - [x] Parâmetros `shallow const` por padrão (reatribuição `a = ...` proibida com `E0107`, mutação de elementos `a[0] = ...` permitida), modificador `ref` para passagem por referência, modificador `out` com atribuição definitiva em todos os caminhos (`E0117`) e declaração inline `out var <name> [:<type>]` (`tests/11_ref_out_parameters_test.sgm`).
+- [x] Funções e procedimentos anônimos `[fun|act]({<param>})[:<return-type>] => <command>` com inferência opcional do tipo de retorno em `fun`, corpo em expressão direta, comando inline sem chaves ou bloco `{ ... }`, closures léxicas, `ref`/`out`, currying, argumentos nomeados e IIFE (`tests/12_anonymous_functions_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 334 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (11 suítes).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 379 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (12 suítes).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
@@ -46,4 +47,5 @@
 - **2026-10-24:** Constantes `const`, testes integrados (`assert`, `assert_error`), `sigma test` (`--parity`), `sigma.toml` e CI/CD (`ADR-021` a `ADR-023`).
 - **2026-10-27:** Tuplas imutáveis, desempacotamento, arrays estáticos, spread `..` e semântica de referência (`ADR-024`).
 - **2026-10-29:** Laços `while`, `for`, `foreach`, rótulos `break`/`continue` (`ADR-025`), `input`/`prompt`, `${expr:spec}` (`ADR-026`) e transpilação `sigma emit-c` (`ADR-027`).
-- **2026-11-02:** Streaming de stdout imediato (`v0.2.2`), funções/procedimentos (`fun`/`act`), currying, parâmetros nomeados (`ADR-028`) e closures com captura léxica por referência (`ADR-029`, 301 asserções, paridade 100%).
+- **2026-11-02:** Streaming de stdout imediato (`v0.2.2`), funções/procedimentos (`fun`/`act`), currying, parâmetros nomeados (`ADR-028`), closures com captura léxica (`ADR-029`) e parâmetros `shallow const`, `ref`, `out` e `out var` (`ADR-030`, 334 asserções).
+- **2026-11-08:** Funções e procedimentos anônimos `[fun,act]({<param>})[:<ret>] => <command>` com inferência de retorno, comandos inline/bloco e paridade VM/C99 (`ADR-031`, 379 asserções em 12 suítes).
