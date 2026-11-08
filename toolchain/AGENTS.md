@@ -25,7 +25,10 @@ Para manter desacoplamento profissional e permitir que o Interpretador, Compilad
 
 ## Diretrizes de Código OCaml para IA
 
-1. **Interfaces Explícitas (`.mli`):** Todo módulo público deve possuir um `.mli` enxuto e documentado. Atualize o `.mli` **antes** do `.ml`.
-2. **Erros Tipados:** Use `Result.t` (`('a, Diagnostic.t list) result`) entre os estágios do pipeline. Nunca use `raise` ou `failwith` para erros de código do usuário.
-3. **Formatação & Impressão:** Inclua funções `pp` (pretty-printing) enxutas nos módulos de AST, Tipos e IR para facilitar *expect tests* e leitura rápida por IA.
-4. **Testes Rápidos:** Use `dune runtest` para validar alterações, garantindo paridade de saída entre `sigma_interp` e `sigma_codegen`.
+1. **Limite de Tamanho de Arquivo e Modularização (Alvo $\le 300$ linhas, Máximo $\le 500$ linhas):**
+   - Nenhum arquivo `.ml` ou `.mli` pode ultrapassar **500 linhas** (busque sempre manter até **300 linhas**).
+   - Evite arquivos monolíticos: estruture cada biblioteca (`sigma_syntax`, `sigma_sema`, `sigma_ir`, `sigma_interp`, `sigma_codegen`, etc.) em submódulos coesos e ortogonais, aplicando padrões de projeto e eliminando *code smells*. Novas features devem preferencialmente adicionar novos arquivos/módulos focados em vez de inflar arquivos existentes.
+2. **Interfaces Explícitas (`.mli`):** Todo módulo público deve possuir um `.mli` enxuto e documentado. Atualize o `.mli` **antes** do `.ml`.
+3. **Erros Tipados:** Use `Result.t` (`('a, Diagnostic.t list) result`) entre os estágios do pipeline. Nunca use `raise` ou `failwith` para erros de código do usuário.
+4. **Formatação & Impressão:** Inclua funções `pp` (pretty-printing) enxutas nos módulos de AST, Tipos e IR para facilitar *expect tests* e leitura rápida por IA.
+5. **Testes Rápidos:** Use `dune runtest` para validar alterações, garantindo paridade de saída entre `sigma_interp` e `sigma_codegen`.

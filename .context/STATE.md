@@ -36,9 +36,17 @@
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
-## Próximos Passos Sugeridos (Aguardando Comando do Usuário)
-- [ ] Arrays dinâmicos ou métodos/propriedades nativas (`len`, `push`, etc.).
-- [ ] Módulos ou importações de outros arquivos `.sgm`.
+## Próximos Passos Planejados (Roadmap Oficial em Ordem de Execução)
+1. [ ] **Manutenção e Modularização do Código:** Reduzir todos os arquivos para no máximo 500 linhas (meta $\le 300$ linhas), aplicando padrões de projeto, removendo *code smells* e decompondo módulos grandes (`parser`, `typecheck`, `lower`, `vm`, `codegen_c`, `test`).
+2. [ ] **Estruturas `class`, `struct` e `record` (Fase 1 — Campos e Igualdade):** `class` (igualdade por referência), `struct` (igualdade por valor) e `record` (imutável, igualdade por valor), inicialmente armazenando valores e suportando `==` e `!=`.
+3. [ ] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
+4. [ ] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
+5. [ ] **Importação e Exportação Preguiçosa (`import` / `export`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso.
+6. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
+7. [ ] **Métodos de Instância e Estáticos para Estruturas (`class`, `struct`, `record`).**
+8. [ ] **Biblioteca de Estruturas de Dados Dinâmicas:** `list`, `stack`, `queue`, `set`, `dict`.
+9. [ ] **Biblioteca Matemática Simples (`math`):** `sum`, `max`, `min`, `sin`, `cos` e constantes matemáticas.
+10. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas, estilo NumPy).**
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).

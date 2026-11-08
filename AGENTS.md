@@ -42,14 +42,47 @@ Sempre que o usuário pedir uma feature (ex: *"implemente a soma"*), siga estrit
    - Implemente o pipeline completo, rode os testes (`dune runtest`) e sincronize `.context/` via skill `context-sync`.
    - Faça commits atômicos usando *Conventional Commits* e conclua a feature com `git flow feature finish <nome-da-feature>` (quando todos os testes passarem).
 
-## 4. Padrão de Qualidade ("Profissional desde o Dia 1")
+## 4. Padrão de Qualidade, Modularidade e Limite de Linhas ("Profissional desde o Dia 1")
 
+- **Limite Estrito de Tamanho de Arquivo (300–500 linhas):**
+  - **Meta ideal:** até **300 linhas** por arquivo.
+  - **Teto máximo absoluto:** **500 linhas** por arquivo (nenhum arquivo `.ml`, `.mli`, `.ts`, etc. deve ultrapassar 500 linhas).
+  - **Arquitetura Modular (Open/Closed & Clean Code):** Novas funcionalidades não devem inflar arquivos monolíticos existentes; decomponha responsabilidades em submódulos coesos, aplique padrões de projeto (*Design Patterns*), boas práticas de engenharia de software e elimine *code smells* continuamente.
 - Mesmo a feature mais simples (ex: somar `1 + 2`) deve atravessar o pipeline completo e modular:
   `Source + Span` → `Lexer` → `Parser (CST/AST)` → `Sema/Typecheck` → `IR/Bytecode` → `Interpreter` & `Compiler` → `Diagnostics`.
 - Nenhuma etapa pode usar `failwith` ou exceções genéricas para erros do usuário final: todo erro deve passar pelo módulo de **Diagnostics** com localização exata (`Span`: arquivo, linha, coluna).
 - Toda feature da linguagem exige testes automatizados (unitários ou *expect tests* via Dune) antes de ser dada como concluída.
 
-## 5. Rastreabilidade com Git & Git Flow (`git-flow-next`)
+## 5. Roadmap Arquitetural e Diretrizes de Design da Linguagem
+
+As próximas evoluções da linguagem devem seguir esta ordem e diretrizes de projeto:
+
+1. **Manutenção, Refatoração Modular e Redução de Arquivos (Próxima Atualização Prioritária):**
+   - Refatorar os módulos atuais (especialmente arquivos acima de 500 linhas como `parser.ml`, `typecheck.ml`, `lower.ml`, `vm.ml`, `codegen_c.ml` e testes) dividindo-os em submódulos menores (alvo $\le 300$ linhas, máximo estrito $\le 500$ linhas), aplicando padrões de projeto e removendo *bad smells* de forma que novas features possam ser adicionadas criando novos módulos desacoplados.
+2. **Estruturas de Dados Definidas pelo Usuário (`class`, `struct`, `record`):**
+   - `class`: mutável, semântica de referência e igualdade por referência (`==` / `!=`).
+   - `struct`: mutável, semântica de valor e igualdade estrutural por valor (`==` / `!=`).
+   - `record`: imutável, semântica de valor e igualdade estrutural por valor (`==` / `!=`).
+   - Na primeira etapa, devem armazenar campos/valores e suportar os operadores de igualdade (`==`) e diferença (`!=`).
+3. **Ponto de Entrada Automático (`main`):**
+   - Se o arquivo executado não possuir instruções executáveis fora de funções/métodos e existir uma definição compatível com `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int`, o runtime/compilador deve invocá-la automaticamente como ponto de entrada.
+4. **Scripts com Funções de Ponto de Entrada no `sigma.toml`:**
+   - Permitir configurar scripts e pontos de entrada no manifesto `sigma.toml` apontando diretamente para funções de entrada específicas.
+5. **Sistema de Módulos (`import` / `export`) com Carregamento Preguiçoso (*Lazy / Dead-Code Elimination*):**
+   - Estilo de importação inspirado em Python (importar o módulo com seu próprio nome, renomear com alias ou importar símbolos/métodos diretamente).
+   - **Semântica Preguiçosa (*Lazy Import / Tree-Shaking*):** Apenas os símbolos efetivamente utilizados são importados/compilados para a aplicação final, e no ponto exato em que são utilizados, mesmo que a biblioteca exporte muito mais conteúdo.
+6. **Separação da Biblioteca de Entrada e Saída (`io`):**
+   - Modularizar as operações de entrada e saída (`print`, `println`, `input`, `prompt`, etc.) em uma biblioteca padrão dedicada.
+7. **Métodos de Instância e Métodos Estáticos para Estruturas:**
+   - Adicionar suporte a métodos associados a instâncias e métodos estáticos em `class`, `struct` e `record`.
+8. **Biblioteca Padrão de Estruturas de Dados Dinâmicas:**
+   - Implementar coleções dinâmicas nativas/padrão: `list`, `stack`, `queue`, `set` e `dict`.
+9. **Biblioteca de Operações e Constantes Matemáticas Simples (`math`):**
+   - Funções matemáticas fundamentais (`sum`, `max`, `min`, `sin`, `cos`, etc.) e constantes matemáticas (`PI`, `E`, `TAU`, etc.).
+10. **Computação Científica Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas):**
+    - Arquitetura de alto desempenho inspirada no NumPy para vetores, matrizes e álgebra linear avançada, projetada em múltiplas etapas e com suporte nativo à aceleração por **GPU**.
+
+## 6. Rastreabilidade com Git & Git Flow (`git-flow-next`)
 
 - **Modelo de Branches (Preset Classic):**
   - `main`: Código de produção / releases fechadas com tags (`v0.1.0`, etc.).

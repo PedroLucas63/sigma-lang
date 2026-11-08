@@ -28,7 +28,8 @@ Antes de escrever código OCaml, defina em [`.context/GRAMMAR.md`](file:///var/h
 - Novos construtores na AST / Typed AST
 - Novos opcodes de IR
 
-### 2. Interfaces `.mli` Primeiro
+### 2. Interfaces `.mli` Primeiro & Modularidade Estrita ($\le 300$ / $\le 500$ linhas)
+- **Regra de Tamanho de Arquivo:** Mantenha cada arquivo `.ml`/`.mli` com no máximo **500 linhas** (buscando sempre até **300 linhas**). Se um módulo se aproximar desse limite, extraia a nova feature em um submódulo dedicado (ex: `typecheck_expr.ml`, `typecheck_stmt.ml`, `codegen_runtime.ml`) aplicando padrões de projeto e evitando *code smells*.
 Em cada biblioteca afetada dentro de `toolchain/lib/`, atualize ou crie o arquivo `.mli` antes do `.ml`:
 1. **`lang_syntax`**:
    - Todos os nós da AST devem carregar `Span.t` (`{ desc : ...; span : Span.t }`).
