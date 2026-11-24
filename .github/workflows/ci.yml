@@ -29,6 +29,9 @@ jobs:
           sudo apt-get install -y gcc make
           opam install -y dune
 
+      - name: Verificar Limite Modular de Linhas (<= 500)
+        run: ./toolchain/scripts/check_file_sizes.sh --strict
+
       - name: Compilar Toolchain
         run: |
           cd toolchain
