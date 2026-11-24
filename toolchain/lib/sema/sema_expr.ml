@@ -51,17 +51,38 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
             ~code:"E0102" ~span:e.span
             (Printf.sprintf "use of undeclared variable '%s'" name)))
   | Ast.ExprCall (callee, args) ->
-    (match check_expr hooks env callee with
-     | Error err -> Error err
-     | Ok tcallee ->
-       (match tcallee.ty with
-        | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
-        | other ->
-          Error
-            (Diagnostic.error
-               ~hint:"only values of function type ('fun'/'act') can be called"
-               ~code:"E0112" ~span:callee.span
-               (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))
+    (match callee.desc with
+     | Ast.ExprIdent name ->
+       (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
+        | Some res -> res
+        | None ->
+          (match check_expr hooks env callee with
+           | Error err -> Error err
+           | Ok tcallee ->
+             (match tcallee.ty with
+              | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
+              | other ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"only values of function type ('fun'/'act') can be called"
+                     ~code:"E0112" ~span:callee.span
+                     (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
+     | _ ->
+       (match check_expr hooks env callee with
+        | Error err -> Error err
+        | Ok tcallee ->
+          (match tcallee.ty with
+           | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
+           | other ->
+             Error
+               (Diagnostic.error
+                  ~hint:"only values of function type ('fun'/'act') can be called"
+                  ~code:"E0112" ~span:callee.span
+                  (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
+  | Ast.ExprStructInit (name, args) ->
+    Sema_user_types.check_struct_init hooks env ~span:e.span name args
+  | Ast.ExprField (base, field) ->
+    Sema_user_types.check_field_access hooks env ~span:e.span base field
   | Ast.ExprLambda lam -> Sema_expr_special.check_lambda_expr hooks env e.span lam
   | Ast.ExprTuple items ->
     (match hooks.check_collection_items env items with

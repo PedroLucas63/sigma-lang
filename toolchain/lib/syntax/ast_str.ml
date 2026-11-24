@@ -29,7 +29,7 @@ let rec type_expr_to_string = function
     base_s ^ String.concat "" dims
 
 let lvalue_span = function
-  | LValIdent (_, sp) | LValIndex (_, _, sp) -> sp
+  | LValIdent (_, sp) | LValIndex (_, _, sp) | LValField (_, _, sp) -> sp
 
 let unop_to_string = function
   | UnPos -> "+"

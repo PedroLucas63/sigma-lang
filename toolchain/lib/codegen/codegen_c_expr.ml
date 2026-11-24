@@ -17,7 +17,8 @@ let emit_collection_literal hooks ~is_tuple (e_ty : Ty.t) (items : Typed_ast.col
     items
     |> List.map (function
          | Typed_ast.TItemExpr sub ->
-           Printf.sprintf "%s->items[%s++] = %s;" obj_var idx_var (emit_box_val sub.ty (hooks.emit_expr sub))
+           Printf.sprintf "%s->items[%s++] = %s;" obj_var idx_var
+             (emit_box_val sub.ty (emit_copy_if_struct sub (hooks.emit_expr sub)))
          | Typed_ast.TItemSpread sub ->
            Printf.sprintf "sgm_obj_spread(%s, &%s, %s);" obj_var idx_var (hooks.emit_expr sub))
     |> String.concat " "
@@ -38,6 +39,7 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
       (if m.neg then 1 else 0) m.scale m.hi m.lo
   | Typed_ast.TExprBool b -> if b then "true" else "false"
   | Typed_ast.TExprChar c | Typed_ast.TExprString c -> escape_c_string c
+  | Typed_ast.TExprNull -> "NULL"
   | Typed_ast.TExprInterp parts ->
     let c_parts =
       List.map
@@ -90,7 +92,8 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
                let vname = match a.tca_expr.desc with Typed_ast.TExprIdent nm -> nm | _ -> "tmp" in
                Printf.sprintf "%s[%d] = sgm_val_ref(&(%s));" av j (ident_c_expr vname)
              | Ty.ParamVal ->
-               Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.tca_expr.ty (hooks.emit_expr a.tca_expr)))
+               Printf.sprintf "%s[%d] = %s;" av j
+                 (emit_box_val a.tca_expr.ty (emit_copy_if_struct a.tca_expr (hooks.emit_expr a.tca_expr))))
            args)
     in
     let idxs =
@@ -111,6 +114,10 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
   | Typed_ast.TExprIndex (target, idx) ->
     Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s)"
       (hooks.emit_expr target) (hooks.emit_expr idx) (c_val_union_field e.ty)
+  | Typed_ast.TExprField (target, _, idx) ->
+    Printf.sprintf "((%s)->items[%d].u.%s)" (hooks.emit_expr target) idx (c_val_union_field e.ty)
+  | Typed_ast.TExprStructInit { tsi_name; tsi_kind; tsi_args } ->
+    Codegen_c_user_types.emit_struct_init hooks tsi_name tsi_kind tsi_args
   | Typed_ast.TExprUnary (unop, sub) -> Codegen_c_expr_ops.emit_unary hooks e unop sub
   | Typed_ast.TExprBinary (binop, lhs, rhs) -> Codegen_c_expr_ops.emit_binary hooks binop lhs rhs
   | Typed_ast.TExprChainCmp (e1, op1, e2, op2, e3) -> Codegen_c_expr_ops.emit_chain_cmp hooks e1 op1 e2 op2 e3

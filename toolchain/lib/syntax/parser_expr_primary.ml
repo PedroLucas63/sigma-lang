@@ -162,7 +162,10 @@ let parse_primary hooks st : (Ast.expr, Diagnostic.t) result =
     parse_prompt_expr hooks st tok
   | Token.IDENT name ->
     bump st;
-    Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
+    if (cur st).kind = Token.LBRACE then
+      Parser_type_decl.parse_struct_init hooks st name tok.span
+    else
+      Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
   | Token.KW_FUN ->
     bump st;
     hooks.parse_lambda_expr st tok ~is_act:false

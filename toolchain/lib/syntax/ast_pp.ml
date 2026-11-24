@@ -20,6 +20,7 @@ let rec pp_collection_item fmt = function
 and pp_lvalue fmt = function
   | LValIdent (name, _) -> Format.fprintf fmt "%s" name
   | LValIndex (base, idx, _) -> Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
+  | LValField (base, field, _) -> Format.fprintf fmt "%a.%s" pp_expr base field
 
 and pp_expr fmt (e : expr) =
   match e.desc with
@@ -77,6 +78,17 @@ and pp_expr fmt (e : expr) =
       items
   | ExprIndex (base, idx) ->
     Format.fprintf fmt "%a[%a]" pp_expr base pp_expr idx
+  | ExprField (base, field) ->
+    Format.fprintf fmt "%a.%s" pp_expr base field
+  | ExprStructInit (tname, args) ->
+    let pp_arg fmt (a : call_arg) =
+      match a.arg_name with
+      | None -> pp_expr fmt a.arg_value
+      | Some (n, _) -> Format.fprintf fmt "%s = %a" n pp_expr a.arg_value
+    in
+    Format.fprintf fmt "%s { %a }" tname
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
+      args
   | ExprCall (callee, args) ->
     let pp_arg fmt (a : call_arg) =
       let prefix =
@@ -220,6 +232,27 @@ and pp_stmt fmt (s : stmt) =
        Format.fprintf fmt "act %s(%s) { %a }" fd.fd_name params_s
          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_stmt)
          fd.fd_body)
+  | StmtTypeDecl td ->
+    let kw =
+      match td.td_kind with
+      | KindClass -> "class"
+      | KindStruct -> "struct"
+      | KindRecord -> "record"
+    in
+    let pp_field fmt (f : field_decl) =
+      match f.field_default with
+      | None -> Format.fprintf fmt "%s: %s" f.field_name (type_expr_to_string f.field_type)
+      | Some d -> Format.fprintf fmt "%s: %s = %a" f.field_name (type_expr_to_string f.field_type) pp_expr d
+    in
+    (match td.td_kind with
+     | KindRecord ->
+       Format.fprintf fmt "%s %s(%a) {}" kw td.td_name
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_field)
+         td.td_fields
+     | KindClass | KindStruct ->
+       Format.fprintf fmt "%s %s { %a }" kw td.td_name
+         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_field)
+         td.td_fields)
   | StmtReturn None -> Format.fprintf fmt "return;"
   | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
   | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e

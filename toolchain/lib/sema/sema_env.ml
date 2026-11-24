@@ -18,6 +18,22 @@ type symbol_info = {
 
 type env = (string, symbol_info) Hashtbl.t
 
+type user_field = {
+  uf_name : string;
+  uf_idx : int;
+  uf_ty : Ty.t;
+  uf_default : Typed_ast.expr option;
+}
+
+type user_type_info = {
+  ut_kind : Ty.user_type_kind;
+  ut_name : string;
+  ut_span : Span.t;
+  ut_fields : user_field list;
+}
+
+let user_types : (string, user_type_info) Hashtbl.t = Hashtbl.create 16
+
 type fun_ret_ctx =
   | RetNone
   | RetExplicit of Ty.t

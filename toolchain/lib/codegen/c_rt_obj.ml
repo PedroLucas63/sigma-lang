@@ -32,6 +32,8 @@ typedef struct {
 
 struct sgm_obj {
   bool is_tuple;
+  int kind;
+  const char *type_name;
   int64_t len;
   sgm_val_t *items;
 };
@@ -105,9 +107,33 @@ __attribute__((unused)) static const char* sgm_fmt_fn(sgm_fn_t *f) { (void)f; re
 __attribute__((unused)) static sgm_obj_t* sgm_obj_alloc(bool is_tuple, int64_t len) {
   sgm_obj_t *o = (sgm_obj_t*)malloc(sizeof(sgm_obj_t));
   o->is_tuple = is_tuple;
+  o->kind = is_tuple ? 1 : 0;
+  o->type_name = NULL;
   o->len = len;
   o->items = (len > 0) ? (sgm_val_t*)calloc((size_t)len, sizeof(sgm_val_t)) : NULL;
   return o;
+}
+
+__attribute__((unused)) static sgm_obj_t* sgm_user_alloc(int kind, const char *type_name, int64_t len) {
+  sgm_obj_t *o = (sgm_obj_t*)malloc(sizeof(sgm_obj_t));
+  o->is_tuple = false;
+  o->kind = kind;
+  o->type_name = type_name;
+  o->len = len;
+  o->items = (len > 0) ? (sgm_val_t*)calloc((size_t)len, sizeof(sgm_val_t)) : NULL;
+  return o;
+}
+
+__attribute__((unused)) static sgm_obj_t* sgm_obj_clone_struct(sgm_obj_t *o) {
+  if (!o || o->kind != 3) return o;
+  sgm_obj_t *c = sgm_user_alloc(o->kind, o->type_name, o->len);
+  for (int64_t i = 0; i < o->len; i++) {
+    c->items[i] = o->items[i];
+    if (c->items[i].tag == SGM_TAG_OBJ) {
+      c->items[i].u.obj = sgm_obj_clone_struct(c->items[i].u.obj);
+    }
+  }
+  return c;
 }
 
 __attribute__((unused)) static void sgm_obj_spread(sgm_obj_t *dst, int64_t *k, sgm_obj_t *src) {
@@ -163,7 +189,9 @@ __attribute__((unused)) static bool sgm_val_eq(sgm_val_t a, sgm_val_t b) {
 __attribute__((unused)) static bool sgm_obj_eq(sgm_obj_t *a, sgm_obj_t *b) {
   if (a == b) return true;
   if (!a || !b) return false;
-  if (a->is_tuple != b->is_tuple || a->len != b->len) return false;
+  if (a->kind != b->kind || a->len != b->len) return false;
+  if (a->kind == 2) return false;
+  if (a->kind >= 3 && strcmp(a->type_name, b->type_name) != 0) return false;
   for (int64_t i = 0; i < a->len; i++) {
     if (!sgm_val_eq(a->items[i], b->items[i])) return false;
   }
@@ -192,7 +220,10 @@ __attribute__((unused)) static const char* sgm_fmt_obj(sgm_obj_t *o) {
   if (!o) return "null";
   int64_t n = o->len;
   const char **parts = (n > 0) ? (const char**)malloc((size_t)n * sizeof(const char*)) : NULL;
-  size_t total = 2;
+  size_t pfx_len = o->type_name ? strlen(o->type_name) : 0;
+  const char *open_s = (o->kind == 2 || o->kind == 3) ? " { " : (o->kind == 4 ? "(" : (o->is_tuple ? "(" : "["));
+  const char *close_s = (o->kind == 2 || o->kind == 3) ? " }" : (o->kind == 4 ? ")" : (o->is_tuple ? ")" : "]"));
+  size_t total = pfx_len + strlen(open_s) + strlen(close_s);
   for (int64_t i = 0; i < n; i++) {
     parts[i] = sgm_fmt_val(o->items[i]);
     total += strlen(parts[i]);
@@ -200,7 +231,8 @@ __attribute__((unused)) static const char* sgm_fmt_obj(sgm_obj_t *o) {
   }
   char *out = (char*)malloc(total + 1);
   size_t pos = 0;
-  out[pos++] = o->is_tuple ? '(' : '[';
+  if (pfx_len > 0) { memcpy(out + pos, o->type_name, pfx_len); pos += pfx_len; }
+  memcpy(out + pos, open_s, strlen(open_s)); pos += strlen(open_s);
   for (int64_t i = 0; i < n; i++) {
     if (i > 0) {
       out[pos++] = ',';
@@ -210,7 +242,7 @@ __attribute__((unused)) static const char* sgm_fmt_obj(sgm_obj_t *o) {
     memcpy(out + pos, parts[i], plen);
     pos += plen;
   }
-  out[pos++] = o->is_tuple ? ')' : ']';
+  memcpy(out + pos, close_s, strlen(close_s)); pos += strlen(close_s);
   out[pos] = '\0';
   if (parts) free(parts);
   return out;

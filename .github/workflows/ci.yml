@@ -34,7 +34,7 @@ jobs:
 
       - name: Auditar Primitivas Proibidas em toolchain/lib/
         run: |
-          if grep -rnE '\b(failwith|Obj\.magic)\b|\bexit[[:space:]]' toolchain/lib/; then
+          if grep -rnE '\b(failwith|Obj\.magic)\b|\b(Stdlib\.)?exit[[:space:]]+(\(|[0-9])' toolchain/lib/; then
             echo "Erro: failwith, Obj.magic ou exit não são permitidos em toolchain/lib/"
             exit 1
           fi

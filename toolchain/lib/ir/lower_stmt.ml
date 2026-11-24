@@ -25,6 +25,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
     hooks.lower_expr b v.init;
+    Lower_user_types.emit_copy_if_struct b v.init;
     ignore (emit b (def_global_opcode v.ty v.name) s.span);
     push_loop_scope loops v.name
   | Typed_ast.TStmtDestruct d ->
@@ -187,7 +188,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
-          | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
+          | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;
@@ -226,9 +227,11 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
          fd.tf_ret)
     in
     ignore (emit b (def_global_opcode fty fd.tf_name) s.span)
+  | Typed_ast.TStmtTypeDecl _ -> ()
   | Typed_ast.TStmtReturn None -> ignore (emit b Ir.OP_RETURN_VOID s.span)
   | Typed_ast.TStmtReturn (Some e) ->
     hooks.lower_expr b e;
+    Lower_user_types.emit_copy_if_struct b e;
     ignore (emit b Ir.OP_RETURN s.span)
   | Typed_ast.TStmtExpr e ->
     hooks.lower_expr b e;

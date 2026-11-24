@@ -54,6 +54,7 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
   | Ir.OP_CONST_BOOL b -> st.stack <- VBool b :: st.stack; Ok ()
   | Ir.OP_CONST_CHAR c -> st.stack <- VChar c :: st.stack; Ok ()
   | Ir.OP_CONST_STR s -> st.stack <- VString s :: st.stack; Ok ()
+  | Ir.OP_CONST_NULL -> st.stack <- VNull :: st.stack; Ok ()
   | Ir.OP_MAKE_TUPLE count ->
     (match pop_n count st.stack with
      | Some (items, rest) -> st.stack <- VTuple (Array.of_list items) :: rest; Ok ()
@@ -85,6 +86,25 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
          Error (Printf.sprintf "Runtime error: index %Ld out of bounds (length %d)" idx len)
        else (arr.(Int64.to_int idx) <- v; st.stack <- v :: rest; Ok ())
      | _ -> Error "VM type error or stack underflow on OP_INDEX_SET")
+  | Ir.OP_NEW_USER { type_name; kind; field_count } ->
+    (match pop_n field_count st.stack with
+     | Some (items, rest) ->
+       let u = { uv_type = type_name; uv_kind = kind; uv_fields = Array.of_list items } in
+       st.stack <- VUser u :: rest;
+       Ok ()
+     | None -> Error "VM stack underflow on OP_NEW_USER")
+  | Ir.OP_GET_FIELD idx ->
+    (match st.stack with
+     | VUser u :: rest -> st.stack <- u.uv_fields.(idx) :: rest; Ok ()
+     | _ -> Error "VM type error or stack underflow on OP_GET_FIELD")
+  | Ir.OP_SET_FIELD idx ->
+    (match st.stack with
+     | v :: VUser u :: rest -> u.uv_fields.(idx) <- v; st.stack <- v :: rest; Ok ()
+     | _ -> Error "VM type error or stack underflow on OP_SET_FIELD")
+  | Ir.OP_COPY_STRUCT ->
+    (match st.stack with
+     | v :: rest -> st.stack <- clone_struct_value v :: rest; Ok ()
+     | [] -> Error "VM stack underflow on OP_COPY_STRUCT")
   | Ir.OP_ARRAY_CONCAT ->
     (match st.stack with
      | VArray b :: VArray a :: rest -> st.stack <- VArray (Array.append a b) :: rest; Ok ()

@@ -17,14 +17,16 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
      | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
      | Typed_ast.TLValIndex (arr, idx) ->
        collect_used_expr used arr;
-       collect_used_expr used idx);
+       collect_used_expr used idx
+     | Typed_ast.TLValField (obj, _, _) -> collect_used_expr used obj);
     collect_used_expr used r
   | Typed_ast.TExprIncDec (_, lval) ->
     (match lval with
      | Typed_ast.TLValIdent id -> Hashtbl.replace used id ()
      | Typed_ast.TLValIndex (arr, idx) ->
        collect_used_expr used arr;
-       collect_used_expr used idx)
+       collect_used_expr used idx
+     | Typed_ast.TLValField (obj, _, _) -> collect_used_expr used obj)
   | Typed_ast.TExprCall { callee; args; _ } ->
     collect_used_expr used callee;
     List.iter (fun (arg : Typed_ast.typed_call_arg) -> collect_used_expr used arg.tca_expr) args
@@ -38,6 +40,9 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
   | Typed_ast.TExprIndex (sub, idx) ->
     collect_used_expr used sub;
     collect_used_expr used idx
+  | Typed_ast.TExprField (sub, _, _) -> collect_used_expr used sub
+  | Typed_ast.TExprStructInit { tsi_args; _ } ->
+    List.iter (collect_used_expr used) tsi_args
   | Typed_ast.TExprInterp parts ->
     List.iter
       (function
@@ -47,7 +52,7 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
   | Typed_ast.TExprInput { prompt; _ } -> Option.iter (collect_used_expr used) prompt
   | Typed_ast.TExprInt _ | Typed_ast.TExprFloat _ | Typed_ast.TExprDouble _
   | Typed_ast.TExprDecimal _ | Typed_ast.TExprBool _ | Typed_ast.TExprChar _
-  | Typed_ast.TExprString _ -> ()
+  | Typed_ast.TExprString _ | Typed_ast.TExprNull -> ()
 
 let rec collect_used_stmt
     (declared : (string, unit) Hashtbl.t)
@@ -66,6 +71,7 @@ let rec collect_used_stmt
   | Typed_ast.TStmtFunDecl inner_fd ->
     Hashtbl.replace declared inner_fd.tf_name ();
     List.iter (fun (cap_name, _) -> Hashtbl.replace used cap_name ()) inner_fd.tf_captures
+  | Typed_ast.TStmtTypeDecl _ -> ()
   | Typed_ast.TStmtBlock stmts -> List.iter (collect_used_stmt declared used) stmts
   | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
     collect_used_expr used cond;

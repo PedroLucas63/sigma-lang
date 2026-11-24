@@ -16,6 +16,9 @@ type kind =
   | KW_RETURN
   | KW_REF
   | KW_OUT
+  | KW_CLASS
+  | KW_STRUCT
+  | KW_RECORD
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -74,6 +77,7 @@ type kind =
   | RBRACE
   | LBRACKET
   | RBRACKET
+  | DOT
   | DOT_DOT
   | COMMA
   | SEMI
@@ -104,6 +108,9 @@ let kind_to_string = function
   | KW_RETURN -> "'return'"
   | KW_REF -> "'ref'"
   | KW_OUT -> "'out'"
+  | KW_CLASS -> "'class'"
+  | KW_STRUCT -> "'struct'"
+  | KW_RECORD -> "'record'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"
@@ -162,6 +169,7 @@ let kind_to_string = function
   | RBRACE -> "'}'"
   | LBRACKET -> "'['"
   | RBRACKET -> "']'"
+  | DOT -> "'.'"
   | DOT_DOT -> "'..'"
   | COMMA -> "','"
   | SEMI -> "';'"

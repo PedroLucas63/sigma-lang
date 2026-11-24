@@ -11,10 +11,18 @@ type value =
   | VBool of bool
   | VChar of string
   | VString of string
+  | VNull
   | VTuple of value array
   | VArray of value array
+  | VUser of user_value
   | VFun of fun_value
   | VRef of value ref
+
+and user_value = {
+  uv_type : string;
+  uv_kind : Sigma_sema.Ty.user_type_kind;
+  uv_fields : value array;
+}
 
 and fun_value = {
   entry : int;

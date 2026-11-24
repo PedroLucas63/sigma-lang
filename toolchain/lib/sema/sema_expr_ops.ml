@@ -170,7 +170,7 @@ let check_incdec_expr hooks (env : env) (e_span : Span.t) inc_op lval
     (match lval_ty with
      | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
        Ok { Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, tlval); ty = lval_ty; span = e_span }
-     | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void ->
+     | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void ->
        Error
          (Diagnostic.error
             ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"

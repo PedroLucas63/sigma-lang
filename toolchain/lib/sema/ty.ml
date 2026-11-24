@@ -5,6 +5,11 @@ type param_mode =
   | ParamRef
   | ParamOut
 
+type user_type_kind =
+  | KindClass
+  | KindStruct
+  | KindRecord
+
 type fun_param = {
   pty : t;
   pmode : param_mode;
@@ -20,6 +25,7 @@ and t =
   | String
   | Tuple of t list
   | Array of t * int
+  | User of user_type_kind * string
   | Fun of fun_param list * t
   | Void
 
@@ -36,12 +42,14 @@ let rec equal a b =
     List.length xs = List.length ys && List.for_all2 equal xs ys
   | Array (ta, na), Array (tb, nb) ->
     na = nb && equal ta tb
+  | User (ka, na), User (kb, nb) ->
+    ka = kb && na = nb
   | Fun (pa, ra), Fun (pb, rb) ->
     List.length pa = List.length pb
     && List.for_all2 (fun p1 p2 -> p1.pmode = p2.pmode && equal p1.pty p2.pty) pa pb
     && equal ra rb
   | Void, Void -> true
-  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | Fun _ | Void), _ -> false
+  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | User _ | Fun _ | Void), _ -> false
 
 let rec to_string = function
   | Int -> "int"
@@ -53,6 +61,7 @@ let rec to_string = function
   | String -> "string"
   | Tuple tys ->
     "(" ^ String.concat ", " (List.map to_string tys) ^ ")"
+  | User (_, name) -> name
   | Void -> "void"
   | Fun (params, ret) ->
     let p_strs =

@@ -18,6 +18,9 @@ type kind =
   | KW_RETURN
   | KW_REF
   | KW_OUT
+  | KW_CLASS
+  | KW_STRUCT
+  | KW_RECORD
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -76,6 +79,7 @@ type kind =
   | RBRACE
   | LBRACKET
   | RBRACKET
+  | DOT
   | DOT_DOT
   | COMMA
   | SEMI

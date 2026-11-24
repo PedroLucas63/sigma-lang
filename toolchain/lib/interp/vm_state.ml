@@ -9,10 +9,18 @@ type value =
   | VBool of bool
   | VChar of string
   | VString of string
+  | VNull
   | VTuple of value array
   | VArray of value array
+  | VUser of user_value
   | VFun of fun_value
   | VRef of value ref
+
+and user_value = {
+  uv_type : string;
+  uv_kind : Sigma_sema.Ty.user_type_kind;
+  uv_fields : value array;
+}
 
 and fun_value = {
   entry : int;
@@ -80,8 +88,14 @@ let rec value_to_string = function
   | VBool b -> if b then "true" else "false"
   | VChar c -> c
   | VString s -> s
+  | VNull -> "null"
   | VTuple arr -> "(" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ ")"
   | VArray arr -> "[" ^ String.concat ", " (List.map value_to_string (Array.to_list arr)) ^ "]"
+  | VUser u ->
+    let body = String.concat ", " (List.map value_to_string (Array.to_list u.uv_fields)) in
+    (match u.uv_kind with
+     | Sigma_sema.Ty.KindRecord -> Printf.sprintf "%s(%s)" u.uv_type body
+     | Sigma_sema.Ty.KindClass | Sigma_sema.Ty.KindStruct -> Printf.sprintf "%s { %s }" u.uv_type body)
   | VFun _ -> "<function>"
   | VRef r -> Printf.sprintf "&(%s)" (value_to_string !r)
 
@@ -94,11 +108,26 @@ let rec value_equal (a : value) (b : value) : bool =
   | VBool x, VBool y -> x = y
   | VChar x, VChar y -> decode_utf8 x = decode_utf8 y
   | VString x, VString y -> String.equal x y
+  | VNull, VNull -> true
   | VFun x, VFun y -> x == y
   | VTuple xs, VTuple ys | VArray xs, VArray ys ->
     let len = Array.length xs in
     len = Array.length ys && Array.for_all2 value_equal xs ys
+  | VUser a, VUser b ->
+    a.uv_type = b.uv_type
+    && a.uv_kind = b.uv_kind
+    && (match a.uv_kind with
+        | Sigma_sema.Ty.KindClass -> a == b
+        | Sigma_sema.Ty.KindStruct | Sigma_sema.Ty.KindRecord ->
+          Array.length a.uv_fields = Array.length b.uv_fields
+          && Array.for_all2 value_equal a.uv_fields b.uv_fields)
   | _ -> false
+
+let rec clone_struct_value = function
+  | VUser ({ uv_kind = Sigma_sema.Ty.KindStruct; uv_fields; _ } as u) ->
+    VUser { u with uv_fields = Array.map clone_struct_value uv_fields }
+  | VTuple arr -> VTuple (Array.map clone_struct_value arr)
+  | v -> v
 
 let cur_vars (st : state) : (string, value ref) Hashtbl.t =
   match st.frames with

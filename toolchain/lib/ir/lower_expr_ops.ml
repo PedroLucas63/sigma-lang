@@ -1,4 +1,3 @@
-open Sigma_common
 open Sigma_syntax
 open Sigma_sema
 open Lower_ctx
@@ -161,6 +160,7 @@ let lower_assign hooks b (e : Typed_ast.expr) lval op rhs =
     (match op, e.ty with
      | Ast.AssignEq, _ ->
        hooks.lower_expr b rhs;
+       Lower_user_types.emit_copy_if_struct b rhs;
        ignore (emit b (set_global_opcode e.ty name) e.span);
        ignore (emit b (get_global_opcode e.ty name) e.span)
      | Ast.AssignAnd, Ty.Bool ->
@@ -194,6 +194,7 @@ let lower_assign hooks b (e : Typed_ast.expr) lval op rhs =
        hooks.lower_expr b target;
        hooks.lower_expr b idx;
        hooks.lower_expr b rhs;
+       Lower_user_types.emit_copy_if_struct b rhs;
        ignore (emit b Ir.OP_INDEX_SET e.span)
      | (Ast.AssignAnd | Ast.AssignOr), Ty.Bool ->
        let is_and = op = Ast.AssignAnd in
@@ -242,27 +243,11 @@ let lower_assign hooks b (e : Typed_ast.expr) lval op rhs =
           in
           hooks.lower_expr b bin_expr;
           ignore (emit b Ir.OP_INDEX_SET e.span)))
+  | Typed_ast.TLValField (target, _, idx) ->
+    Lower_user_types.lower_field_assign hooks b e target idx op rhs
 
 let lower_incdec hooks b (e : Typed_ast.expr) inc_op lval =
-  let emit_step is_inc =
-    match e.ty with
-    | Ty.Int ->
-      ignore (emit b (Ir.OP_CONST_I64 1L) e.span);
-      ignore (emit b (if is_inc then Ir.OP_ADD_I64 else Ir.OP_SUB_I64) e.span)
-    | Ty.Float ->
-      ignore (emit b (Ir.OP_CONST_F32 1.0) e.span);
-      ignore (emit b (if is_inc then Ir.OP_ADD_F32 else Ir.OP_SUB_F32) e.span)
-    | Ty.Double ->
-      ignore (emit b (Ir.OP_CONST_F64 1.0) e.span);
-      ignore (emit b (if is_inc then Ir.OP_ADD_F64 else Ir.OP_SUB_F64) e.span)
-    | Ty.Decimal ->
-      ignore (emit b (Ir.OP_CONST_DEC (Decimal.of_int64 1L)) e.span);
-      ignore (emit b (if is_inc then Ir.OP_ADD_DEC else Ir.OP_SUB_DEC) e.span)
-    | Ty.Char ->
-      ignore (emit b (Ir.OP_CONST_I64 1L) e.span);
-      ignore (emit b (if is_inc then Ir.OP_CHAR_ADD_I64 else Ir.OP_CHAR_SUB_I64) e.span)
-    | _ -> ()
-  in
+  let emit_step is_inc = Lower_user_types.emit_incdec_step b e.span e.ty ~is_inc in
   match lval with
   | Typed_ast.TLValIdent name ->
     (match inc_op with
@@ -297,3 +282,5 @@ let lower_incdec hooks b (e : Typed_ast.expr) inc_op lval =
       ignore (emit b Ir.OP_POP e.span);
       ignore (emit b (Ir.OP_GET_TEMP t_old) e.span)
     end
+  | Typed_ast.TLValField (target, _, idx) ->
+    Lower_user_types.lower_field_incdec hooks b e inc_op target idx

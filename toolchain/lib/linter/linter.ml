@@ -18,7 +18,8 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   | Typed_ast.TExprDecimal _
   | Typed_ast.TExprBool _
   | Typed_ast.TExprChar _
-  | Typed_ast.TExprString _ -> ()
+  | Typed_ast.TExprString _
+  | Typed_ast.TExprNull -> ()
   | Typed_ast.TExprInterp parts ->
     List.iter
       (function
@@ -43,6 +44,10 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   | Typed_ast.TExprCall { callee; args; _ } ->
     mark_expr_usage tbl callee;
     List.iter (fun (a : Typed_ast.typed_call_arg) -> mark_expr_usage tbl a.tca_expr) args
+  | Typed_ast.TExprStructInit { tsi_args; _ } ->
+    List.iter (mark_expr_usage tbl) tsi_args
+  | Typed_ast.TExprField (base, _, _) ->
+    mark_expr_usage tbl base
   | Typed_ast.TExprUnary (_, sub) ->
     mark_expr_usage tbl sub
   | Typed_ast.TExprBinary (_, lhs, rhs) ->
@@ -62,7 +67,9 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
        end
      | Typed_ast.TLValIndex (target, idx) ->
        mark_expr_usage tbl target;
-       mark_expr_usage tbl idx);
+       mark_expr_usage tbl idx
+     | Typed_ast.TLValField (target, _, _) ->
+       mark_expr_usage tbl target);
     mark_expr_usage tbl rhs
   | Typed_ast.TExprIncDec (_, lval) ->
     (match lval with
@@ -72,7 +79,9 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
         | None -> ())
      | Typed_ast.TLValIndex (target, idx) ->
        mark_expr_usage tbl target;
-       mark_expr_usage tbl idx)
+       mark_expr_usage tbl idx
+     | Typed_ast.TLValField (target, _, _) ->
+       mark_expr_usage tbl target)
   | Typed_ast.TExprLambda fd ->
     let saved = Hashtbl.copy tbl in
     List.iter (fun (tp : Typed_ast.typed_param) -> Hashtbl.remove tbl tp.tp_name) fd.tf_params;
@@ -185,6 +194,7 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     List.iter (lint_stmt tbl decl_order) fd.tf_body;
     (* Restaura entradas escondidas por parâmetros/locais da função. *)
     Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
+  | Typed_ast.TStmtTypeDecl _ -> ()
   | Typed_ast.TStmtReturn eo ->
     Option.iter (mark_expr_usage tbl) eo
   | Typed_ast.TStmtExpr e ->

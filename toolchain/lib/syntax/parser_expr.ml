@@ -270,6 +270,17 @@ and parse_postfix hooks st : (Ast.expr, Diagnostic.t) result =
          | Error e -> Error e
          | Ok (args, close_span) ->
            loop { Ast.desc = Ast.ExprCall (acc, args); span = Span.merge acc.span close_span })
+      | Token.DOT ->
+        bump st;
+        let fld_tok = cur st in
+        (match fld_tok.kind with
+         | Token.IDENT field ->
+           bump st;
+           loop { Ast.desc = Ast.ExprField (acc, field); span = Span.merge acc.span fld_tok.span }
+         | _ ->
+           err_at fld_tok ~hint:"access a field by identifier, e.g. 'obj.field'"
+             (Printf.sprintf "expected field name after '.', found %s"
+                (Token.kind_to_string fld_tok.kind)))
       | Token.PLUS_PLUS | Token.MINUS_MINUS ->
         let inc_op = if tok.kind = Token.PLUS_PLUS then Ast.PostInc else Ast.PostDec in
         let op_str = Ast.incdec_op_to_string inc_op in

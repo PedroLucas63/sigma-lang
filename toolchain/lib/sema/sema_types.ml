@@ -18,18 +18,21 @@ let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
   | Ast.TypeNamed (ty_name, ty_span) ->
     (match Ty.of_string ty_name with
      | Some ty -> Ok ty
-     | None when ty_name = "void" ->
-       Error
-         (Diagnostic.error
-            ~hint:"'void' only appears as the return type of a function type, e.g. 'void(int)' for an 'act'"
-            ~code:"E0113" ~span:ty_span
-            "'void' cannot be used as the type of a value")
      | None ->
-       Error
-         (Diagnostic.error
-            ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string', tuples '(T1, T2)', or arrays 'T[N]'"
-            ~code:"E0101" ~span:ty_span
-            (Printf.sprintf "unknown or unsupported type '%s'" ty_name)))
+       (match Hashtbl.find_opt Sema_env.user_types ty_name with
+        | Some info -> Ok (Ty.User (info.ut_kind, info.ut_name))
+        | None when ty_name = "void" ->
+          Error
+            (Diagnostic.error
+               ~hint:"'void' only appears as the return type of a function type, e.g. 'void(int)' for an 'act'"
+               ~code:"E0113" ~span:ty_span
+               "'void' cannot be used as the type of a value")
+        | None ->
+          Error
+            (Diagnostic.error
+               ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string', user types, tuples '(T1, T2)', or arrays 'T[N]'"
+               ~code:"E0101" ~span:ty_span
+               (Printf.sprintf "unknown or unsupported type '%s'" ty_name))))
   | Ast.TypeFun (ret_te, param_tes, _) ->
     let ret_res =
       match ret_te with
@@ -104,7 +107,7 @@ let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
                   (Printf.sprintf "type mismatch: expected array type '%s', found '%s'"
                      (Ast.type_expr_to_string te) (Ty.to_string bad_init_ty))))))
 
-let rec default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
+let rec default_expr_for_type ?(visited = []) (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   match ty with
   | Ty.Int -> { Typed_ast.desc = Typed_ast.TExprInt Ty.default_int_value; ty = Ty.Int; span }
   | Ty.Float -> { Typed_ast.desc = Typed_ast.TExprFloat Ty.default_float_value; ty = Ty.Float; span }
@@ -114,11 +117,28 @@ let rec default_expr_for_type (ty : Ty.t) (span : Span.t) : Typed_ast.expr =
   | Ty.Char -> { Typed_ast.desc = Typed_ast.TExprChar Ty.default_char_value; ty = Ty.Char; span }
   | Ty.String -> { Typed_ast.desc = Typed_ast.TExprString Ty.default_string_value; ty = Ty.String; span }
   | Ty.Tuple tys ->
-    let items = List.map (fun sub_ty -> Typed_ast.TItemExpr (default_expr_for_type sub_ty span)) tys in
+    let items = List.map (fun sub_ty -> Typed_ast.TItemExpr (default_expr_for_type ~visited sub_ty span)) tys in
     { Typed_ast.desc = Typed_ast.TExprTuple items; ty; span }
   | Ty.Array (elem_ty, n) ->
-    let items = List.init n (fun _ -> Typed_ast.TItemExpr (default_expr_for_type elem_ty span)) in
+    let items = List.init n (fun _ -> Typed_ast.TItemExpr (default_expr_for_type ~visited elem_ty span)) in
     { Typed_ast.desc = Typed_ast.TExprArray items; ty; span }
+  | Ty.User (kind, name) ->
+    if List.mem name visited then
+      { Typed_ast.desc = Typed_ast.TExprNull; ty; span }
+    else
+      let visited' = name :: visited in
+      let args =
+        match Hashtbl.find_opt Sema_env.user_types name with
+        | None -> []
+        | Some info ->
+          List.map
+            (fun (f : Sema_env.user_field) ->
+              match f.uf_default with
+              | Some d -> d
+              | None -> default_expr_for_type ~visited:visited' f.uf_ty span)
+            info.ut_fields
+      in
+      { Typed_ast.desc = Typed_ast.TExprStructInit { tsi_name = name; tsi_kind = kind; tsi_args = args }; ty; span }
   | Ty.Fun _ | Ty.Void ->
     { Typed_ast.desc = Typed_ast.TExprInt 0L; ty = Ty.Int; span }
 

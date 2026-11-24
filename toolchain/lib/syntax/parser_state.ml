@@ -118,4 +118,5 @@ let expr_to_lvalue (e : Ast.expr) : Ast.lvalue option =
   match e.desc with
   | Ast.ExprIdent name -> Some (Ast.LValIdent (name, e.span))
   | Ast.ExprIndex (base, idx) -> Some (Ast.LValIndex (base, idx, e.span))
+  | Ast.ExprField (base, field) -> Some (Ast.LValField (base, field, e.span))
   | _ -> None

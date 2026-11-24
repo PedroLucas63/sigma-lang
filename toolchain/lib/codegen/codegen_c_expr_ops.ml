@@ -90,7 +90,8 @@ let emit_assign hooks (e : Typed_ast.expr) lval op rhs : string =
   | Typed_ast.TLValIdent name ->
     let vname = ident_c_expr name in
     (match op, e.ty with
-     | Ast.AssignEq, _ -> Printf.sprintf "(%s = (%s))" vname (hooks.emit_expr rhs)
+     | Ast.AssignEq, _ ->
+       Printf.sprintf "(%s = (%s))" vname (emit_copy_if_struct rhs (hooks.emit_expr rhs))
      | Ast.AssignAnd, Ty.Bool -> Printf.sprintf "(%s = (%s && (%s)))" vname vname (hooks.emit_expr rhs)
      | Ast.AssignOr, Ty.Bool -> Printf.sprintf "(%s = (%s || (%s)))" vname vname (hooks.emit_expr rhs)
      | _, _ ->
@@ -105,7 +106,7 @@ let emit_assign hooks (e : Typed_ast.expr) lval op rhs : string =
     (match op, e.ty with
      | Ast.AssignEq, _ ->
        Printf.sprintf "(sgm_obj_slot(%s, %s)->u.%s = (%s))"
-         (hooks.emit_expr target) (hooks.emit_expr idx) field (hooks.emit_expr rhs)
+         (hooks.emit_expr target) (hooks.emit_expr idx) field (emit_copy_if_struct rhs (hooks.emit_expr rhs))
      | (Ast.AssignAnd | Ast.AssignOr), Ty.Bool ->
        let c_op = if op = Ast.AssignAnd then "&&" else "||" in
        incr chain_counter;
@@ -128,6 +129,8 @@ let emit_assign hooks (e : Typed_ast.expr) lval op rhs : string =
             "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); %s %s = %s->u.%s; %s->u.%s = (%s); })"
             slot (hooks.emit_expr target) (hooks.emit_expr idx)
             (c_type_of_ty e.ty) (mangle_ident tmp_ident) slot field slot field (hooks.emit_expr bin_expr)))
+  | Typed_ast.TLValField (target, _, idx) ->
+    Codegen_c_user_types.emit_field_assign hooks e target idx op rhs
 
 let emit_incdec hooks (e : Typed_ast.expr) inc_op lval : string =
   let vname_raw, slot_prefix, slot_suffix =
@@ -139,6 +142,12 @@ let emit_incdec hooks (e : Typed_ast.expr) inc_op lval : string =
       ( Printf.sprintf "(%s->u.%s)" slot (c_val_union_field e.ty),
         Printf.sprintf "__extension__ ({ sgm_val_t *%s = sgm_obj_slot(%s, %s); "
           slot (hooks.emit_expr target) (hooks.emit_expr idx),
+        "; })" )
+    | Typed_ast.TLValField (target, _, idx) ->
+      incr chain_counter;
+      let slot = Printf.sprintf "_sgm_fslot_%d" !chain_counter in
+      ( Printf.sprintf "(%s->u.%s)" slot (c_val_union_field e.ty),
+        Printf.sprintf "__extension__ ({ sgm_val_t *%s = &((%s)->items[%d]); " slot (hooks.emit_expr target) idx,
         "; })" )
   in
   let body =

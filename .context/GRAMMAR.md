@@ -21,6 +21,9 @@
 | Palavra-chave | `KW_RETURN` | `return` |
 | Palavra-chave | `KW_REF` | `ref` |
 | Palavra-chave | `KW_OUT` | `out` |
+| Palavra-chave | `KW_CLASS` | `class` |
+| Palavra-chave | `KW_STRUCT` | `struct` |
+| Palavra-chave | `KW_RECORD` | `record` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -79,6 +82,7 @@
 | Delimitador | `RBRACE` | `}` |
 | Delimitador | `LBRACKET` | `[` |
 | Delimitador | `RBRACKET` | `]` |
+| Operador | `DOT` | `.` |
 | Operador | `DOT_DOT` | `..` |
 | Delimitador | `COMMA` | `,` |
 | Delimitador | `SEMI` | `;` |
@@ -91,7 +95,8 @@
 ```ebnf
 program       ::= stmt* EOF ;
 
-stmt          ::= decl_stmt ";"
+stmt          ::= type_decl
+                | decl_stmt ";"
                 | non_decl_stmt ;
 
 decl_stmt     ::= var_decl
@@ -99,6 +104,12 @@ decl_stmt     ::= var_decl
                 | destruct_decl
                 | fun_decl
                 | act_decl ;
+
+type_decl     ::= ( "class" | "struct" ) IDENT "{" field_decl* "}"
+                | "record" IDENT "(" record_params? ")" ( "{" "}" | ";" ) ;
+field_decl    ::= IDENT ":" type_expr ( "=" expr )? ";" ;
+record_params ::= record_param ( "," record_param )* ","? ;
+record_param  ::= IDENT ":" type_expr ( "=" expr )? ;
 
 non_decl_stmt ::= if_stmt
                 | loop_stmt
@@ -154,7 +165,7 @@ expr_stmt     ::= expr ;
 expr          ::= assignment ;
 assignment    ::= lvalue ASSIGN_OP assignment
                 | logical_or ;
-lvalue        ::= IDENT ( "[" expr "]" )* ;
+lvalue        ::= IDENT ( "[" expr "]" | "." IDENT )* ;
 ASSIGN_OP     ::= "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^="
                 | "and=" | "or=" | "xor=" | "<<=" | ">>=" ;
 logical_or    ::= logical_xor ( "or" logical_xor )* ;
@@ -170,7 +181,7 @@ mult          ::= unary ( ( "*" | "/" | "//" | "%" ) unary )* ;
 unary         ::= ( "+" | "-" | "++" | "--" ) unary
                 | power ;
 power         ::= postfix ( "^" unary )? ;
-postfix       ::= primary ( "[" expr "]" | "++" | "--" | "(" call_args? ")" )* ;
+postfix       ::= primary ( "[" expr "]" | "." IDENT | "++" | "--" | "(" call_args? ")" )* ;
 call_args     ::= call_arg ( "," call_arg )* ","? ;
 call_arg      ::= ( IDENT "=" )? ( "ref" expr | "out" ( "var" IDENT ( ":" type_expr )? | expr ) | expr ) ;
 primary       ::= INT
@@ -182,6 +193,7 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
+                | IDENT "{" call_args? "}"
                 | lambda_expr
                 | input_expr
                 | prompt_expr
@@ -303,6 +315,7 @@ type collection_item =
 and lvalue =
   | LValIdent of string * Sigma_common.Span.t
   | LValIndex of expr * expr * Sigma_common.Span.t
+  | LValField of expr * string * Sigma_common.Span.t
 
 and expr_desc =
   | ExprInt of int64
@@ -317,6 +330,8 @@ and expr_desc =
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
+  | ExprField of expr * string
+  | ExprStructInit of string * call_arg list
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -480,6 +495,10 @@ type opcode =
   | OP_NOT_I64 | OP_AND_I64 | OP_OR_I64 | OP_XOR_I64 | OP_SHL_I64 | OP_SHR_I64
   | OP_EQ_* | OP_NE_* | OP_LT_* | OP_GT_* | OP_LE_* | OP_GE_*
   | OP_EQ_OBJ | OP_NE_OBJ
+  | OP_NEW_USER of { type_name : string; kind : user_kind; field_count : int }
+  | OP_GET_FIELD of int
+  | OP_SET_FIELD of int
+  | OP_COPY_STRUCT
   | OP_JUMP of int | OP_JUMP_IF_FALSE of int | OP_JUMP_IF_TRUE of int
   | OP_SET_TEMP of int | OP_GET_TEMP of int
   | OP_DEF_GLOBAL_I64 of string

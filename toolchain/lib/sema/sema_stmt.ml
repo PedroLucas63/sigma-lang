@@ -13,6 +13,13 @@ let check_stmt_inner hooks (env : env) (scope_vars : string list ref)
      | Error err -> Error [ err ])
   | Ast.StmtReturn eo -> Sema_stmt_fun.check_return_stmt hooks env s.span eo
   | Ast.StmtFunDecl fd -> Sema_stmt_fun.check_fun_decl hooks env scope_vars next_loop_id s.span fd
+  | Ast.StmtTypeDecl td ->
+    let is_top_level =
+      match !root_scope_ref with
+      | Some r -> r == scope_vars
+      | None -> false
+    in
+    Sema_user_types.check_type_decl hooks env ~is_top_level s.span td
   | Ast.StmtBlock stmts ->
     let block_vars = ref [] in
     let tstmts = ref [] in

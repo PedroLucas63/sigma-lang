@@ -19,6 +19,7 @@ type opcode =
   | OP_CONST_BOOL of bool
   | OP_CONST_CHAR of string
   | OP_CONST_STR of string
+  | OP_CONST_NULL
   | OP_MAKE_TUPLE of int
   | OP_MAKE_ARRAY of int
   | OP_SPREAD
@@ -95,6 +96,14 @@ type opcode =
   | OP_NE_CHAR
   | OP_NE_STR
   | OP_NE_OBJ
+  | OP_NEW_USER of {
+      type_name : string;
+      kind : Ty.user_type_kind;
+      field_count : int;
+    }
+  | OP_GET_FIELD of int
+  | OP_SET_FIELD of int
+  | OP_COPY_STRUCT
   | OP_LT_I64
   | OP_LT_F32
   | OP_LT_F64

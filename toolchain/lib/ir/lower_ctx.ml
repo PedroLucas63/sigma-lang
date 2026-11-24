@@ -76,7 +76,7 @@ let cmp_opcode (op : Ast.binop) (ty : Ty.t) : Ir.opcode =
   | Ast.BinEq, Ty.Bool -> Ir.OP_EQ_BOOL
   | Ast.BinEq, Ty.Char -> Ir.OP_EQ_CHAR
   | Ast.BinEq, Ty.String -> Ir.OP_EQ_STR
-  | Ast.BinEq, (Ty.Tuple _ | Ty.Array _) -> Ir.OP_EQ_OBJ
+  | Ast.BinEq, (Ty.Tuple _ | Ty.Array _ | Ty.User _) -> Ir.OP_EQ_OBJ
   | Ast.BinNe, Ty.Int -> Ir.OP_NE_I64
   | Ast.BinNe, Ty.Float -> Ir.OP_NE_F32
   | Ast.BinNe, Ty.Double -> Ir.OP_NE_F64
@@ -84,7 +84,7 @@ let cmp_opcode (op : Ast.binop) (ty : Ty.t) : Ir.opcode =
   | Ast.BinNe, Ty.Bool -> Ir.OP_NE_BOOL
   | Ast.BinNe, Ty.Char -> Ir.OP_NE_CHAR
   | Ast.BinNe, Ty.String -> Ir.OP_NE_STR
-  | Ast.BinNe, (Ty.Tuple _ | Ty.Array _) -> Ir.OP_NE_OBJ
+  | Ast.BinNe, (Ty.Tuple _ | Ty.Array _ | Ty.User _) -> Ir.OP_NE_OBJ
   | Ast.BinLt, Ty.Int -> Ir.OP_LT_I64
   | Ast.BinLt, Ty.Float -> Ir.OP_LT_F32
   | Ast.BinLt, Ty.Double -> Ir.OP_LT_F64
@@ -120,7 +120,7 @@ let def_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_DEF_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_DEF_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_DEF_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_DEF_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_DEF_GLOBAL_OBJ name
 
 let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
@@ -131,7 +131,7 @@ let get_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_GET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_GET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_GET_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_GET_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_GET_GLOBAL_OBJ name
 
 let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   match ty with
@@ -142,7 +142,7 @@ let set_global_opcode (ty : Ty.t) (name : string) : Ir.opcode =
   | Ty.Bool -> Ir.OP_SET_GLOBAL_BOOL name
   | Ty.Char -> Ir.OP_SET_GLOBAL_CHAR name
   | Ty.String -> Ir.OP_SET_GLOBAL_STR name
-  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> Ir.OP_SET_GLOBAL_OBJ name
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_SET_GLOBAL_OBJ name
 
 let binop_of_assign_op = function
   | Ast.AssignEq -> None
@@ -176,7 +176,7 @@ let rec emit_default_value b span (ty : Ty.t) : unit =
       emit_default_value b span elem_ty
     done;
     ignore (emit b (Ir.OP_MAKE_ARRAY len) span)
-  | Ty.Fun _ | Ty.Void -> ignore (emit b (Ir.OP_CONST_I64 0L) span)
+  | Ty.User _ | Ty.Fun _ | Ty.Void -> ignore (emit b (Ir.OP_CONST_I64 0L) span)
 
 let emit_undef_scopes b (scopes : string list ref list) span =
   List.iter

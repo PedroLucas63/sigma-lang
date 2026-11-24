@@ -10,6 +10,7 @@ let lower_expr hooks b (e : Typed_ast.expr) =
   | Typed_ast.TExprBool v -> ignore (emit b (Ir.OP_CONST_BOOL v) e.span)
   | Typed_ast.TExprChar c -> ignore (emit b (Ir.OP_CONST_CHAR c) e.span)
   | Typed_ast.TExprString s -> ignore (emit b (Ir.OP_CONST_STR s) e.span)
+  | Typed_ast.TExprNull -> ignore (emit b Ir.OP_CONST_NULL e.span)
   | Typed_ast.TExprInterp parts ->
     List.iter
       (function
@@ -76,6 +77,19 @@ let lower_expr hooks b (e : Typed_ast.expr) =
     hooks.lower_expr b target;
     hooks.lower_expr b idx;
     ignore (emit b Ir.OP_INDEX_GET e.span)
+  | Typed_ast.TExprField (target, _, idx) ->
+    hooks.lower_expr b target;
+    ignore (emit b (Ir.OP_GET_FIELD idx) e.span)
+  | Typed_ast.TExprStructInit { tsi_name; tsi_kind; tsi_args } ->
+    List.iter
+      (fun arg ->
+        hooks.lower_expr b arg;
+        Lower_user_types.emit_copy_if_struct b arg)
+      tsi_args;
+    ignore
+      (emit b
+         (Ir.OP_NEW_USER { type_name = tsi_name; kind = tsi_kind; field_count = List.length tsi_args })
+         e.span)
   | Typed_ast.TExprCall { callee; args; _ } ->
     hooks.lower_expr b callee;
     List.iter
@@ -92,7 +106,9 @@ let lower_expr hooks b (e : Typed_ast.expr) =
           (match a.tca_expr.desc with
            | Typed_ast.TExprIdent vname -> ignore (emit b (Ir.OP_GET_REF vname) a.tca_expr.span)
            | _ -> hooks.lower_expr b a.tca_expr)
-        | Ty.ParamVal -> hooks.lower_expr b a.tca_expr)
+        | Ty.ParamVal ->
+          hooks.lower_expr b a.tca_expr;
+          Lower_user_types.emit_copy_if_struct b a.tca_expr)
       args;
     ignore (emit b (Ir.OP_CALL (List.map (fun a -> a.Typed_ast.tca_idx) args)) e.span)
   | Typed_ast.TExprUnary (unop, sub) -> Lower_expr_ops.lower_unary hooks b e unop sub

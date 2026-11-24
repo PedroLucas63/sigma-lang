@@ -9,6 +9,7 @@ let pp_opcode fmt = function
   | OP_CONST_BOOL b -> Format.fprintf fmt "OP_CONST_BOOL %B" b
   | OP_CONST_CHAR c -> Format.fprintf fmt "OP_CONST_CHAR %S" c
   | OP_CONST_STR s -> Format.fprintf fmt "OP_CONST_STR %S" s
+  | OP_CONST_NULL -> Format.fprintf fmt "OP_CONST_NULL"
   | OP_MAKE_TUPLE n -> Format.fprintf fmt "OP_MAKE_TUPLE %d" n
   | OP_MAKE_ARRAY n -> Format.fprintf fmt "OP_MAKE_ARRAY %d" n
   | OP_SPREAD -> Format.fprintf fmt "OP_SPREAD"
@@ -85,6 +86,11 @@ let pp_opcode fmt = function
   | OP_NE_CHAR -> Format.fprintf fmt "OP_NE_CHAR"
   | OP_NE_STR -> Format.fprintf fmt "OP_NE_STR"
   | OP_NE_OBJ -> Format.fprintf fmt "OP_NE_OBJ"
+  | OP_NEW_USER { type_name; field_count; _ } ->
+    Format.fprintf fmt "OP_NEW_USER %s/%d" type_name field_count
+  | OP_GET_FIELD idx -> Format.fprintf fmt "OP_GET_FIELD %d" idx
+  | OP_SET_FIELD idx -> Format.fprintf fmt "OP_SET_FIELD %d" idx
+  | OP_COPY_STRUCT -> Format.fprintf fmt "OP_COPY_STRUCT"
   | OP_LT_I64 -> Format.fprintf fmt "OP_LT_I64"
   | OP_LT_F32 -> Format.fprintf fmt "OP_LT_F32"
   | OP_LT_F64 -> Format.fprintf fmt "OP_LT_F64"

@@ -107,6 +107,7 @@ type collection_item =
 and lvalue =
   | LValIdent of string * Span.t
   | LValIndex of expr * expr * Span.t
+  | LValField of expr * string * Span.t
 
 and lambda_expr = {
   lam_is_act : bool;
@@ -128,6 +129,8 @@ and expr_desc =
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
+  | ExprField of expr * string
+  | ExprStructInit of string * call_arg list
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -231,12 +234,32 @@ and stmt_desc =
       message : expr option;
     }
   | StmtFunDecl of fun_decl
+  | StmtTypeDecl of type_decl
   | StmtReturn of expr option
   | StmtExpr of expr
 
 and stmt = {
   desc : stmt_desc;
   span : Span.t;
+}
+
+and user_type_kind =
+  | KindClass
+  | KindStruct
+  | KindRecord
+
+and field_decl = {
+  field_name : string;
+  field_span : Span.t;
+  field_type : type_expr;
+  field_default : expr option;
+}
+
+and type_decl = {
+  td_kind : user_type_kind;
+  td_name : string;
+  td_name_span : Span.t;
+  td_fields : field_decl list;
 }
 
 and fun_decl = {

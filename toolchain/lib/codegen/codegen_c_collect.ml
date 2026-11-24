@@ -9,16 +9,24 @@ let rec collect_inner_captures_expr (e : Typed_ast.expr) : string list =
   | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
     collect_inner_captures_expr e1 @ collect_inner_captures_expr e2 @ collect_inner_captures_expr e3
   | Typed_ast.TExprAssign (lval, _, rhs) ->
-    (match lval with Typed_ast.TLValIdent _ -> [] | Typed_ast.TLValIndex (a, i) -> collect_inner_captures_expr a @ collect_inner_captures_expr i)
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (a, i) -> collect_inner_captures_expr a @ collect_inner_captures_expr i
+     | Typed_ast.TLValField (o, _, _) -> collect_inner_captures_expr o)
     @ collect_inner_captures_expr rhs
   | Typed_ast.TExprIncDec (_, lval) ->
-    (match lval with Typed_ast.TLValIdent _ -> [] | Typed_ast.TLValIndex (a, i) -> collect_inner_captures_expr a @ collect_inner_captures_expr i)
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (a, i) -> collect_inner_captures_expr a @ collect_inner_captures_expr i
+     | Typed_ast.TLValField (o, _, _) -> collect_inner_captures_expr o)
   | Typed_ast.TExprCall { callee; args; _ } ->
     collect_inner_captures_expr callee
     @ List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_inner_captures_expr a.tca_expr) args
   | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
     List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_inner_captures_expr sub) items
   | Typed_ast.TExprIndex (b, i) -> collect_inner_captures_expr b @ collect_inner_captures_expr i
+  | Typed_ast.TExprField (o, _, _) -> collect_inner_captures_expr o
+  | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_inner_captures_expr tsi_args
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_inner_captures_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_inner_captures_expr p
@@ -71,6 +79,8 @@ let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
   | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
     List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_out_vars_expr sub) items
   | Typed_ast.TExprIndex (b, i) -> collect_out_vars_expr b @ collect_out_vars_expr i
+  | Typed_ast.TExprField (o, _, _) -> collect_out_vars_expr o
+  | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_out_vars_expr tsi_args
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_out_vars_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_out_vars_expr p
@@ -125,15 +135,23 @@ let rec collect_all_funs_expr (e : Typed_ast.expr) : Typed_ast.fun_decl list =
   | Typed_ast.TExprChainCmp (e1, _, e2, _, e3) ->
     collect_all_funs_expr e1 @ collect_all_funs_expr e2 @ collect_all_funs_expr e3
   | Typed_ast.TExprAssign (lval, _, rhs) ->
-    (match lval with Typed_ast.TLValIdent _ -> [] | Typed_ast.TLValIndex (a, i) -> collect_all_funs_expr a @ collect_all_funs_expr i)
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (a, i) -> collect_all_funs_expr a @ collect_all_funs_expr i
+     | Typed_ast.TLValField (o, _, _) -> collect_all_funs_expr o)
     @ collect_all_funs_expr rhs
   | Typed_ast.TExprIncDec (_, lval) ->
-    (match lval with Typed_ast.TLValIdent _ -> [] | Typed_ast.TLValIndex (a, i) -> collect_all_funs_expr a @ collect_all_funs_expr i)
+    (match lval with
+     | Typed_ast.TLValIdent _ -> []
+     | Typed_ast.TLValIndex (a, i) -> collect_all_funs_expr a @ collect_all_funs_expr i
+     | Typed_ast.TLValField (o, _, _) -> collect_all_funs_expr o)
   | Typed_ast.TExprCall { callee; args; _ } ->
     collect_all_funs_expr callee @ List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_all_funs_expr a.tca_expr) args
   | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
     List.concat_map (function Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> collect_all_funs_expr sub) items
   | Typed_ast.TExprIndex (b, i) -> collect_all_funs_expr b @ collect_all_funs_expr i
+  | Typed_ast.TExprField (o, _, _) -> collect_all_funs_expr o
+  | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_all_funs_expr tsi_args
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_all_funs_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_all_funs_expr p

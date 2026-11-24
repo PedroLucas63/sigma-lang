@@ -28,6 +28,8 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   let saved_root = !root_scope_ref in
   let saved_fun = !current_fun in
   let saved_outer = !fn_outer in
+  let saved_user_types = Hashtbl.copy user_types in
+  Hashtbl.clear user_types;
   root_scope_ref := Some root_scope;
   current_fun := RetNone;
   fn_outer := None;
@@ -40,6 +42,8 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   root_scope_ref := saved_root;
   current_fun := saved_fun;
   fn_outer := saved_outer;
+  Hashtbl.clear user_types;
+  Hashtbl.iter (Hashtbl.replace user_types) saved_user_types;
   match List.rev !all_errors with
   | [] -> Ok (List.rev !tstmts)
   | errs -> Error errs

@@ -19,6 +19,9 @@ let keyword_or_ident st word =
   | "return" -> Token.KW_RETURN
   | "ref" -> Token.KW_REF
   | "out" -> Token.KW_OUT
+  | "class" -> Token.KW_CLASS
+  | "struct" -> Token.KW_STRUCT
+  | "record" -> Token.KW_RECORD
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT
@@ -110,6 +113,7 @@ let read_symbol st tokens errors start_pos c =
   | ']' -> advance st; emit Token.RBRACKET
   | '.' when peek_next st = '.' ->
     advance st; advance st; emit Token.DOT_DOT
+  | '.' -> advance st; emit Token.DOT
   | ',' -> advance st; emit Token.COMMA
   | ';' -> advance st; emit Token.SEMI
   | _ ->

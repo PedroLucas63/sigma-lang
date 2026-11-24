@@ -10,6 +10,8 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
     SSet.add name (assigned_in_expr rhs acc)
   | Typed_ast.TExprAssign (Typed_ast.TLValIndex (base, idx), _, rhs) ->
     assigned_in_expr rhs (assigned_in_expr idx (assigned_in_expr base acc))
+  | Typed_ast.TExprAssign (Typed_ast.TLValField (base, _, _), _, rhs) ->
+    assigned_in_expr rhs (assigned_in_expr base acc)
   | Typed_ast.TExprCall { args; _ } ->
     List.fold_left
       (fun s (arg : Typed_ast.typed_call_arg) ->
@@ -27,6 +29,8 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
   | Typed_ast.TExprIncDec (_, Typed_ast.TLValIdent name) -> SSet.add name acc
   | Typed_ast.TExprIncDec (_, Typed_ast.TLValIndex (base, idx)) ->
     assigned_in_expr idx (assigned_in_expr base acc)
+  | Typed_ast.TExprIncDec (_, Typed_ast.TLValField (base, _, _)) ->
+    assigned_in_expr base acc
   | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
     List.fold_left
       (fun s item ->
@@ -34,6 +38,9 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
         | Typed_ast.TItemExpr sub | Typed_ast.TItemSpread sub -> assigned_in_expr sub s)
       acc items
   | Typed_ast.TExprIndex (base, idx) -> assigned_in_expr idx (assigned_in_expr base acc)
+  | Typed_ast.TExprField (base, _, _) -> assigned_in_expr base acc
+  | Typed_ast.TExprStructInit { tsi_args; _ } ->
+    List.fold_left (fun s a -> assigned_in_expr a s) acc tsi_args
   | Typed_ast.TExprInterp parts ->
     List.fold_left
       (fun s part ->

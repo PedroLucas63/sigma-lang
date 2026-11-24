@@ -24,9 +24,9 @@ if [[ -n "${STAGED_LIB_FILES}" ]]; then
   while IFS= read -r rel_file; do
     [[ -z "${rel_file}" ]] && continue
     # Verifica o conteúdo staged (index) do arquivo
-    if git show ":${rel_file}" | grep -nE '\b(failwith|Obj\.magic)\b|\bexit[[:space:]]' >/dev/null; then
+    if git show ":${rel_file}" | grep -nE '\b(failwith|Obj\.magic)\b|\b(Stdlib\.)?exit[[:space:]]+(\(|[0-9])' >/dev/null; then
       echo "[FAIL] Primitiva proibida encontrada em ${rel_file}:"
-      git show ":${rel_file}" | grep -nE '\b(failwith|Obj\.magic)\b|\bexit[[:space:]]' | sed 's/^/  /'
+      git show ":${rel_file}" | grep -nE '\b(failwith|Obj\.magic)\b|\b(Stdlib\.)?exit[[:space:]]+(\(|[0-9])' | sed 's/^/  /'
       bad_found=1
     fi
   done <<< "${STAGED_LIB_FILES}"

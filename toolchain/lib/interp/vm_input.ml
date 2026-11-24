@@ -79,7 +79,7 @@ let parse_prim_value (ty : Ty.t) (raw : string) : (value, string) result =
       if utf8_code_point_len trimmed = 1 then Ok (VChar trimmed)
       else Error (Printf.sprintf "Runtime error: failed to parse %S as 'char' (expected a single character)" raw)
   | Ty.String -> Ok (VString raw)
-  | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void ->
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void ->
     Error "Runtime error: composite types are not supported in primitive input parsing"
 
 let split_whitespace_tokens (s : string) : string list =

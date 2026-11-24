@@ -15,7 +15,7 @@ let emit_bound_var buf indent ~is_const (ty : Ty.t) name c_init_val c_init_boxed
 let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
-    let c_e = hooks.emit_expr v.init in
+    let c_e = emit_copy_if_struct v.init (hooks.emit_expr v.init) in
     emit_bound_var buf indent ~is_const:v.is_const v.ty v.name c_e (emit_box_val v.ty c_e)
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
@@ -114,7 +114,7 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
         | Ty.Decimal -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_dec(%s), stdout);\n" indent c_e)
         | Ty.Bool -> Buffer.add_string buf (Printf.sprintf "%sfputs((%s) ? \"true\" : \"false\", stdout);\n" indent c_e)
         | Ty.Char | Ty.String -> Buffer.add_string buf (Printf.sprintf "%sfputs(%s, stdout);\n" indent c_e)
-        | Ty.Tuple _ | Ty.Array _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
+        | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
         | Ty.Fun _ -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n%sfputs(\"<function>\", stdout);\n" indent c_e indent)
         | Ty.Void -> ())
       args;
@@ -146,7 +146,9 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
            indent indent vm c_msg indent indent (escape_c_string (Span.to_string s.span)) vm vm vm exp_str act_str indent indent)
   | Typed_ast.TStmtReturn None -> Buffer.add_string buf (Printf.sprintf "%sreturn sgm_val_i64(0);\n" indent)
   | Typed_ast.TStmtReturn (Some e) ->
-    Buffer.add_string buf (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty (hooks.emit_expr e)))
+    let c_e = emit_copy_if_struct e (hooks.emit_expr e) in
+    Buffer.add_string buf (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty c_e))
+  | Typed_ast.TStmtTypeDecl _ -> ()
   | Typed_ast.TStmtFunDecl fd ->
     let c_fn_name =
       match Hashtbl.find_opt fun_c_names fd.tf_name_span with Some n -> n | None -> "sgm_fn_" ^ fd.tf_name

@@ -161,6 +161,9 @@ let rec parse_non_decl_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
     let kw = if tok.kind = Token.KW_FUN then "fun" else "act" in
     err_at tok ~hint:(Printf.sprintf "wrap the declaration in braces, e.g. 'if (cond) { %s f(...) ... }'" kw)
       (Printf.sprintf "'%s' declaration is not allowed directly inside an unbraced branch" kw)
+  | Token.KW_CLASS | Token.KW_STRUCT | Token.KW_RECORD ->
+    err_at tok ~hint:"declare 'class', 'struct', and 'record' at top level"
+      "type declaration is not allowed directly inside an unbraced branch"
   | Token.KW_RETURN -> bump st; parse_return_stmt hooks st tok
   | Token.KW_IF -> bump st; hooks.parse_if_stmt st tok ~stmt_parser:nd_parser
   | Token.KW_WHILE -> bump st; hooks.parse_while_stmt st tok.span ~label:None ~stmt_parser:nd_parser
@@ -209,4 +212,13 @@ let parse_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
     bump st;
     Parser_decl.parse_fun_decl hooks st tok ~is_act:true
+  | Token.KW_CLASS ->
+    bump st;
+    Parser_type_decl.parse_type_decl hooks st tok ~kind:Ast.KindClass
+  | Token.KW_STRUCT ->
+    bump st;
+    Parser_type_decl.parse_type_decl hooks st tok ~kind:Ast.KindStruct
+  | Token.KW_RECORD ->
+    bump st;
+    Parser_type_decl.parse_type_decl hooks st tok ~kind:Ast.KindRecord
   | _ -> parse_non_decl_stmt hooks st

@@ -23,6 +23,7 @@ and input_mode =
 and lvalue =
   | TLValIdent of string
   | TLValIndex of expr * expr
+  | TLValField of expr * string * int
 
 and typed_call_arg = {
   tca_idx : int;
@@ -39,11 +40,18 @@ and expr_desc =
   | TExprBool of bool
   | TExprChar of string
   | TExprString of string
+  | TExprNull
   | TExprInterp of interp_part list
   | TExprIdent of string
   | TExprTuple of collection_item list
   | TExprArray of collection_item list
   | TExprIndex of expr * expr
+  | TExprField of expr * string * int
+  | TExprStructInit of {
+      tsi_name : string;
+      tsi_kind : Ty.user_type_kind;
+      tsi_args : expr list;
+    }
   | TExprCall of {
       callee : expr;
       args : typed_call_arg list;
@@ -166,8 +174,22 @@ and stmt_desc =
       message : expr option;
     }
   | TStmtFunDecl of fun_decl
+  | TStmtTypeDecl of user_type_decl
   | TStmtReturn of expr option
   | TStmtExpr of expr
+
+and user_field_decl = {
+  tuf_name : string;
+  tuf_ty : Ty.t;
+  tuf_default : expr option;
+}
+
+and user_type_decl = {
+  tud_kind : Ty.user_type_kind;
+  tud_name : string;
+  tud_span : Span.t;
+  tud_fields : user_field_decl list;
+}
 
 and stmt = {
   desc : stmt_desc;

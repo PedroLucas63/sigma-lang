@@ -51,7 +51,9 @@ let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
 let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
-    Buffer.add_string buf (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident v.name) (hooks.emit_expr v.init))
+    Buffer.add_string buf
+      (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident v.name)
+         (emit_copy_if_struct v.init (hooks.emit_expr v.init)))
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
     let tmp_obj = Printf.sprintf "_sgm_destr_%d" !chain_counter in

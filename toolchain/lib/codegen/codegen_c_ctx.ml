@@ -54,7 +54,7 @@ let c_type_of_ty = function
   | Ty.Decimal -> "sgm_decimal_t"
   | Ty.Bool -> "bool"
   | Ty.Char | Ty.String -> "const char*"
-  | Ty.Tuple _ | Ty.Array _ -> "sgm_obj_t*"
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> "sgm_obj_t*"
   | Ty.Fun _ -> "sgm_fn_t*"
   | Ty.Void -> "void"
 
@@ -65,7 +65,7 @@ let c_val_union_field = function
   | Ty.Decimal -> "dec"
   | Ty.Bool -> "b"
   | Ty.Char | Ty.String -> "str"
-  | Ty.Tuple _ | Ty.Array _ -> "obj"
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> "obj"
   | Ty.Fun _ -> "fn"
   | Ty.Void -> "i64"
 
@@ -78,7 +78,7 @@ let emit_box_val (ty : Ty.t) (c_expr : string) : string =
   | Ty.Bool -> Printf.sprintf "sgm_val_bool(%s)" c_expr
   | Ty.Char -> Printf.sprintf "sgm_val_char(%s)" c_expr
   | Ty.String -> Printf.sprintf "sgm_val_str(%s)" c_expr
-  | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_val_obj(%s)" c_expr
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> Printf.sprintf "sgm_val_obj(%s)" c_expr
   | Ty.Fun _ -> Printf.sprintf "sgm_val_fn(%s)" c_expr
   | Ty.Void -> Printf.sprintf "((void)(%s), sgm_val_i64(0))" c_expr
 
@@ -119,7 +119,7 @@ let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (c
   | Ty.Decimal -> Printf.sprintf "(sgm_dec_cmp(%s, %s) %s 0)" cl cr c_op
   | Ty.String -> Printf.sprintf "(strcmp(%s, %s) %s 0)" cl cr c_op
   | Ty.Char -> Printf.sprintf "(sgm_decode_utf8(%s) %s sgm_decode_utf8(%s))" cl c_op cr
-  | Ty.Tuple _ | Ty.Array _ ->
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ ->
     if op = Ast.BinEq then Printf.sprintf "sgm_obj_eq(%s, %s)" cl cr
     else Printf.sprintf "(!sgm_obj_eq(%s, %s))" cl cr
   | _ -> Printf.sprintf "((%s) %s (%s))" cl c_op cr
@@ -127,7 +127,7 @@ let emit_cmp_raw (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) (cl_raw : string) (c
 let c_tag_of_ty = function
   | Ty.Int -> "SGM_TAG_I64" | Ty.Float -> "SGM_TAG_F32" | Ty.Double -> "SGM_TAG_F64"
   | Ty.Decimal -> "SGM_TAG_DEC" | Ty.Bool -> "SGM_TAG_BOOL" | Ty.Char -> "SGM_TAG_CHAR"
-  | Ty.String -> "SGM_TAG_STR" | Ty.Tuple _ | Ty.Array _ -> "SGM_TAG_OBJ"
+  | Ty.String -> "SGM_TAG_STR" | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> "SGM_TAG_OBJ"
   | Ty.Fun _ -> "SGM_TAG_FN" | Ty.Void -> "SGM_TAG_I64"
 
 let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
@@ -138,7 +138,7 @@ let emit_fmt_c_val (ty : Ty.t) (c_val : string) : string =
   | Ty.Decimal -> Printf.sprintf "sgm_fmt_dec(%s)" c_val
   | Ty.Bool -> Printf.sprintf "((%s) ? \"true\" : \"false\")" c_val
   | Ty.Char | Ty.String -> c_val
-  | Ty.Tuple _ | Ty.Array _ -> Printf.sprintf "sgm_fmt_obj(%s)" c_val
+  | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> Printf.sprintf "sgm_fmt_obj(%s)" c_val
   | Ty.Fun _ -> Printf.sprintf "sgm_fmt_fn(%s)" c_val
   | Ty.Void -> "\"\""
 
@@ -157,7 +157,7 @@ let c_decl_type_and_qual ~is_const (ty : Ty.t) : string * string =
   if is_const then
     match ty with
     | Ty.Char | Ty.String -> ("const char* const", "")
-    | Ty.Tuple _ | Ty.Array _ -> ("sgm_obj_t* const", "")
+    | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> ("sgm_obj_t* const", "")
     | Ty.Fun _ -> ("sgm_fn_t* const", "")
     | Ty.Void -> ("void", "")
     | _ -> (c_type_of_ty ty, "const ")
@@ -166,4 +166,10 @@ let c_decl_type_and_qual ~is_const (ty : Ty.t) : string * string =
 let emit_default_c_val = function
   | Ty.Int -> "INT64_C(0)" | Ty.Float -> "0.0f" | Ty.Double -> "0.0"
   | Ty.Decimal -> "sgm_dec_from_i64(INT64_C(0))" | Ty.Bool -> "false"
-  | Ty.Char | Ty.String -> "\"\"" | Ty.Tuple _ | Ty.Array _ | Ty.Fun _ | Ty.Void -> "NULL"
+  | Ty.Char | Ty.String -> "\"\"" | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> "NULL"
+
+let emit_copy_if_struct (e : Typed_ast.expr) (c_expr : string) : string =
+  match e.ty, e.desc with
+  | Ty.User (Ty.KindStruct, _), Typed_ast.TExprStructInit _ -> c_expr
+  | Ty.User (Ty.KindStruct, _), _ -> Printf.sprintf "sgm_obj_clone_struct(%s)" c_expr
+  | _ -> c_expr
