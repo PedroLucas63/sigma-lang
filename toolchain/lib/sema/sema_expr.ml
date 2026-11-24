@@ -1,0 +1,124 @@
+open Sigma_diagnostics
+open Sigma_syntax
+open Sema_env
+open Sema_ops
+
+let check_expr hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
+  match hooks.check_expr_any env e with
+  | Ok (te : Typed_ast.expr) when te.ty = Ty.Void ->
+    Error
+      (Diagnostic.error
+         ~hint:"'act' procedures do not produce a value; call them as a standalone statement, e.g. 'my_act(...);'"
+         ~code:"E0113" ~span:e.span
+         "the result of an 'act' call cannot be used as a value")
+  | r -> r
+
+let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnostic.t) result =
+  match e.desc with
+  | Ast.ExprInt n -> Ok { Typed_ast.desc = Typed_ast.TExprInt n; ty = Ty.Int; span = e.span }
+  | Ast.ExprFloat f -> Ok { Typed_ast.desc = Typed_ast.TExprFloat f; ty = Ty.Float; span = e.span }
+  | Ast.ExprDouble d -> Ok { Typed_ast.desc = Typed_ast.TExprDouble d; ty = Ty.Double; span = e.span }
+  | Ast.ExprDecimal m -> Ok { Typed_ast.desc = Typed_ast.TExprDecimal m; ty = Ty.Decimal; span = e.span }
+  | Ast.ExprBool b -> Ok { Typed_ast.desc = Typed_ast.TExprBool b; ty = Ty.Bool; span = e.span }
+  | Ast.ExprChar c -> Ok { Typed_ast.desc = Typed_ast.TExprChar c; ty = Ty.Char; span = e.span }
+  | Ast.ExprString s -> Ok { Typed_ast.desc = Typed_ast.TExprString s; ty = Ty.String; span = e.span }
+  | Ast.ExprInterp parts ->
+    let rec check_parts acc = function
+      | [] -> Ok (List.rev acc)
+      | Ast.InterpLit s :: rest -> check_parts (Typed_ast.TInterpLit s :: acc) rest
+      | Ast.InterpExpr (ie, fmt_opt) :: rest ->
+        (match check_expr hooks env ie with
+         | Error err -> Error err
+         | Ok tie ->
+           (match fmt_opt with
+            | None -> check_parts (Typed_ast.TInterpExpr (tie, None) :: acc) rest
+            | Some spec ->
+              (match validate_format_spec spec tie.ty with
+               | Error err -> Error err
+               | Ok () -> check_parts (Typed_ast.TInterpExpr (tie, Some spec) :: acc) rest)))
+    in
+    (match check_parts [] parts with
+     | Ok tparts -> Ok { Typed_ast.desc = Typed_ast.TExprInterp tparts; ty = Ty.String; span = e.span }
+     | Error err -> Error err)
+  | Ast.ExprInput { prompt; mode } -> Sema_expr_special.check_input_expr hooks env e.span prompt mode
+  | Ast.ExprIdent name ->
+    (match Hashtbl.find_opt env name with
+     | Some info -> Ok { Typed_ast.desc = Typed_ast.TExprIdent name; ty = info.ty; span = e.span }
+     | None ->
+       Error
+         (Diagnostic.error
+            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+            ~code:"E0102" ~span:e.span
+            (Printf.sprintf "use of undeclared variable '%s'" name)))
+  | Ast.ExprCall (callee, args) ->
+    (match check_expr hooks env callee with
+     | Error err -> Error err
+     | Ok tcallee ->
+       (match tcallee.ty with
+        | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
+        | other ->
+          Error
+            (Diagnostic.error
+               ~hint:"only values of function type ('fun'/'act') can be called"
+               ~code:"E0112" ~span:callee.span
+               (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))
+  | Ast.ExprLambda lam -> Sema_expr_special.check_lambda_expr hooks env e.span lam
+  | Ast.ExprTuple items ->
+    (match hooks.check_collection_items env items with
+     | Error err -> Error err
+     | Ok checked ->
+       let titems = List.map fst checked in
+       let elem_tys = List.concat_map snd checked in
+       Ok { Typed_ast.desc = Typed_ast.TExprTuple titems; ty = Ty.Tuple elem_tys; span = e.span })
+  | Ast.ExprArray items ->
+    if items = [] then
+      Error
+        (Diagnostic.error
+           ~hint:"static arrays require at least 1 element (or declare with explicit size like 'var a : int[3];')"
+           ~code:"E0108" ~span:e.span "empty array literal '[]' is not allowed")
+    else
+      (match hooks.check_collection_items env items with
+       | Error err -> Error err
+       | Ok checked ->
+         let titems = List.map fst checked in
+         let elem_tys = List.concat_map snd checked in
+         match elem_tys with
+         | [] -> Error (Diagnostic.error ~code:"E0108" ~span:e.span "array literal must contain at least 1 element")
+         | first_ty :: rest_tys ->
+           (match List.find_opt (fun t -> not (Ty.equal first_ty t)) rest_tys with
+            | Some bad_ty ->
+              Error
+                (Diagnostic.error
+                   ~hint:"all elements in an array must have the exact same type; use a tuple '(a, b)' for heterogeneous values"
+                   ~code:"E0104" ~span:e.span
+                   (Printf.sprintf "array elements must all have the same type: expected '%s', found '%s'"
+                      (Ty.to_string first_ty) (Ty.to_string bad_ty)))
+            | None ->
+              Ok
+                {
+                  Typed_ast.desc = Typed_ast.TExprArray titems;
+                  ty = Ty.Array (first_ty, List.length elem_tys);
+                  span = e.span;
+                }))
+  | Ast.ExprIndex (target, idx) ->
+    (match hooks.check_index_access env ~span:e.span target idx with
+     | Error err -> Error err
+     | Ok (ttarget, tidx, elem_ty) ->
+       Ok { Typed_ast.desc = Typed_ast.TExprIndex (ttarget, tidx); ty = elem_ty; span = e.span })
+  | Ast.ExprUnary (op, sub) ->
+    (match check_expr hooks env sub with
+     | Error err -> Error err
+     | Ok tsub ->
+       (match check_unary_type op tsub.ty with
+        | Some res_ty -> Ok { Typed_ast.desc = Typed_ast.TExprUnary (op, tsub); ty = res_ty; span = e.span }
+        | None ->
+          Error
+            (Diagnostic.error
+               ~hint:"unary '+' and '-' are only supported on numeric types ('int', 'float', 'double', 'decimal')"
+               ~code:"E0104" ~span:e.span
+               (Printf.sprintf "invalid unary operator '%s' for operand of type '%s'"
+                  (Ast.unop_to_string op) (Ty.to_string tsub.ty)))))
+  | Ast.ExprBinary (op, lhs, rhs) -> Sema_expr_ops.check_binary_expr hooks env e.span op lhs rhs
+  | Ast.ExprChainCmp (e1, op1, e2, op2, e3) -> Sema_expr_ops.check_chain_cmp hooks env e.span e1 op1 e2 op2 e3
+  | Ast.ExprAssign (lval, op, rhs) -> Sema_expr_ops.check_assign_expr hooks env e.span lval op rhs
+  | Ast.ExprIncDec (inc_op, lval) -> Sema_expr_ops.check_incdec_expr hooks env e.span inc_op lval
