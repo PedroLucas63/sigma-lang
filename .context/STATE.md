@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M2 — Funções e Procedimentos Anônimos (Concluído)`
-- **Git Flow:** Branch ativa `develop` (`feature/anonymous-functions` mesclada).
+- **Milestone:** `M3.0 — Manutenção e Modularização do Código (Concluído)`
+- **Git Flow:** Branch ativa `develop` (`feature/modular-refactoring` mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -37,7 +37,7 @@
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
 ## Próximos Passos Planejados (Roadmap Oficial em Ordem de Execução)
-1. [ ] **Manutenção e Modularização do Código:** Reduzir todos os arquivos para no máximo 500 linhas (meta $\le 300$ linhas), aplicando padrões de projeto, removendo *code smells* e decompondo módulos grandes (`parser`, `typecheck`, `lower`, `vm`, `codegen_c`, `test`).
+1. [x] **Manutenção e Modularização do Código:** Todos os 100 arquivos `.ml`/`.mli` reduzidos para $\le 300$ linhas, com guardrail `check_file_sizes.sh --strict` ativo no CI.
 2. [ ] **Estruturas `class`, `struct` e `record` (Fase 1 — Campos e Igualdade):** `class` (igualdade por referência), `struct` (igualdade por valor) e `record` (imutável, igualdade por valor), inicialmente armazenando valores e suportando `==` e `!=`.
 3. [ ] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
 4. [ ] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
@@ -57,3 +57,4 @@
 - **2026-10-29:** Laços `while`, `for`, `foreach`, rótulos `break`/`continue` (`ADR-025`), `input`/`prompt`, `${expr:spec}` (`ADR-026`) e transpilação `sigma emit-c` (`ADR-027`).
 - **2026-11-02:** Streaming de stdout imediato (`v0.2.2`), funções/procedimentos (`fun`/`act`), currying, parâmetros nomeados (`ADR-028`), closures com captura léxica (`ADR-029`) e parâmetros `shallow const`, `ref`, `out` e `out var` (`ADR-030`, 334 asserções).
 - **2026-11-08:** Funções e procedimentos anônimos `[fun,act]({<param>})[:<ret>] => <command>` com inferência de retorno, comandos inline/bloco e paridade VM/C99 (`ADR-031`, 379 asserções em 12 suítes).
+- **2026-11-24:** Refatoração modular completa da toolchain (`syntax`, `sema`, `ir`, `interp`, `codegen`, `common`, `bin`, `test`) com 100 arquivos $\le 300$ linhas e `check_file_sizes.sh --strict` no CI (`ADR-034`).
