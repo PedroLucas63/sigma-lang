@@ -82,6 +82,17 @@ let check_fun
         check_assigned s.span curr;
         curr
       | Typed_ast.TStmtExpr e -> assigned_in_expr e curr
+      | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+        let c1 = assigned_in_expr tma_rhs curr in
+        List.fold_left
+          (fun acc -> function
+            | Typed_ast.TTargetDiscard -> acc
+            | Typed_ast.TTargetLVal (Typed_ast.TLValIdent nm, _) -> SSet.add nm acc
+            | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (b, i), _) ->
+              assigned_in_expr i (assigned_in_expr b acc)
+            | Typed_ast.TTargetLVal (Typed_ast.TLValField (b, _, _), _) ->
+              assigned_in_expr b acc)
+          c1 tma_targets
       | Typed_ast.TStmtBlock ss -> check_stmts ss curr
       | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
         let curr_cond = assigned_in_expr cond curr in

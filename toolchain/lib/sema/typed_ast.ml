@@ -25,6 +25,10 @@ and lvalue =
   | TLValIndex of expr * expr
   | TLValField of expr * string * int
 
+and multi_target =
+  | TTargetDiscard
+  | TTargetLVal of lvalue * Ty.t
+
 and typed_call_arg = {
   tca_idx : int;
   tca_expr : expr;
@@ -175,6 +179,10 @@ and stmt_desc =
     }
   | TStmtFunDecl of fun_decl
   | TStmtTypeDecl of user_type_decl
+  | TStmtMultiAssign of {
+      tma_targets : multi_target list;
+      tma_rhs : expr;
+    }
   | TStmtReturn of expr option
   | TStmtExpr of expr
 

@@ -20,6 +20,8 @@ let check_stmt_inner hooks (env : env) (scope_vars : string list ref)
       | None -> false
     in
     Sema_user_types.check_type_decl hooks env ~is_top_level s.span td
+  | Ast.StmtMultiAssign { ma_targets; ma_rhs } ->
+    Sema_multi_assign.check_multi_assign hooks env s.span ma_targets ma_rhs
   | Ast.StmtBlock stmts ->
     let block_vars = ref [] in
     let tstmts = ref [] in

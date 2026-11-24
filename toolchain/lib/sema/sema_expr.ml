@@ -81,8 +81,10 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                   (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
   | Ast.ExprStructInit (name, args) ->
     Sema_user_types.check_struct_init hooks env ~span:e.span name args
+  | Ast.ExprNew { new_name; new_is_ctor; new_args } ->
+    Sema_user_types.check_new_expr hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_args
   | Ast.ExprField (base, field) ->
-    Sema_user_types.check_field_access hooks env ~span:e.span base field
+    Sema_user_fields.check_field_access hooks env ~span:e.span base field
   | Ast.ExprLambda lam -> Sema_expr_special.check_lambda_expr hooks env e.span lam
   | Ast.ExprTuple items ->
     (match hooks.check_collection_items env items with

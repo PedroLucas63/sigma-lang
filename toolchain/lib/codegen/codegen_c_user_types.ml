@@ -50,3 +50,53 @@ let emit_field_assign hooks (e : Typed_ast.expr) (target : Typed_ast.expr) (idx 
          "__extension__ ({ sgm_obj_t *%s = (%s); %s %s = %s->items[%d].u.%s; %s->items[%d].u.%s = (%s); })"
          obj_v (hooks.emit_expr target) (c_type_of_ty e.ty) (mangle_ident tmp_ident)
          obj_v idx field obj_v idx field (hooks.emit_expr bin_expr))
+
+let destruct_slot_c ~tmp_obj ~(rhs_ty : Ty.t) ~pat_len ~(elem_ty : Ty.t) (i : int) : string * string =
+  match rhs_ty with
+  | Ty.Array (_, n) when i = pat_len - 1 && pat_len < n ->
+    let raw = Printf.sprintf "sgm_array_slice(%s, INT64_C(%d), INT64_C(%d))" tmp_obj i (n - pat_len + 1) in
+    (raw, Printf.sprintf "sgm_val_obj(%s)" raw)
+  | _ ->
+    let slot = Printf.sprintf "sgm_obj_slot(%s, INT64_C(%d))" tmp_obj i in
+    let raw = Printf.sprintf "%s->u.%s" slot (c_val_union_field elem_ty) in
+    let raw =
+      match elem_ty with
+      | Ty.User (Ty.KindStruct, _) -> Printf.sprintf "sgm_obj_clone_struct(%s)" raw
+      | _ -> raw
+    in
+    (raw, emit_box_val elem_ty raw)
+
+let emit_multi_assign hooks (buf : Buffer.t) (indent : string)
+    (targets : Typed_ast.multi_target list) (rhs : Typed_ast.expr) : unit =
+  incr chain_counter;
+  let id = !chain_counter in
+  let rhs_var = Printf.sprintf "_sgm_ma_rhs_%d" id in
+  let pat_len = List.length targets in
+  Buffer.add_string buf (Printf.sprintf "%s{\n%s  sgm_obj_t *%s = %s;\n%s  (void)%s;\n" indent indent rhs_var (hooks.emit_expr rhs) indent rhs_var);
+  let temp_names =
+    List.mapi
+      (fun i -> function
+        | Typed_ast.TTargetDiscard -> None
+        | Typed_ast.TTargetLVal (_, lv_ty) ->
+          let tv = Printf.sprintf "_sgm_mav_%d_%d" id i in
+          let raw, _ = destruct_slot_c ~tmp_obj:rhs_var ~rhs_ty:rhs.ty ~pat_len ~elem_ty:lv_ty i in
+          Buffer.add_string buf (Printf.sprintf "%s  %s %s = %s;\n" indent (c_type_of_ty lv_ty) tv raw);
+          Some tv)
+      targets
+  in
+  List.iter2
+    (fun tgt tv_opt ->
+      match tgt, tv_opt with
+      | Typed_ast.TTargetLVal (Typed_ast.TLValIdent nm, _), Some tv ->
+        Buffer.add_string buf (Printf.sprintf "%s  %s = %s;\n" indent (ident_c_expr nm) tv)
+      | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (base, idx), lv_ty), Some tv ->
+        Buffer.add_string buf
+          (Printf.sprintf "%s  sgm_obj_slot(%s, %s)->u.%s = %s;\n"
+             indent (hooks.emit_expr base) (hooks.emit_expr idx) (c_val_union_field lv_ty) tv)
+      | Typed_ast.TTargetLVal (Typed_ast.TLValField (base, _, fidx), lv_ty), Some tv ->
+        Buffer.add_string buf
+          (Printf.sprintf "%s  (%s)->items[%d].u.%s = %s;\n"
+             indent (hooks.emit_expr base) fidx (c_val_union_field lv_ty) tv)
+      | _ -> ())
+    targets temp_names;
+  Buffer.add_string buf (Printf.sprintf "%s}\n" indent)

@@ -189,7 +189,30 @@ let resolve_init_args hooks (env : env) ~span (info : user_type_info) (args : As
         span;
       }
 
-let check_struct_init hooks (env : env) ~span (type_name : string) (args : Ast.call_arg list)
+let check_new_expr hooks (env : env) ~span ~(is_ctor : bool) (type_name : string)
+    (args : Ast.call_arg list) : (Typed_ast.expr, Diagnostic.t) result =
+  match Hashtbl.find_opt user_types type_name with
+  | None ->
+    Error
+      (Diagnostic.error ~code:"E0101" ~span
+         (Printf.sprintf "unknown type '%s'" type_name))
+  | Some info ->
+    if is_ctor && info.ut_kind <> Ty.KindRecord then
+      Error
+        (Diagnostic.error
+           ~hint:(Printf.sprintf "use 'new %s { ... }' to initialize fields" type_name)
+           ~code:"E0121" ~span
+           (Printf.sprintf "type '%s' has no constructor; use 'new %s { ... }' to initialize fields"
+              type_name type_name))
+    else if (not is_ctor) && info.ut_kind = Ty.KindRecord then
+      Error
+        (Diagnostic.error
+           ~hint:(Printf.sprintf "instantiate records with parentheses, e.g. 'new %s(...)'" type_name)
+           ~code:"E0121" ~span
+           (Printf.sprintf "record '%s' must be instantiated with parentheses, not '{ ... }'" type_name))
+    else resolve_init_args hooks env ~span info args
+
+let check_struct_init _hooks _env ~span (type_name : string) (_args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result =
   match Hashtbl.find_opt user_types type_name with
   | None ->
@@ -197,94 +220,30 @@ let check_struct_init hooks (env : env) ~span (type_name : string) (args : Ast.c
       (Diagnostic.error ~code:"E0101" ~span
          (Printf.sprintf "unknown type '%s'" type_name))
   | Some info ->
-    if info.ut_kind = Ty.KindRecord then
-      Error
-        (Diagnostic.error
-           ~hint:(Printf.sprintf "instantiate records with parentheses, e.g. '%s(...)'" type_name)
-           ~code:"E0121" ~span
-           (Printf.sprintf "record '%s' must be instantiated with parentheses, not '{ ... }'" type_name))
-    else resolve_init_args hooks env ~span info args
+    let usage =
+      if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" type_name
+      else Printf.sprintf "new %s { ... }" type_name
+    in
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "use '%s' to create an instance" usage)
+         ~code:"E0122" ~span
+         (Printf.sprintf "missing 'new' keyword when instantiating '%s'" type_name))
 
-let check_record_ctor hooks (env : env) ~span (type_name : string) (args : Ast.call_arg list)
+let check_record_ctor _hooks (env : env) ~span (type_name : string) (_args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result option =
   if Hashtbl.mem env type_name then None
   else
     match Hashtbl.find_opt user_types type_name with
     | None -> None
     | Some info ->
-      if info.ut_kind = Ty.KindRecord then Some (resolve_init_args hooks env ~span info args)
-      else
-        Some
-          (Error
-             (Diagnostic.error
-                ~hint:(Printf.sprintf "use '%s { ... }' to initialize fields" type_name)
-                ~code:"E0121" ~span
-                (Printf.sprintf "type '%s' has no constructor; use '%s { ... }' to initialize fields"
-                   type_name type_name)))
-
-let check_field_access hooks (env : env) ~span (base : Ast.expr) (field : string)
-    : (Typed_ast.expr, Diagnostic.t) result =
-  match hooks.check_expr env base with
-  | Error e -> Error e
-  | Ok tbase ->
-    (match tbase.ty with
-     | Ty.User (_, tname) ->
-       (match Hashtbl.find_opt user_types tname with
-        | Some info ->
-          (match List.find_opt (fun f -> f.uf_name = field) info.ut_fields with
-           | Some f ->
-             Ok { Typed_ast.desc = Typed_ast.TExprField (tbase, field, f.uf_idx); ty = f.uf_ty; span }
-           | None ->
-             Error
-               (Diagnostic.error ~code:"E0119" ~span
-                  (Printf.sprintf "type '%s' has no field named '%s'" tname field)))
-        | None ->
-          Error
-            (Diagnostic.error ~code:"E0101" ~span:tbase.span
-               (Printf.sprintf "unknown type '%s'" tname)))
-     | other ->
-       Error
-         (Diagnostic.error ~code:"E0119" ~span
-            (Printf.sprintf "cannot access field '%s' on value of type '%s'" field (Ty.to_string other))))
-
-let rec root_var_const_kind (env : env) (e : Typed_ast.expr) : const_kind option =
-  match e.desc with
-  | Typed_ast.TExprIdent name ->
-    Option.map (fun info -> info.const_kind) (Hashtbl.find_opt env name)
-  | Typed_ast.TExprField (sub, _, _) | Typed_ast.TExprIndex (sub, _) ->
-    root_var_const_kind env sub
-  | _ -> None
-
-let check_field_lvalue hooks (env : env) ~span ~for_op:_ (base : Ast.expr) (field : string)
-    : (Typed_ast.lvalue * Ty.t * string, Diagnostic.t) result =
-  match hooks.check_expr env base with
-  | Error e -> Error e
-  | Ok tbase ->
-    (match tbase.ty with
-     | Ty.User (kind, tname) ->
-       (match Hashtbl.find_opt user_types tname with
-        | None ->
-          Error (Diagnostic.error ~code:"E0101" ~span:tbase.span (Printf.sprintf "unknown type '%s'" tname))
-        | Some info ->
-          (match List.find_opt (fun f -> f.uf_name = field) info.ut_fields with
-           | None ->
-             Error
-               (Diagnostic.error ~code:"E0119" ~span
-                  (Printf.sprintf "type '%s' has no field named '%s'" tname field))
-           | Some f ->
-             if kind = Ty.KindRecord then
-               Error
-                 (Diagnostic.error ~code:"E0107" ~span
-                    (Printf.sprintf "cannot mutate field '%s' of immutable record '%s'" field tname))
-             else if kind = Ty.KindStruct then
-               (match root_var_const_kind env tbase with
-                | Some (DeepConst | ShallowConst) ->
-                  Error
-                    (Diagnostic.error ~code:"E0107" ~span
-                       (Printf.sprintf "cannot mutate field '%s' of immutable struct '%s'" field tname))
-                | _ -> Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, "struct field"))
-             else Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, "class field")))
-     | other ->
-       Error
-         (Diagnostic.error ~code:"E0119" ~span
-            (Printf.sprintf "cannot assign to field '%s' of non-object type '%s'" field (Ty.to_string other))))
+      let usage =
+        if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" type_name
+        else Printf.sprintf "new %s { ... }" type_name
+      in
+      Some
+        (Error
+           (Diagnostic.error
+              ~hint:(Printf.sprintf "use '%s' to create an instance" usage)
+              ~code:"E0122" ~span
+              (Printf.sprintf "missing 'new' keyword when instantiating '%s'" type_name)))

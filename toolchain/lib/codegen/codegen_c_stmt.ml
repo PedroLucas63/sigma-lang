@@ -20,15 +20,16 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
     let tmp_obj = Printf.sprintf "_sgm_destr_%d" !chain_counter in
+    let pat_len = List.length d.bindings in
     Buffer.add_string buf (Printf.sprintf "%ssgm_obj_t *%s = %s;\n%s(void)%s;\n" indent tmp_obj (hooks.emit_expr d.init) indent tmp_obj);
     List.iteri
       (fun i (bind : Typed_ast.destruct_binding) ->
         Option.iter
           (fun name ->
-            let slot_expr = Printf.sprintf "sgm_obj_slot(%s, INT64_C(%d))" tmp_obj i in
-            emit_bound_var buf indent ~is_const:d.is_const bind.ty name
-              (Printf.sprintf "%s->u.%s" slot_expr (c_val_union_field bind.ty))
-              ("*" ^ slot_expr))
+            let raw, boxed =
+              Codegen_c_user_types.destruct_slot_c ~tmp_obj ~rhs_ty:d.ty ~pat_len ~elem_ty:bind.ty i
+            in
+            emit_bound_var buf indent ~is_const:d.is_const bind.ty name raw boxed)
           bind.name)
       d.bindings
   | Typed_ast.TStmtBlock stmts ->
@@ -149,6 +150,8 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
     let c_e = emit_copy_if_struct e (hooks.emit_expr e) in
     Buffer.add_string buf (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty c_e))
   | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    Codegen_c_user_types.emit_multi_assign hooks buf indent tma_targets tma_rhs
   | Typed_ast.TStmtFunDecl fd ->
     let c_fn_name =
       match Hashtbl.find_opt fun_c_names fd.tf_name_span with Some n -> n | None -> "sgm_fn_" ^ fd.tf_name

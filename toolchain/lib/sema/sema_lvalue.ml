@@ -156,4 +156,4 @@ let check_lvalue hooks (env : env) ~for_op (lval : Ast.lvalue)
           | Some err -> Error err
           | None -> Ok (Typed_ast.TLValIndex (tbase, tidx), elem_ty, "indexed element")))
   | Ast.LValField (base, field, span) ->
-    Sema_user_types.check_field_lvalue hooks env ~span ~for_op base field
+    Sema_user_fields.check_field_lvalue hooks env ~span ~for_op base field

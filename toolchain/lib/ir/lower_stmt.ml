@@ -1,15 +1,15 @@
 open Sigma_sema
 open Lower_ctx
 
-let emit_destruct_bindings b tid (bindings : Typed_ast.destruct_binding list) =
+let emit_destruct_bindings b tid (rhs_ty : Ty.t) (bindings : Typed_ast.destruct_binding list) =
+  let pat_len = List.length bindings in
   List.iteri
     (fun i (bind : Typed_ast.destruct_binding) ->
       match bind.name with
       | None -> ()
       | Some name ->
-        ignore (emit b (Ir.OP_GET_TEMP tid) bind.name_span);
-        ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int i)) bind.name_span);
-        ignore (emit b Ir.OP_INDEX_GET bind.name_span);
+        Lower_user_types.emit_destruct_extract b bind.name_span tid rhs_ty pat_len i;
+        Lower_user_types.emit_copy_if_struct_ty b bind.name_span bind.ty;
         ignore (emit b (def_global_opcode bind.ty name) bind.name_span))
     bindings
 
@@ -32,7 +32,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
     let tid = fresh_temp b in
     hooks.lower_expr b d.init;
     ignore (emit b (Ir.OP_SET_TEMP tid) s.span);
-    emit_destruct_bindings b tid d.bindings;
+    emit_destruct_bindings b tid d.ty d.bindings;
     List.iter
       (fun (bind : Typed_ast.destruct_binding) ->
         Option.iter (push_loop_scope loops) bind.name)
@@ -95,7 +95,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
         let tid = fresh_temp b in
         hooks.lower_expr b d.init;
         ignore (emit b (Ir.OP_SET_TEMP tid) s.span);
-        emit_destruct_bindings b tid d.bindings;
+        emit_destruct_bindings b tid d.ty d.bindings;
         List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) d.bindings
       | Typed_ast.TForInitExpr e ->
         hooks.lower_expr b e;
@@ -141,10 +141,10 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
       | Typed_ast.TForeachVar { name = Some name; name_span; ty; _ } ->
         ignore (emit b (def_global_opcode ty name) name_span);
         [ name ]
-      | Typed_ast.TForeachDestruct { bindings; _ } ->
+      | Typed_ast.TForeachDestruct { bindings; ty; _ } ->
         let t_elem = fresh_temp b in
         ignore (emit b (Ir.OP_SET_TEMP t_elem) s.span);
-        emit_destruct_bindings b t_elem bindings;
+        emit_destruct_bindings b t_elem ty bindings;
         List.filter_map (fun (bind : Typed_ast.destruct_binding) -> bind.name) bindings
     in
     let frame =
@@ -228,6 +228,8 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
     in
     ignore (emit b (def_global_opcode fty fd.tf_name) s.span)
   | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    Lower_user_types.lower_multi_assign hooks b s.span tma_targets tma_rhs
   | Typed_ast.TStmtReturn None -> ignore (emit b Ir.OP_RETURN_VOID s.span)
   | Typed_ast.TStmtReturn (Some e) ->
     hooks.lower_expr b e;

@@ -107,6 +107,10 @@ and lvalue =
   | LValIndex of expr * expr * Span.t
   | LValField of expr * string * Span.t
 
+and multi_target =
+  | TargetDiscard of Span.t
+  | TargetLVal of lvalue
+
 and lambda_expr = {
   lam_is_act : bool;
   lam_params : fun_param list;
@@ -129,6 +133,11 @@ and expr_desc =
   | ExprIndex of expr * expr
   | ExprField of expr * string
   | ExprStructInit of string * call_arg list
+  | ExprNew of {
+      new_name : string;
+      new_is_ctor : bool;
+      new_args : call_arg list;
+    }
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -233,6 +242,10 @@ and stmt_desc =
     }
   | StmtFunDecl of fun_decl
   | StmtTypeDecl of type_decl
+  | StmtMultiAssign of {
+      ma_targets : multi_target list;
+      ma_rhs : expr;
+    }
   | StmtReturn of expr option
   | StmtExpr of expr
 

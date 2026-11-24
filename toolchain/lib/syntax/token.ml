@@ -19,6 +19,7 @@ type kind =
   | KW_CLASS
   | KW_STRUCT
   | KW_RECORD
+  | KW_NEW
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -111,6 +112,7 @@ let kind_to_string = function
   | KW_CLASS -> "'class'"
   | KW_STRUCT -> "'struct'"
   | KW_RECORD -> "'record'"
+  | KW_NEW -> "'new'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

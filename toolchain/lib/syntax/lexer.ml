@@ -22,6 +22,7 @@ let keyword_or_ident st word =
   | "class" -> Token.KW_CLASS
   | "struct" -> Token.KW_STRUCT
   | "record" -> Token.KW_RECORD
+  | "new" -> Token.KW_NEW
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT

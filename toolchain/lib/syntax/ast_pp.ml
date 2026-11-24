@@ -89,6 +89,16 @@ and pp_expr fmt (e : expr) =
     Format.fprintf fmt "%s { %a }" tname
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
       args
+  | ExprNew { new_name; new_is_ctor; new_args } ->
+    let pp_arg fmt (a : call_arg) =
+      match a.arg_name with
+      | None -> pp_expr fmt a.arg_value
+      | Some (n, _) -> Format.fprintf fmt "%s = %a" n pp_expr a.arg_value
+    in
+    let open_c, close_c = if new_is_ctor then ("(", ")") else (" { ", " }") in
+    Format.fprintf fmt "new %s%s%a%s" new_name open_c
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
+      new_args close_c
   | ExprCall (callee, args) ->
     let pp_arg fmt (a : call_arg) =
       let prefix =
@@ -253,6 +263,14 @@ and pp_stmt fmt (s : stmt) =
        Format.fprintf fmt "%s %s { %a }" kw td.td_name
          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_field)
          td.td_fields)
+  | StmtMultiAssign { ma_targets; ma_rhs } ->
+    let pp_t fmt = function
+      | TargetDiscard _ -> Format.fprintf fmt "_"
+      | TargetLVal lv -> pp_lvalue fmt lv
+    in
+    Format.fprintf fmt "(%a) = %a;"
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_t)
+      ma_targets pp_expr ma_rhs
   | StmtReturn None -> Format.fprintf fmt "return;"
   | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
   | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e

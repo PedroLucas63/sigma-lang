@@ -94,3 +94,65 @@ let lower_field_incdec hooks b (e : Typed_ast.expr) (inc_op : Ast.incdec_op)
     ignore (emit b Ir.OP_POP e.span);
     ignore (emit b (Ir.OP_GET_TEMP t_old) e.span)
   end
+
+let emit_destruct_extract b span tid (rhs_ty : Ty.t) (pat_len : int) (idx : int) : unit =
+  match rhs_ty with
+  | Ty.User _ ->
+    ignore (emit b (Ir.OP_GET_TEMP tid) span);
+    ignore (emit b (Ir.OP_GET_FIELD idx) span)
+  | Ty.Array (_, n) when idx = pat_len - 1 && pat_len < n ->
+    for k = idx to n - 1 do
+      ignore (emit b (Ir.OP_GET_TEMP tid) span);
+      ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int k)) span);
+      ignore (emit b Ir.OP_INDEX_GET span)
+    done;
+    ignore (emit b (Ir.OP_MAKE_ARRAY (n - pat_len + 1)) span)
+  | _ ->
+    ignore (emit b (Ir.OP_GET_TEMP tid) span);
+    ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int idx)) span);
+    ignore (emit b Ir.OP_INDEX_GET span)
+
+let emit_copy_if_struct_ty b span (ty : Ty.t) : unit =
+  match ty with
+  | Ty.User (Ty.KindStruct, _) -> ignore (emit b Ir.OP_COPY_STRUCT span)
+  | _ -> ()
+
+let lower_multi_assign hooks b span (targets : Typed_ast.multi_target list) (rhs : Typed_ast.expr) : unit =
+  let tid = fresh_temp b in
+  hooks.lower_expr b rhs;
+  ignore (emit b (Ir.OP_SET_TEMP tid) span);
+  let pat_len = List.length targets in
+  let val_temps =
+    List.mapi
+      (fun i tgt ->
+        match tgt with
+        | Typed_ast.TTargetDiscard -> None
+        | Typed_ast.TTargetLVal _ ->
+          let vt = fresh_temp b in
+          emit_destruct_extract b span tid rhs.ty pat_len i;
+          ignore (emit b (Ir.OP_SET_TEMP vt) span);
+          Some vt)
+      targets
+  in
+  List.iter2
+    (fun tgt vt_opt ->
+      match tgt, vt_opt with
+      | Typed_ast.TTargetLVal (Typed_ast.TLValIdent nm, ty), Some vt ->
+        ignore (emit b (Ir.OP_GET_TEMP vt) span);
+        emit_copy_if_struct_ty b span ty;
+        ignore (emit b (set_global_opcode ty nm) span)
+      | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (base, idx), ty), Some vt ->
+        hooks.lower_expr b base;
+        hooks.lower_expr b idx;
+        ignore (emit b (Ir.OP_GET_TEMP vt) span);
+        emit_copy_if_struct_ty b span ty;
+        ignore (emit b Ir.OP_INDEX_SET span);
+        ignore (emit b Ir.OP_POP span)
+      | Typed_ast.TTargetLVal (Typed_ast.TLValField (base, _, fidx), ty), Some vt ->
+        hooks.lower_expr b base;
+        ignore (emit b (Ir.OP_GET_TEMP vt) span);
+        emit_copy_if_struct_ty b span ty;
+        ignore (emit b (Ir.OP_SET_FIELD fidx) span);
+        ignore (emit b Ir.OP_POP span)
+      | _ -> ())
+    targets val_temps

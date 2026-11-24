@@ -113,6 +113,18 @@ let rec collect_used_stmt
   | Typed_ast.TStmtAssertError { message; _ } -> Option.iter (collect_used_expr used) message
   | Typed_ast.TStmtReturn eo -> Option.iter (collect_used_expr used) eo
   | Typed_ast.TStmtExpr e -> collect_used_expr used e
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    collect_used_expr used tma_rhs;
+    List.iter
+      (function
+        | Typed_ast.TTargetDiscard -> ()
+        | Typed_ast.TTargetLVal (Typed_ast.TLValIdent nm, _) -> Hashtbl.replace used nm ()
+        | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (a, i), _) ->
+          collect_used_expr used a;
+          collect_used_expr used i
+        | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
+          collect_used_expr used o)
+      tma_targets
   | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
 
 let compute_captures

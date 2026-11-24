@@ -21,6 +21,7 @@ type kind =
   | KW_CLASS
   | KW_STRUCT
   | KW_RECORD
+  | KW_NEW
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

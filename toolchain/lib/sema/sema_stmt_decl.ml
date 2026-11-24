@@ -78,35 +78,11 @@ let check_destruct_decl hooks (env : env) (scope_vars : string list ref) (s_span
          | Some annot_ty, None -> (annot_ty, default_expr_for_type annot_ty s_span)
          | None, None -> (Ty.Int, default_expr_for_type Ty.Int s_span)
        in
-       let elem_tys_opt =
-         match final_ty with
-         | Ty.Tuple tys -> Some tys
-         | Ty.Array (elem_ty, n) -> Some (List.init n (fun _ -> elem_ty))
-         | _ -> None
-       in
-       (match elem_tys_opt with
-        | None ->
-          Error
-            [
-              Diagnostic.error
-                ~hint:"destructuring requires a tuple '(a, b)' or array '[a, b]' on the right-hand side"
-                ~code:"E0104" ~span:final_init.span
-                (Printf.sprintf "cannot destructure value of type '%s' (expected a tuple or array)"
-                   (Ty.to_string final_ty));
-            ]
-        | Some elem_tys ->
-          let pat_len = List.length d.names in
-          let val_len = List.length elem_tys in
-          if pat_len <> val_len then
-            Error
-              [
-                Diagnostic.error
-                  ~hint:(Printf.sprintf "provide %d binding(s) in the pattern (use '_' to ignore elements)" val_len)
-                  ~code:"E0104" ~span:s_span
-                  (Printf.sprintf "destructuring arity mismatch: pattern has %d elements, but '%s' has %d elements"
-                     pat_len (Ty.to_string final_ty) val_len);
-              ]
-          else
+       let pat_len = List.length d.names in
+       (match Sema_multi_assign.resolve_destruct_tys ~span:final_init.span final_ty pat_len with
+        | Error err -> Error [ err ]
+        | Ok elem_tys ->
+          begin
             let bindings =
               List.map2
                 (fun (name, name_span) elem_ty ->
@@ -132,7 +108,8 @@ let check_destruct_decl hooks (env : env) (scope_vars : string list ref) (s_span
                   Typed_ast.TStmtDestruct
                     { bindings; is_const = d.is_const; ty = final_ty; init = final_init };
                 span = s_span;
-              }))
+              }
+          end))
 
 let check_var_decl hooks (env : env) (scope_vars : string list ref) (s_span : Span.t)
     (v : Ast.var_decl) : (Typed_ast.stmt, Diagnostic.t list) result =

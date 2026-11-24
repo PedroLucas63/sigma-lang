@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M3.1 — Estruturas Definidas pelo Usuário (class, struct, record — Fase 1)`
-- **Git Flow:** Branch ativa `develop` (`feature/user-defined-types` mesclada).
+- **Milestone:** `M3.1 — Estruturas Definidas pelo Usuário, new e Atribuição Múltipla`
+- **Git Flow:** Branch ativa `develop` (`feature/new-and-multi-assign` mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -30,8 +30,8 @@
 - [x] Funções e procedimentos anônimos `[fun|act]({<param>})[:<return-type>] => <command>` com inferência opcional do tipo de retorno em `fun`, corpo em expressão direta, comando inline sem chaves ou bloco `{ ... }`, closures léxicas, `ref`/`out`, currying, argumentos nomeados e IIFE (`tests/12_anonymous_functions_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 415 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (13 suítes).
-- [x] Estruturas definidas pelo usuário (`class`, `struct`, `record` — Fase 1): `class` (mutável, referência, `==`/`!=` por referência), `struct` (mutável, cópia por valor, `==`/`!=` estrutural, `const struct` imutável) e `record Nome(campos) {}` / `;` (imutável, construtor `()`, `==`/`!=` estrutural), com inicializadores `{ ... }`, acesso `.campo`, operadores compostos/`++`/`--`, zero-init e diagnósticos `E0119`..`E0121` (`tests/13_user_defined_types_test.sgm`).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 428 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (13 suítes).
+- [x] Estruturas definidas pelo usuário (`class`, `struct`, `record` — Fase 1) com instanciação obrigatória via `new` (`new T { ... }` / `new R(...)`, `E0122`), atribuição múltipla com parênteses `(a, b) = rhs;` (swap seguro e desempacotamento de tuplas, estruturas e arrays com *rest slice* no último alvo `var (a, b) := [1, 2, 3, 4]`), acesso `.campo`, operadores compostos/`++`/`--` e diagnósticos `E0119`..`E0122` (`tests/13_user_defined_types_test.sgm`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
@@ -47,7 +47,8 @@
 7. [ ] **Métodos de Instância e Estáticos para Estruturas (`class`, `struct`, `record`) e modificadores de acesso (public, protected, private, internal).**
 8. [ ] **Biblioteca de Estruturas de Dados Dinâmicas:** `list`, `stack`, `queue`, `set`, `dict`.
 9. [ ] **Biblioteca Matemática Simples (`math`):** `sum`, `max`, `min`, `sin`, `cos` e constantes matemáticas.
-10. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas, estilo NumPy).**
+10. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
+11. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas, estilo NumPy).**
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).

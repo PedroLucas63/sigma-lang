@@ -1,4 +1,4 @@
-# Suite 13: Estruturas definidas pelo usuario (class, struct, record - Fase 1)
+# Suite 13: Estruturas definidas pelo usuario (class, struct, record), new e atribuicao multipla
 
 struct Ponto {
     x: int;
@@ -23,10 +23,10 @@ class No {
 record Config(host: string, porta: int = 8080) {}
 record Par(a: int, b: int);
 
-# 1. struct: inicializacao posicional, nomeada, default, zero-init e mutacao
-var p1 := Ponto { 3, 4 };
-var p2 := Ponto { y = 4, x = 3 };
-var p3 := Ponto { 3 };
+# 1. struct com new: inicializacao posicional, nomeada, default, zero-init e mutacao
+var p1 := new Ponto { 3, 4 };
+var p2 := new Ponto { y = 4, x = 3 };
+var p3 := new Ponto { 3 };
 var p4 : Ponto;
 
 assert(p1.x, 3, "struct posicional x");
@@ -48,7 +48,7 @@ p_copy.x = 99;
 assert(p1.x, 3, "alterar copia de struct nao altera original");
 assert(p_copy.x, 99, "copia de struct foi alterada");
 
-var cxa1 := Caixa { Ponto { 1, 2 }, "A" };
+var cxa1 := new Caixa { new Ponto { 1, 2 }, "A" };
 var cxa2 := cxa1;
 cxa2.origem.x = 777;
 assert(cxa1.origem.x, 1, "copia profunda de struct aninhado preserva original");
@@ -63,10 +63,10 @@ var p_movido := mover_copia(p1);
 assert(p1.x, 3, "passagem de struct por valor nao altera chamador");
 assert(p_movido.x, 103, "retorno de struct por valor");
 
-# 3. class: semantica de referencia, shallow const e igualdade por referencia
-var cta1 := Conta { titular = "Ana", saldo = 100.0m };
+# 3. class com new: semantica de referencia, shallow const e igualdade por referencia
+var cta1 := new Conta { titular = "Ana", saldo = 100.0m };
 var cta2 := cta1;
-var cta3 := Conta { "Ana", 100.0m };
+var cta3 := new Conta { "Ana", 100.0m };
 
 assert(cta1 == cta2, true, "class igualdade por referencia (mesma instancia)");
 assert(cta1 != cta3, true, "class instâncias distintas sao diferentes mesmo com mesmos valores");
@@ -74,7 +74,7 @@ assert(cta1 != cta3, true, "class instâncias distintas sao diferentes mesmo com
 cta2.saldo += 50.0m;
 assert(cta1.saldo, 150.0m, "mutacao via alias de class reflete na referencia original");
 
-const cta_const := Conta { "Bia", 20.0m };
+const cta_const := new Conta { "Bia", 20.0m };
 cta_const.saldo += 30.0m;
 assert(cta_const.saldo, 50.0m, "const class permite mutar campos (shallow const)");
 
@@ -86,32 +86,63 @@ assert(cta_const.saldo, 65.0m, "parametro class permite mutacao da instancia");
 
 # class autorreferenciada
 var n1 : No;
-var n2 := No { valor = 42, proximo = n1 };
+var n2 := new No { valor = 42, proximo = n1 };
 assert(n2.valor, 42, "class autorreferenciada");
 
-# 4. record: declaracao {} e ;, instancia com (), imutabilidade e igualdade por valor
-var cfg1 := Config("localhost");
-var cfg2 := Config(porta = 8080, host = "localhost");
-var cfg3 := Config("127.0.0.1", 9000);
+# 4. record com new: declaracao {} e ;, imutabilidade e igualdade por valor
+var cfg1 := new Config("localhost");
+var cfg2 := new Config(porta = 8080, host = "localhost");
+var cfg3 := new Config("127.0.0.1", 9000);
 assert(cfg1 == cfg2, true, "record igualdade estrutural por valor");
 assert(cfg1 != cfg3, true, "record diferenca estrutural");
 assert(cfg1.porta, 8080, "record default parameter");
 
-var par1 := Par(10, 20);
-var par2 := Par(10, 20);
+var par1 := new Par(10, 20);
+var par2 := new Par(10, 20);
 assert(par1 == par2, true, "record com ';' igualdade estrutural");
 assert(par1.a + par1.b, 30, "leitura de campos do record");
 
-# 5. Diagnosticos estaticos esperados
-assert_error("E0107", "record R(x: int); var r := R(1); r.x = 2;", "record nao permite mutacao de campo");
-assert_error("E0107", "struct P { x: int; } const p := P { 1 }; p.x = 2;", "const struct nao permite mutar campo");
+# 5. Atribuicao multipla (apenas com parenteses) e desempacotamento de estruturas/arrays
+var sw := new Ponto { 10, 20 };
+(sw.x, sw.y) = (sw.y, sw.x);
+assert(sw.x, 20, "swap via atribuicao multipla x");
+assert(sw.y, 10, "swap via atribuicao multipla y");
+
+var (dx, dy) := sw;
+assert((dx, dy), (20, 10), "var desempacotando struct");
+
+const (cfg_host, _) := cfg1;
+assert(cfg_host, "localhost", "const desempacotando record com curinga");
+
+var ax : int = 0;
+var ay : int = 0;
+(ax, ay) = p1;
+assert((ax, ay), (3, 4), "atribuicao multipla desempacotando struct");
+
+var (head, tail) := [1, 2, 3, 4];
+assert(head, 1, "desempacotamento de array head");
+assert(tail, [2, 3, 4], "desempacotamento de array rest tail");
+
+var h2 : int = 0;
+var t2 : int[2];
+(h2, t2) = [10, 20, 30];
+assert(h2, 10, "atribuicao multipla array head");
+assert(t2, [20, 30], "atribuicao multipla array rest");
+
+# 6. Diagnosticos estaticos esperados
+assert_error("E0122", "struct P { x: int; } var p := P { 1 };", "struct sem new deve falhar");
+assert_error("E0122", "record R(x: int); var r := R(1);", "record sem new deve falhar");
+assert_error("E0003", "var a := 1; var b := 2; a, b = b, a;", "atribuicao multipla sem parenteses deve falhar");
+assert_error("E0107", "record R(x: int); var r := new R(1); r.x = 2;", "record nao permite mutacao de campo");
+assert_error("E0107", "struct P { x: int; } const p := new P { 1 }; p.x = 2;", "const struct nao permite mutar campo");
 assert_error("E0107", "struct P { x: int; } act f(p: P) { p.x = 2; }", "parametro struct shallow const nao permite mutar campo");
-assert_error("E0119", "struct P { x: int; } var p := P { 1 }; var z := p.y;", "campo inexistente em leitura");
-assert_error("E0119", "struct P { x: int; } var p := P { y = 1 };", "campo inexistente em inicializacao");
+assert_error("E0107", "struct P { x: int; } const p := new P { 1 }; var x := 0; (p.x, x) = (2, 3);", "atribuicao multipla em const struct deve falhar");
+assert_error("E0119", "struct P { x: int; } var p := new P { 1 }; var z := p.y;", "campo inexistente em leitura");
+assert_error("E0119", "struct P { x: int; } var p := new P { y = 1 };", "campo inexistente em inicializacao");
 assert_error("E0120", "struct Ciclo { prox: Ciclo; }", "struct recursivo por valor deve falhar");
 assert_error("E0120", "record RCiclo(prox: RCiclo);", "record recursivo por valor deve falhar");
-assert_error("E0121", "struct P { x: int; } var p := P(1);", "struct sem construtor deve exigir chaves");
-assert_error("E0121", "record R(x: int); var r := R { 1 };", "record deve exigir parenteses");
-assert_error("E0104", "struct A { x: int; } struct B { x: int; } var b := A { 1 } == B { 1 };", "igualdade entre tipos distintos deve falhar");
+assert_error("E0121", "struct P { x: int; } var p := new P(1);", "struct sem construtor deve exigir chaves");
+assert_error("E0121", "record R(x: int); var r := new R { 1 };", "record deve exigir parenteses");
+assert_error("E0104", "struct A { x: int; } struct B { x: int; } var b := new A { 1 } == new B { 1 };", "igualdade entre tipos distintos deve falhar");
 
 println("All user-defined type tests passed!");

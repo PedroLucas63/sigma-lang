@@ -172,6 +172,9 @@ let parse_primary hooks st : (Ast.expr, Diagnostic.t) result =
   | Token.KW_ACT ->
     bump st;
     hooks.parse_lambda_expr st tok ~is_act:true
+  | Token.KW_NEW ->
+    bump st;
+    Parser_type_decl.parse_new_expr hooks st tok
   | Token.LPAREN ->
     bump st;
     if (cur st).kind = Token.RPAREN then begin

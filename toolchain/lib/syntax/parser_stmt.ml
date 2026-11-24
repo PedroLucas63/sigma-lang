@@ -193,6 +193,16 @@ let rec parse_non_decl_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_PRINTLN -> bump st; parse_print_stmt hooks st tok ~newline:true ~require_semi:true
   | Token.KW_ASSERT -> bump st; parse_assert_stmt hooks st tok ~require_semi:true
   | Token.KW_ASSERT_ERROR -> bump st; parse_assert_error_stmt hooks st tok ~require_semi:true
+  | Token.LPAREN ->
+    (match Parser_type_decl.try_parse_multi_assign hooks st tok with
+     | Some res -> res
+     | None ->
+       (match hooks.parse_expr st with
+        | Error e -> Error e
+        | Ok expr ->
+          (match expect_semi st expr.span with
+           | Error e -> Error e
+           | Ok full_span -> Ok { Ast.desc = Ast.StmtExpr expr; span = full_span })))
   | _ ->
     (match hooks.parse_expr st with
      | Error e -> Error e

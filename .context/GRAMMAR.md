@@ -24,6 +24,7 @@
 | Palavra-chave | `KW_CLASS` | `class` |
 | Palavra-chave | `KW_STRUCT` | `struct` |
 | Palavra-chave | `KW_RECORD` | `record` |
+| Palavra-chave | `KW_NEW` | `new` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -119,7 +120,12 @@ non_decl_stmt ::= if_stmt
                 | block_stmt
                 | print_stmt ";"
                 | assert_stmt ";"
+                | multi_assign ";"
                 | expr_stmt ";" ;
+
+lval_target   ::= "_" | lvalue ;
+multi_lhs     ::= "(" lval_target ( "," lval_target )+ ","? ")" ;
+multi_assign  ::= multi_lhs "=" expr ;
 
 if_stmt       ::= "if" "(" expr ")" non_decl_stmt ( "else" non_decl_stmt )? ;
 
@@ -193,7 +199,7 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
-                | IDENT "{" call_args? "}"
+                | new_expr
                 | lambda_expr
                 | input_expr
                 | prompt_expr
@@ -203,6 +209,7 @@ primary       ::= INT
 
 lambda_expr   ::= "fun" "(" params? ")" ( ":" type_expr )? "=>" lambda_body
                 | "act" "(" params? ")" "=>" lambda_body ;
+new_expr      ::= "new" IDENT ( "{" call_args? "}" | "(" call_args? ")" ) ;
 lambda_body   ::= block_stmt
                 | inline_stmt
                 | expr ;

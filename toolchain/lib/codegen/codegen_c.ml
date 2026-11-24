@@ -57,14 +57,16 @@ let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) :
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
     let tmp_obj = Printf.sprintf "_sgm_destr_%d" !chain_counter in
+    let pat_len = List.length d.bindings in
     Buffer.add_string buf (Printf.sprintf "%ssgm_obj_t *%s = %s;\n%s(void)%s;\n" indent tmp_obj (hooks.emit_expr d.init) indent tmp_obj);
     List.iteri
       (fun i (bind : Typed_ast.destruct_binding) ->
         Option.iter
           (fun name ->
-            Buffer.add_string buf
-              (Printf.sprintf "%s%s = sgm_obj_slot(%s, INT64_C(%d))->u.%s;\n"
-                 indent (mangle_ident name) tmp_obj i (c_val_union_field bind.ty)))
+            let raw, _ =
+              Codegen_c_user_types.destruct_slot_c ~tmp_obj ~rhs_ty:d.ty ~pat_len ~elem_ty:bind.ty i
+            in
+            Buffer.add_string buf (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident name) raw))
           bind.name)
       d.bindings
   | Typed_ast.TStmtFunDecl fd ->

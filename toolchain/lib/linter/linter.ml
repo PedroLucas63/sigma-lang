@@ -195,6 +195,17 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     (* Restaura entradas escondidas por parâmetros/locais da função. *)
     Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
   | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    mark_expr_usage tbl tma_rhs;
+    List.iter
+      (function
+        | Typed_ast.TTargetDiscard | Typed_ast.TTargetLVal (Typed_ast.TLValIdent _, _) -> ()
+        | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (t, i), _) ->
+          mark_expr_usage tbl t;
+          mark_expr_usage tbl i
+        | Typed_ast.TTargetLVal (Typed_ast.TLValField (t, _, _), _) ->
+          mark_expr_usage tbl t)
+      tma_targets
   | Typed_ast.TStmtReturn eo ->
     Option.iter (mark_expr_usage tbl) eo
   | Typed_ast.TStmtExpr e ->

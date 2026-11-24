@@ -57,6 +57,16 @@ and collect_inner_captures (s : Typed_ast.stmt) : string list =
   | Typed_ast.TStmtAssertError { message = Some m; _ } -> collect_inner_captures_expr m
   | Typed_ast.TStmtReturn (Some e) -> collect_inner_captures_expr e
   | Typed_ast.TStmtExpr e -> collect_inner_captures_expr e
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    collect_inner_captures_expr tma_rhs
+    @ List.concat_map
+        (function
+          | Typed_ast.TTargetDiscard | Typed_ast.TTargetLVal (Typed_ast.TLValIdent _, _) -> []
+          | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (a, i), _) ->
+            collect_inner_captures_expr a @ collect_inner_captures_expr i
+          | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
+            collect_inner_captures_expr o)
+        tma_targets
   | _ -> []
 
 let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
@@ -106,6 +116,16 @@ let rec collect_out_vars_stmt (s : Typed_ast.stmt) : (string * Ty.t) list =
   | Typed_ast.TStmtAssertError { message = Some m; _ } -> collect_out_vars_expr m
   | Typed_ast.TStmtReturn (Some e) -> collect_out_vars_expr e
   | Typed_ast.TStmtExpr e -> collect_out_vars_expr e
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    collect_out_vars_expr tma_rhs
+    @ List.concat_map
+        (function
+          | Typed_ast.TTargetDiscard | Typed_ast.TTargetLVal (Typed_ast.TLValIdent _, _) -> []
+          | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (a, i), _) ->
+            collect_out_vars_expr a @ collect_out_vars_expr i
+          | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
+            collect_out_vars_expr o)
+        tma_targets
   | _ -> []
 
 let compute_boxed_vars_in_fun (fd : Typed_ast.fun_decl) : string list =
@@ -181,4 +201,14 @@ and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
   | Typed_ast.TStmtAssertError { message = Some m; _ } -> collect_all_funs_expr m
   | Typed_ast.TStmtReturn (Some e) -> collect_all_funs_expr e
   | Typed_ast.TStmtExpr e -> collect_all_funs_expr e
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    collect_all_funs_expr tma_rhs
+    @ List.concat_map
+        (function
+          | Typed_ast.TTargetDiscard | Typed_ast.TTargetLVal (Typed_ast.TLValIdent _, _) -> []
+          | Typed_ast.TTargetLVal (Typed_ast.TLValIndex (a, i), _) ->
+            collect_all_funs_expr a @ collect_all_funs_expr i
+          | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
+            collect_all_funs_expr o)
+        tma_targets
   | _ -> []

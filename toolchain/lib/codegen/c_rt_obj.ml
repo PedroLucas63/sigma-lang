@@ -167,6 +167,14 @@ __attribute__((unused)) static sgm_obj_t* sgm_array_repeat(sgm_obj_t *a, int64_t
   return out;
 }
 
+__attribute__((unused)) static sgm_obj_t* sgm_array_slice(sgm_obj_t *a, int64_t start, int64_t len) {
+  sgm_obj_t *out = sgm_obj_alloc(false, len);
+  for (int64_t i = 0; i < len; i++) {
+    out->items[i] = a->items[start + i];
+  }
+  return out;
+}
+
 static bool sgm_obj_eq(sgm_obj_t *a, sgm_obj_t *b);
 
 __attribute__((unused)) static bool sgm_val_eq(sgm_val_t a, sgm_val_t b) {
