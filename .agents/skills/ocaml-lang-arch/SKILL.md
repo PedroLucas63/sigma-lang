@@ -28,25 +28,28 @@ Antes de escrever código OCaml, defina em [`.context/GRAMMAR.md`](file:///var/h
 - Novos construtores na AST / Typed AST
 - Novos opcodes de IR
 
-### 2. Interfaces `.mli` Primeiro & Modularidade Estrita ($\le 300$ / $\le 500$ linhas)
-- **Regra de Tamanho de Arquivo:** Mantenha cada arquivo `.ml`/`.mli` com no máximo **500 linhas** (buscando sempre até **300 linhas**). Se um módulo se aproximar desse limite, extraia a nova feature em um submódulo dedicado (ex: `typecheck_expr.ml`, `typecheck_stmt.ml`, `codegen_runtime.ml`) aplicando padrões de projeto e evitando *code smells*.
+### 2. Interfaces `.mli` Primeiro & Modularidade Estrita ($\le 300$ linhas)
+- **Regra de Tamanho de Arquivo:** Mantenha cada arquivo `.ml`/`.mli` com no máximo **300 linhas** (teto absoluto de 500 linhas no CI e trava de 300 linhas no hook `pre-commit` via `--strict-ideal`). Se um módulo se aproximar de 250 linhas, extraia a nova feature em um submódulo dedicado (ex: `typecheck_expr.ml`, `typecheck_stmt.ml`, `c_rt_obj.ml`, `test_features.ml`).
+- **Quebra de Recursão Mútua:** Use fachadas `.mli` finas + registro `hooks` injetado entre submódulos; nunca re-funda submódulos em um arquivo monolítico por causa de dependência mútua.
+- **Proibido em `toolchain/lib/`:** `failwith`, `Obj.magic` e `exit`.
 Em cada biblioteca afetada dentro de `toolchain/lib/`, atualize ou crie o arquivo `.mli` antes do `.ml`:
-1. **`lang_syntax`**:
+1. **`sigma_syntax`**:
    - Todos os nós da AST devem carregar `Span.t` (`{ desc : ...; span : Span.t }`).
    - O Lexer e o Parser nunca devem abortar com exceção não tratada; converta falhas em `Diagnostic.t`.
-2. **`lang_sema`**:
+2. **`sigma_sema`**:
    - Valide tipos e escopos produzindo uma estrutura validada ou lista de `Diagnostic.t`.
-3. **`lang_ir`**:
+3. **`sigma_ir`**:
    - Abaixe (lower) a AST verificada para a IR/Bytecode linear. Isso evita duplicar lógica entre o Interpretador e o Compilador.
-4. **`lang_interp` & `lang_codegen`**:
-   - `lang_interp`: Executa os opcodes de `lang_ir` na VM.
-   - `lang_codegen`: Compila os mesmos opcodes de `lang_ir` para o alvo compilado (C/Nativo).
-5. **`lang_linter` & `lang_debugger`**:
-   - Adicione verificações estáticas pertinentes em `lang_linter` e suporte a inspeção do novo opcode em `lang_debugger`.
+4. **`sigma_interp` & `sigma_codegen`**:
+   - `sigma_interp`: Executa os opcodes de `sigma_ir` na VM.
+   - `sigma_codegen`: Compila os mesmos opcodes de `sigma_ir` para o alvo compilado (C99/Nativo).
+5. **`sigma_linter` & `sigma_debugger`**:
+   - Adicione verificações estáticas pertinentes em `sigma_linter` e suporte a inspeção do novo opcode em `sigma_debugger`.
 
 ### 3. Verificação e Testes
-1. Crie testes em `toolchain/test/` cobrindo:
+1. Crie testes em `toolchain/test/` em arquivos separados por domínio (`test_<assunto>.ml`, $\le 300$ linhas) cobrindo:
    - Caso de sucesso (comparando saída do **Interpretador** vs saída do **Compilador** — ambos devem produzir o mesmo resultado!).
    - Caso de erro com verificação do `Span` e código de diagnóstico (`Diagnostic`).
-2. Rode `dune build` e `dune runtest` no diretório `toolchain/`.
-3. Execute o protocolo da skill `context-sync`.
+2. Rode em `toolchain/`: `dune build`, `dune runtest` e `dune exec sigma -- test --parity ../tests/`.
+3. Valide o tamanho dos arquivos com `./toolchain/scripts/check_file_sizes.sh --strict-ideal`.
+4. Execute o protocolo da skill `context-sync`.

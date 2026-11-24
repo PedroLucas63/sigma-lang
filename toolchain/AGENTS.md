@@ -25,10 +25,21 @@ Para manter desacoplamento profissional e permitir que o Interpretador, Compilad
 
 ## Diretrizes de Código OCaml para IA
 
-1. **Limite de Tamanho de Arquivo e Modularização (Alvo $\le 300$ linhas, Máximo $\le 500$ linhas):**
-   - Nenhum arquivo `.ml` ou `.mli` pode ultrapassar **500 linhas** (busque sempre manter até **300 linhas**).
-   - Evite arquivos monolíticos: estruture cada biblioteca (`sigma_syntax`, `sigma_sema`, `sigma_ir`, `sigma_interp`, `sigma_codegen`, etc.) em submódulos coesos e ortogonais, aplicando padrões de projeto e eliminando *code smells*. Novas features devem preferencialmente adicionar novos arquivos/módulos focados em vez de inflar arquivos existentes.
-2. **Interfaces Explícitas (`.mli`):** Todo módulo público deve possuir um `.mli` enxuto e documentado. Atualize o `.mli` **antes** do `.ml`.
-3. **Erros Tipados:** Use `Result.t` (`('a, Diagnostic.t list) result`) entre os estágios do pipeline. Nunca use `raise` ou `failwith` para erros de código do usuário.
+1. **Limite de Tamanho de Arquivo (Alvo $\le 300$ linhas, Máximo $\le 500$ linhas):**
+   - **Todo arquivo `.ml` ou `.mli` em `lib/`, `bin/` e `test/` deve permanecer $\le 300$ linhas** (bloqueado pelo hook `pre-commit` com `--strict-ideal`; teto absoluto no CI de 500 linhas com `--strict`).
+   - **Nunca infle um módulo existente:** antes de adicionar uma feature a um arquivo que já esteja próximo de 250 linhas, extraia um novo submódulo coeso (ex: `typecheck_match.ml`, `codegen_c_struct.ml`, `test_<tema>.ml`).
+2. **Arquitetura Modular & Quebra de Ciclos (`hooks` + Fachada `.mli`):**
+   - Cada biblioteca expõe **uma fachada `.mli` estável** (`Parser`, `Typecheck`, `Lower`, `Vm`, `Codegen_c`) e delega para submódulos internos por responsabilidade.
+   - **Quando houver recursão mútua entre submódulos** (ex: `expr` $\leftrightarrow$ `stmt`), **não** re-funda os arquivos em um monolito: use um registro `hooks` injetado pela fachada/orquestrador.
+   - **Sem código duplicado:** helpers compartilhados entre CLI/testes/codegen devem viver em módulos comuns dedicados (`cli_commands.ml`, `test_helpers.ml`, `c_rt_*.ml`, `u128.ml`).
+   - **Suítes de teste por domínio:** mantenha `test/test_int_vars.ml` apenas como runner e crie arquivos `test_<assunto>.ml` focados (<= 300 linhas cada).
+3. **Interfaces Explícitas (`.mli`) e Erros Tipados (Zero Gambiarra em `lib/`):**
+   - Atualize o `.mli` **antes** do `.ml`.
+   - Use `Result.t` (`('a, Diagnostic.t list) result`) entre os estágios do pipeline.
+   - **Proibido em `toolchain/lib/`:** `failwith`, `Obj.magic` e `exit` (também bloqueados pelo hook `pre-commit`). Erros de usuário viram `Diagnostic.t` com `Span.t`.
 4. **Formatação & Impressão:** Inclua funções `pp` (pretty-printing) enxutas nos módulos de AST, Tipos e IR para facilitar *expect tests* e leitura rápida por IA.
-5. **Testes Rápidos:** Use `dune runtest` para validar alterações, garantindo paridade de saída entre `sigma_interp` e `sigma_codegen`.
+5. **Checklist Obrigatório Antes de Concluir / Commitar:**
+   - `./toolchain/scripts/check_file_sizes.sh --strict-ideal` (todos os arquivos $\le 300$ linhas).
+   - `cd toolchain && dune runtest` (zero warnings, todos os testes passando).
+   - `cd toolchain && dune exec sigma -- test --parity ../tests/` (paridade exata `VM == C99`).
+   - Hook local instalado via `./toolchain/scripts/install-hooks.sh` (`.git/hooks/pre-commit`).

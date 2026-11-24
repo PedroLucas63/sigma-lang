@@ -29,8 +29,15 @@ jobs:
           sudo apt-get install -y gcc make
           opam install -y dune
 
-      - name: Verificar Limite Modular de Linhas (<= 500)
-        run: ./toolchain/scripts/check_file_sizes.sh --strict
+      - name: Verificar Limite Modular de Linhas (<= 300)
+        run: ./toolchain/scripts/check_file_sizes.sh --strict-ideal
+
+      - name: Auditar Primitivas Proibidas em toolchain/lib/
+        run: |
+          if grep -rnE '\b(failwith|Obj\.magic)\b|\bexit[[:space:]]' toolchain/lib/; then
+            echo "Erro: failwith, Obj.magic ou exit não são permitidos em toolchain/lib/"
+            exit 1
+          fi
 
       - name: Compilar Toolchain
         run: |

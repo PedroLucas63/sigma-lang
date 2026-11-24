@@ -5,12 +5,17 @@ set -euo pipefail
 #   - Meta ideal: <= 300 linhas
 #   - Teto máximo absoluto: <= 500 linhas
 # Uso:
-#   ./check_file_sizes.sh           # Modo relatório (sem falhar em arquivos legados)
-#   ./check_file_sizes.sh --strict  # Falha (exit 1) se algum arquivo exceder 500 linhas
+#   ./check_file_sizes.sh                 # Modo relatório (sem falhar)
+#   ./check_file_sizes.sh --strict        # Falha (exit 1) se algum arquivo exceder 500 linhas
+#   ./check_file_sizes.sh --strict-ideal  # Falha (exit 1) se algum arquivo exceder 300 linhas
 
 STRICT=false
+STRICT_IDEAL=false
 if [[ "${1:-}" == "--strict" ]]; then
   STRICT=true
+elif [[ "${1:-}" == "--strict-ideal" ]]; then
+  STRICT=true
+  STRICT_IDEAL=true
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,5 +47,8 @@ echo "----------------------------------------"
 echo "Total analisado: ${total} arquivo(s) | >${HARD_LIMIT} linhas: ${over_hard} | 301-${HARD_LIMIT} linhas: ${over_ideal}"
 
 if [[ "$STRICT" == "true" && "$over_hard" -gt 0 ]]; then
+  exit 1
+fi
+if [[ "$STRICT_IDEAL" == "true" && "$over_ideal" -gt 0 ]]; then
   exit 1
 fi
