@@ -28,7 +28,22 @@ let resolve_destruct_tys ~span (rhs_ty : Ty.t) (pat_len : int) : (Ty.t list, Dia
               ~code:"E0104" ~span
               (Printf.sprintf "destructuring arity mismatch: pattern has %d elements, but '%s' has %d fields"
                  pat_len name val_len))
-       else Ok (List.map (fun f -> f.uf_ty) info.ut_fields))
+       else
+         let rec check_fields_vis = function
+           | [] -> Ok (List.map (fun f -> f.uf_ty) info.ut_fields)
+           | f :: rest ->
+             (match f.uf_get with
+              | None ->
+                Error
+                  (Diagnostic.error ~code:"E0124" ~span
+                     (Printf.sprintf "cannot destructure '%s': property '%s' has no 'get' accessor" name f.uf_name))
+              | Some v when not (is_vis_accessible v) ->
+                Error
+                  (Diagnostic.error ~code:"E0124" ~span
+                     (Printf.sprintf "cannot destructure '%s': property '%s' is %s" name f.uf_name (vis_to_string v)))
+              | Some _ -> check_fields_vis rest)
+         in
+         check_fields_vis info.ut_fields)
   | Ty.Array (elem_ty, n) ->
     if pat_len > n then
       Error

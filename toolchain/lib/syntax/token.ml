@@ -20,6 +20,10 @@ type kind =
   | KW_STRUCT
   | KW_RECORD
   | KW_NEW
+  | KW_PUBLIC
+  | KW_PROTECTED
+  | KW_PRIVATE
+  | KW_INTERNAL
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -113,6 +117,10 @@ let kind_to_string = function
   | KW_STRUCT -> "'struct'"
   | KW_RECORD -> "'record'"
   | KW_NEW -> "'new'"
+  | KW_PUBLIC -> "'public'"
+  | KW_PROTECTED -> "'protected'"
+  | KW_PRIVATE -> "'private'"
+  | KW_INTERNAL -> "'internal'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

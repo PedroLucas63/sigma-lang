@@ -8,7 +8,9 @@ let kind_kw = function
   | Ast.KindRecord -> "record"
 
 let parse_field_spec hooks st ~stop_kind ~require_semi ~ctx_name : (Ast.field_decl, Diagnostic.t) result =
+  let vis_opt = Parser_accessors.parse_opt_visibility st in
   let name_tok = cur st in
+  let start_sp = match vis_opt with Some (_, sp) -> sp | None -> name_tok.span in
   match name_tok.kind with
   | Token.IDENT field_name ->
     bump st;
@@ -22,44 +24,71 @@ let parse_field_spec hooks st ~stop_kind ~require_semi ~ctx_name : (Ast.field_de
       match Parser_types.parse_type_expr st with
       | Error e -> Error e
       | Ok field_type ->
-        let default_res =
-          if (cur st).kind = Token.EQUAL then begin
-            bump st;
-            match hooks.parse_expr st with
+        let acc_res =
+          if require_semi && (cur st).kind = Token.LBRACE then
+            match Parser_accessors.parse_accessor_blk st with
             | Error e -> Error e
-            | Ok e -> Ok (Some e)
-          end else Ok None
+            | Ok (accs, end_sp) -> Ok (Some accs, Some end_sp)
+          else Ok (None, None)
         in
-        (match default_res with
+        (match acc_res with
          | Error e -> Error e
-         | Ok field_default ->
-           if require_semi then begin
-             match expect_semi st name_tok.span with
-             | Error e -> Error e
-             | Ok full_span ->
-               Ok { Ast.field_name; field_span = full_span; field_type; field_default }
-           end else
-             let end_sp =
-               match field_default with
-               | Some e -> e.span
-               | None -> Ast.type_expr_span field_type
-             in
-             if (cur st).kind = stop_kind || (cur st).kind = Token.COMMA then
-               Ok { Ast.field_name; field_span = Span.merge name_tok.span end_sp; field_type; field_default }
-             else
-               err_at (cur st)
-                 (Printf.sprintf "expected ',' or ')' after field '%s' in %s, found %s"
-                    field_name ctx_name (Token.kind_to_string (cur st).kind)))
+         | Ok (field_accessors, acc_end_sp) ->
+           let default_res =
+             if (cur st).kind = Token.EQUAL then begin
+               bump st;
+               match hooks.parse_expr st with
+               | Error e -> Error e
+               | Ok e -> Ok (Some e)
+             end else Ok None
+           in
+           (match default_res with
+            | Error e -> Error e
+            | Ok field_default ->
+              let field_vis = Option.map fst vis_opt in
+              let field_is_positional = not require_semi in
+              if require_semi then begin
+                match field_accessors, field_default, acc_end_sp with
+                | Some _, None, Some end_sp ->
+                  let full_span =
+                    if (cur st).kind = Token.SEMI then
+                      let semi_tok = cur st in
+                      bump st;
+                      Span.merge start_sp semi_tok.span
+                    else Span.merge start_sp end_sp
+                  in
+                  Ok { Ast.field_vis; field_is_positional; field_name; field_span = full_span;
+                       field_type; field_accessors; field_default }
+                | _ ->
+                  (match expect_semi st start_sp with
+                   | Error e -> Error e
+                   | Ok full_span ->
+                     Ok { Ast.field_vis; field_is_positional; field_name; field_span = full_span;
+                          field_type; field_accessors; field_default })
+              end else
+                let end_sp =
+                  match field_default with
+                  | Some e -> e.span
+                  | None -> Ast.type_expr_span field_type
+                in
+                if (cur st).kind = stop_kind || (cur st).kind = Token.COMMA then
+                  Ok { Ast.field_vis; field_is_positional; field_name;
+                       field_span = Span.merge start_sp end_sp;
+                       field_type; field_accessors; field_default }
+                else
+                  err_at (cur st)
+                    (Printf.sprintf "expected ',' or ')' after field '%s' in %s, found %s"
+                       field_name ctx_name (Token.kind_to_string (cur st).kind))))
     end
   | _ ->
     err_at name_tok
       (Printf.sprintf "expected field name in %s, found %s" ctx_name (Token.kind_to_string name_tok.kind))
 
-let parse_class_or_struct hooks st kw_tok ~kind name name_tok : (Ast.stmt, Diagnostic.t) result =
+let parse_class_or_struct hooks st ~td_vis ~start_span ~kind name name_tok : (Ast.stmt, Diagnostic.t) result =
   let kw = kind_kw kind in
   let open_tok = cur st in
   if open_tok.kind <> Token.LBRACE then
-    err_at open_tok ~hint:(Printf.sprintf "declare fields inside '{ ... }', e.g. '%s %s { x: int; }'" kw name)
+    err_at open_tok ~hint:(Printf.sprintf "declare fields inside '{ ... }', e.g. '%s %s { public x: int; }'" kw name)
       (Printf.sprintf "expected '{' after '%s %s', found %s" kw name (Token.kind_to_string open_tok.kind))
   else begin
     bump st;
@@ -68,9 +97,9 @@ let parse_class_or_struct hooks st kw_tok ~kind name name_tok : (Ast.stmt, Diagn
       if tok.kind = Token.RBRACE then begin
         bump st;
         let td : Ast.type_decl =
-          { td_kind = kind; td_name = name; td_name_span = name_tok.Token.span; td_fields = List.rev acc }
+          { td_vis; td_kind = kind; td_name = name; td_name_span = name_tok.Token.span; td_fields = List.rev acc }
         in
-        Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge kw_tok.Token.span tok.span }
+        Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span tok.span }
       end else if is_eof st then
         err_at open_tok (Printf.sprintf "unclosed '{' in %s '%s'" kw name)
       else
@@ -81,7 +110,7 @@ let parse_class_or_struct hooks st kw_tok ~kind name name_tok : (Ast.stmt, Diagn
     loop []
   end
 
-let parse_record hooks st kw_tok name name_tok : (Ast.stmt, Diagnostic.t) result =
+let parse_record hooks st ~td_vis ~start_span name name_tok : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   if open_tok.kind <> Token.LPAREN then
     err_at open_tok ~hint:(Printf.sprintf "declare record members in parentheses, e.g. 'record %s(x: int) {}'" name)
@@ -107,42 +136,57 @@ let parse_record hooks st kw_tok name name_tok : (Ast.stmt, Diagnostic.t) result
     in
     match loop [] with
     | Error e -> Error e
-    | Ok (fields, _rparen_sp) ->
+    | Ok (param_fields, _rparen_sp) ->
       let next_tok = cur st in
-      let finish_span_res =
+      let finish_res =
         match next_tok.kind with
         | Token.SEMI ->
           bump st;
-          Ok next_tok.span
+          Ok ([], next_tok.span)
         | Token.LBRACE ->
           bump st;
-          let close_tok = cur st in
-          if close_tok.kind = Token.RBRACE then (bump st; Ok close_tok.span)
-          else err_at close_tok ~hint:"records currently only support an empty body '{}' or ';'"
-                 (Printf.sprintf "expected '}' in record '%s', found %s" name (Token.kind_to_string close_tok.kind))
+          let rec body_loop acc =
+            let tok = cur st in
+            if tok.kind = Token.RBRACE then (bump st; Ok (List.rev acc, tok.span))
+            else if is_eof st then err_at next_tok (Printf.sprintf "unclosed '{' in record '%s'" name)
+            else
+              match parse_field_spec hooks st ~stop_kind:Token.RBRACE ~require_semi:true ~ctx_name:"record" with
+              | Error e -> Error e
+              | Ok f -> body_loop (f :: acc)
+          in
+          body_loop []
         | _ ->
           err_at next_tok ~hint:(Printf.sprintf "end record with '{}' or ';', e.g. 'record %s(...) {}'" name)
             (Printf.sprintf "expected '{}' or ';' after record '%s(...)', found %s"
                name (Token.kind_to_string next_tok.kind))
       in
-      (match finish_span_res with
+      (match finish_res with
        | Error e -> Error e
-       | Ok end_sp ->
+       | Ok (body_fields, end_sp) ->
          let td : Ast.type_decl =
-           { td_kind = Ast.KindRecord; td_name = name; td_name_span = name_tok.Token.span; td_fields = fields }
+           {
+             td_vis;
+             td_kind = Ast.KindRecord;
+             td_name = name;
+             td_name_span = name_tok.Token.span;
+             td_fields = param_fields @ body_fields;
+           }
          in
-         Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge kw_tok.Token.span end_sp })
+         Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span end_sp })
   end
 
-let parse_type_decl hooks st kw_tok ~(kind : Ast.user_type_kind) : (Ast.stmt, Diagnostic.t) result =
+let parse_type_decl hooks st ?(td_vis = None) ?start_span kw_tok ~(kind : Ast.user_type_kind)
+    : (Ast.stmt, Diagnostic.t) result =
   let kw = kind_kw kind in
+  let start_span = match start_span with Some sp -> sp | None -> kw_tok.Token.span in
   let name_tok = cur st in
   match name_tok.kind with
   | Token.IDENT name ->
     bump st;
     (match kind with
-     | Ast.KindRecord -> parse_record hooks st kw_tok name name_tok
-     | Ast.KindClass | Ast.KindStruct -> parse_class_or_struct hooks st kw_tok ~kind name name_tok)
+     | Ast.KindRecord -> parse_record hooks st ~td_vis ~start_span name name_tok
+     | Ast.KindClass | Ast.KindStruct ->
+       parse_class_or_struct hooks st ~td_vis ~start_span ~kind name name_tok)
   | _ ->
     err_at name_tok
       (Printf.sprintf "expected type name after '%s', found %s" kw (Token.kind_to_string name_tok.kind))

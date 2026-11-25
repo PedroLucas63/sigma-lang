@@ -13,7 +13,17 @@ let check_field_access hooks (env : env) ~span (base : Ast.expr) (field : string
         | Some info ->
           (match List.find_opt (fun f -> f.uf_name = field) info.ut_fields with
            | Some f ->
-             Ok { Typed_ast.desc = Typed_ast.TExprField (tbase, field, f.uf_idx); ty = f.uf_ty; span }
+             (match f.uf_get with
+              | None ->
+                Error
+                  (Diagnostic.error ~code:"E0124" ~span
+                     (Printf.sprintf "property '%s' of '%s' has no 'get' accessor" field tname))
+              | Some v when not (is_vis_accessible v) ->
+                Error
+                  (Diagnostic.error ~code:"E0124" ~span
+                     (Printf.sprintf "cannot access %s property '%s' of '%s'" (vis_to_string v) field tname))
+              | Some _ ->
+                Ok { Typed_ast.desc = Typed_ast.TExprField (tbase, field, f.uf_idx); ty = f.uf_ty; span })
            | None ->
              Error
                (Diagnostic.error ~code:"E0119" ~span
@@ -35,7 +45,7 @@ let rec root_var_const_kind (env : env) (e : Typed_ast.expr) : const_kind option
     root_var_const_kind env sub
   | _ -> None
 
-let check_field_lvalue hooks (env : env) ~span ~for_op:_ (base : Ast.expr) (field : string)
+let check_field_lvalue hooks (env : env) ~span ~for_op (base : Ast.expr) (field : string)
     : (Typed_ast.lvalue * Ty.t * string, Diagnostic.t) result =
   match hooks.check_expr env base with
   | Error e -> Error e
@@ -52,6 +62,39 @@ let check_field_lvalue hooks (env : env) ~span ~for_op:_ (base : Ast.expr) (fiel
                (Diagnostic.error ~code:"E0119" ~span
                   (Printf.sprintf "type '%s' has no field named '%s'" tname field))
            | Some f ->
+             let check_accessors label =
+               match f.uf_set with
+               | None ->
+                 if Option.is_some f.uf_init then
+                   Error
+                     (Diagnostic.error ~code:"E0125" ~span
+                        (Printf.sprintf "property '%s' of '%s' is init-only and cannot be assigned after initialization"
+                           field tname))
+                 else
+                   Error
+                     (Diagnostic.error ~code:"E0125" ~span
+                        (Printf.sprintf "property '%s' of '%s' is read-only and cannot be assigned" field tname))
+               | Some v when not (is_vis_accessible v) ->
+                 Error
+                   (Diagnostic.error ~code:"E0124" ~span
+                      (Printf.sprintf "cannot assign to property '%s' of '%s' because its 'set' accessor is %s"
+                         field tname (vis_to_string v)))
+               | Some _ ->
+                 if for_op <> "=" && for_op <> "out" then
+                   (match f.uf_get with
+                    | None ->
+                      Error
+                        (Diagnostic.error ~code:"E0124" ~span
+                           (Printf.sprintf "cannot read property '%s' of '%s' for '%s' because it has no 'get' accessor"
+                              field tname for_op))
+                    | Some gv when not (is_vis_accessible gv) ->
+                      Error
+                        (Diagnostic.error ~code:"E0124" ~span
+                           (Printf.sprintf "cannot read %s property '%s' of '%s' for '%s'"
+                              (vis_to_string gv) field tname for_op))
+                    | Some _ -> Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, label))
+                 else Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, label)
+             in
              if kind = Ty.KindRecord then
                Error
                  (Diagnostic.error ~code:"E0107" ~span
@@ -62,8 +105,8 @@ let check_field_lvalue hooks (env : env) ~span ~for_op:_ (base : Ast.expr) (fiel
                   Error
                     (Diagnostic.error ~code:"E0107" ~span
                        (Printf.sprintf "cannot mutate field '%s' of immutable struct '%s'" field tname))
-                | _ -> Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, "struct field"))
-             else Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, "class field")))
+                | _ -> check_accessors "struct field")
+             else check_accessors "class field"))
      | other ->
        Error
          (Diagnostic.error ~code:"E0119" ~span

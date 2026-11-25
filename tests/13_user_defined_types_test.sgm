@@ -1,23 +1,23 @@
 # Suite 13: Estruturas definidas pelo usuario (class, struct, record), new e atribuicao multipla
 
 struct Ponto {
-    x: int;
-    y: int = 10;
+    public x: int;
+    public y: int = 10;
 }
 
 struct Caixa {
-    origem: Ponto;
-    rotulo: string = "padrao";
+    public origem: Ponto;
+    public rotulo: string = "padrao";
 }
 
 class Conta {
-    titular: string;
-    saldo: decimal = 0.0m;
+    public titular: string;
+    public saldo: decimal = 0.0m;
 }
 
 class No {
-    valor: int;
-    proximo: No;
+    public valor: int;
+    public proximo: No;
 }
 
 record Config(host: string, porta: int = 8080) {}
@@ -134,15 +134,15 @@ assert_error("E0122", "struct P { x: int; } var p := P { 1 };", "struct sem new 
 assert_error("E0122", "record R(x: int); var r := R(1);", "record sem new deve falhar");
 assert_error("E0003", "var a := 1; var b := 2; a, b = b, a;", "atribuicao multipla sem parenteses deve falhar");
 assert_error("E0107", "record R(x: int); var r := new R(1); r.x = 2;", "record nao permite mutacao de campo");
-assert_error("E0107", "struct P { x: int; } const p := new P { 1 }; p.x = 2;", "const struct nao permite mutar campo");
-assert_error("E0107", "struct P { x: int; } act f(p: P) { p.x = 2; }", "parametro struct shallow const nao permite mutar campo");
-assert_error("E0107", "struct P { x: int; } const p := new P { 1 }; var x := 0; (p.x, x) = (2, 3);", "atribuicao multipla em const struct deve falhar");
-assert_error("E0119", "struct P { x: int; } var p := new P { 1 }; var z := p.y;", "campo inexistente em leitura");
+assert_error("E0107", "struct P { public x: int; } const p := new P { 1 }; p.x = 2;", "const struct nao permite mutar campo");
+assert_error("E0107", "struct P { public x: int; } act f(p: P) { p.x = 2; }", "parametro struct shallow const nao permite mutar campo");
+assert_error("E0107", "struct P { public x: int; } const p := new P { 1 }; var x := 0; (p.x, x) = (2, 3);", "atribuicao multipla em const struct deve falhar");
+assert_error("E0119", "struct P { public x: int; } var p := new P { 1 }; var z := p.y;", "campo inexistente em leitura");
 assert_error("E0119", "struct P { x: int; } var p := new P { y = 1 };", "campo inexistente em inicializacao");
 assert_error("E0120", "struct Ciclo { prox: Ciclo; }", "struct recursivo por valor deve falhar");
 assert_error("E0120", "record RCiclo(prox: RCiclo);", "record recursivo por valor deve falhar");
 assert_error("E0121", "struct P { x: int; } var p := new P(1);", "struct sem construtor deve exigir chaves");
 assert_error("E0121", "record R(x: int); var r := new R { 1 };", "record deve exigir parenteses");
-assert_error("E0104", "struct A { x: int; } struct B { x: int; } var b := new A { 1 } == new B { 1 };", "igualdade entre tipos distintos deve falhar");
+assert_error("E0104", "struct A { public x: int; } struct B { public x: int; } var b := new A { 1 } == new B { 1 };", "igualdade entre tipos distintos deve falhar");
 
 println("All user-defined type tests passed!");

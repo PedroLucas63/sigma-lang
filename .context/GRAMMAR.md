@@ -25,6 +25,10 @@
 | Palavra-chave | `KW_STRUCT` | `struct` |
 | Palavra-chave | `KW_RECORD` | `record` |
 | Palavra-chave | `KW_NEW` | `new` |
+| Palavra-chave | `KW_PUBLIC` | `public` |
+| Palavra-chave | `KW_PROTECTED` | `protected` |
+| Palavra-chave | `KW_PRIVATE` | `private` |
+| Palavra-chave | `KW_INTERNAL` | `internal` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -106,11 +110,15 @@ decl_stmt     ::= var_decl
                 | fun_decl
                 | act_decl ;
 
-type_decl     ::= ( "class" | "struct" ) IDENT "{" field_decl* "}"
-                | "record" IDENT "(" record_params? ")" ( "{" "}" | ";" ) ;
-field_decl    ::= IDENT ":" type_expr ( "=" expr )? ";" ;
+visibility    ::= "public" | "protected" | "private" | "internal" ;
+
+type_decl     ::= visibility? ( "class" | "struct" ) IDENT "{" field_decl* "}"
+                | visibility? "record" IDENT "(" record_params? ")" ( "{" field_decl* "}" | ";" ) ;
+field_decl    ::= visibility? IDENT ":" type_expr ( accessor_blk ( "=" expr )? ";"? | ( "=" expr )? ";" ) ;
+accessor_blk  ::= "{" accessor+ "}" ;
+accessor      ::= visibility? ( "get" | "set" | "init" ) ";" ;
 record_params ::= record_param ( "," record_param )* ","? ;
-record_param  ::= IDENT ":" type_expr ( "=" expr )? ;
+record_param  ::= visibility? IDENT ":" type_expr ( "=" expr )? ;
 
 non_decl_stmt ::= if_stmt
                 | loop_stmt

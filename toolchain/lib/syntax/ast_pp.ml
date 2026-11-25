@@ -249,18 +249,35 @@ and pp_stmt fmt (s : stmt) =
       | KindStruct -> "struct"
       | KindRecord -> "record"
     in
+    let pp_vis fmt = function
+      | None -> () | Some VisPublic -> Format.fprintf fmt "public "
+      | Some VisProtected -> Format.fprintf fmt "protected "
+      | Some VisPrivate -> Format.fprintf fmt "private " | Some VisInternal -> Format.fprintf fmt "internal "
+    in
+    let pp_acc fmt (a : accessor_spec) =
+      let k = match a.acc_kind with AccGet -> "get" | AccSet -> "set" | AccInit -> "init" in
+      Format.fprintf fmt "%a%s;" pp_vis a.acc_vis k
+    in
+    let pp_accs fmt = function
+      | None -> ()
+      | Some accs -> Format.fprintf fmt " { %a }" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_acc) accs
+    in
     let pp_field fmt (f : field_decl) =
       match f.field_default with
-      | None -> Format.fprintf fmt "%s: %s" f.field_name (type_expr_to_string f.field_type)
-      | Some d -> Format.fprintf fmt "%s: %s = %a" f.field_name (type_expr_to_string f.field_type) pp_expr d
+      | None ->
+        Format.fprintf fmt "%a%s: %s%a" pp_vis f.field_vis f.field_name
+          (type_expr_to_string f.field_type) pp_accs f.field_accessors
+      | Some d ->
+        Format.fprintf fmt "%a%s: %s%a = %a" pp_vis f.field_vis f.field_name
+          (type_expr_to_string f.field_type) pp_accs f.field_accessors pp_expr d
     in
     (match td.td_kind with
      | KindRecord ->
-       Format.fprintf fmt "%s %s(%a) {}" kw td.td_name
+       Format.fprintf fmt "%a%s %s(%a) {}" pp_vis td.td_vis kw td.td_name
          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_field)
          td.td_fields
      | KindClass | KindStruct ->
-       Format.fprintf fmt "%s %s { %a }" kw td.td_name
+       Format.fprintf fmt "%a%s %s { %a }" pp_vis td.td_vis kw td.td_name
          (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_field)
          td.td_fields)
   | StmtMultiAssign { ma_targets; ma_rhs } ->

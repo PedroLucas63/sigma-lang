@@ -1,0 +1,91 @@
+# Suite 15: Modificadores de acesso (public, protected, private, internal) e acessores (get, set, init)
+
+# 1. Palavras-chave contextuais: get, set e init continuam válidos como identificadores comuns
+fun get(set: int, init: int): int {
+    return set + init;
+}
+var init := 10;
+var set := 20;
+assert(get(set, init), 30, "get/set/init contextuais funcionam como identificadores");
+
+# 2. Visibilidade em class e struct + acessores { get; set; }, { get; init; }, { get; }, { get; private set; }
+public class Conta {
+    public titular: string;
+    public saldo: decimal { get; private set; } = 0.0m;
+    public agencia: int { get; init; } = 1;
+    public versao: int { get; } = 1;
+    internal codigo_banco: string { get; internal set; } = "001";
+    private pin: int = 1234;
+    protected limite: decimal = 500.0m;
+    segredo_padrao: int = 99; # default sem modificador = private
+}
+
+internal struct Ponto {
+    public x: int { get; set; }
+    public y: int { get; init; } = 10;
+    public origem: int { get; } = 0;
+    oculto: int = 7; # default = private
+}
+
+var c := new Conta { titular = "Ana", agencia = 42, codigo_banco = "341" };
+assert(c.titular, "Ana", "campo publico de class");
+assert(c.saldo, 0.0m, "propriedade com get publico e private set");
+assert(c.agencia, 42, "propriedade init-only inicializada via new");
+assert(c.versao, 1, "propriedade somente-leitura usa valor default");
+assert(c.codigo_banco, "341", "propriedade internal acessivel no mesmo modulo");
+
+c.titular = "Ana Maria";
+c.codigo_banco = "033";
+assert(c.titular, "Ana Maria", "mutacao de campo publico");
+assert(c.codigo_banco, "033", "mutacao de propriedade internal");
+
+var p := new Ponto { x = 3, y = 4 };
+assert((p.x, p.y, p.origem), (3, 4, 0), "leitura de propriedades de struct");
+p.x += 5;
+assert(++p.x, 9, "operacao composta e incremento em propriedade { get; set; }");
+
+# 3. Record com modificadores nos parametros posicionais e corpo com membros
+public record Config(public host: string, porta: int = 8080, private token: string = "xyz") {
+    public versao: int { get; init; } = 2;
+    private interno: int = 100;
+}
+
+var cfg := new Config("localhost", 9000);
+assert((cfg.host, cfg.porta, cfg.versao), ("localhost", 9000, 2), "record com modificadores e corpo");
+
+# 4. Desempacotamento de struct com todos os campos publicos
+struct ParPub {
+    public a: int { get; set; }
+    public b: int { get; init; }
+}
+var pp := new ParPub { 10, 20 };
+var da := 0;
+var db := 0;
+(da, db) = pp;
+assert((da, db), (10, 20), "desempacotamento de struct com getters publicos");
+
+# 5. Diagnosticos E0124 (visibilidade)
+assert_error("E0124", "class A { x: int = 1; } var a := new A {}; var v := a.x;", "campo sem modificador e private por padrao");
+assert_error("E0124", "class A { private x: int = 1; } var a := new A { x = 2 };", "nao pode inicializar campo private no new");
+assert_error("E0124", "class A { protected x: int = 1; } var a := new A {}; var v := a.x;", "nao pode ler campo protected externamente");
+assert_error("E0124", "class A { public x: int { get; private set; } } var a := new A {}; a.x = 5;", "nao pode atribuir a private set");
+assert_error("E0124", "class A { public x: int { get; protected set; } } var a := new A {}; a.x = 5;", "nao pode atribuir a protected set");
+assert_error("E0124", "class A { public x: int { private get; set; } } var a := new A {}; var v := a.x;", "nao pode ler private get");
+assert_error("E0124", "class A { public x: int { private get; set; } } var a := new A {}; a.x += 1;", "operacao composta exige get acessivel");
+assert_error("E0124", "class A { public x: int { get; } private y: int; } var a := new A {}; var (x, y) := (0, 0); (x, y) = a;", "desempacotamento falha se campo e private");
+
+# 6. Diagnosticos E0125 (imutabilidade de acessores get / init / record)
+assert_error("E0125", "struct S { public x: int { get; init; } } var s := new S { 1 }; s.x = 2;", "init-only nao permite reatribuicao apos new");
+assert_error("E0125", "struct S { public x: int { get; } = 5; } var s := new S {}; s.x = 2;", "read-only nao permite atribuicao");
+assert_error("E0125", "struct S { public x: int { get; } = 5; } var s := new S { x = 2 };", "read-only nao permite inicializacao em new");
+assert_error("E0125", "record R(a: int) { public b: int { get; set; } }", "record nao permite acessor set");
+
+# 7. Diagnosticos E0126 (combinacao invalida de modificadores e acessores)
+assert_error("E0126", "class A { private x: int { public get; } }", "acessor nao pode ser mais permissivo que o membro");
+assert_error("E0126", "class A { public x: int { get; get; } }", "acessor get duplicado");
+assert_error("E0126", "class A { public x: int { set; set; } }", "acessor set duplicado");
+assert_error("E0126", "class A { public x: int { init; init; } }", "acessor init duplicado");
+assert_error("E0126", "class A { public x: int { get; set; init; } }", "set e init simultaneos sao invalidos");
+
+# 8. Erro de sintaxe E0002 em bloco de acessores vazio
+assert_error("E0002", "class A { public x: int {} }", "bloco de acessores vazio deve falhar");

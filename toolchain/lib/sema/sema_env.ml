@@ -22,15 +22,30 @@ type user_field = {
   uf_name : string;
   uf_idx : int;
   uf_ty : Ty.t;
+  uf_vis : Ast.visibility;
+  uf_get : Ast.visibility option;
+  uf_set : Ast.visibility option;
+  uf_init : Ast.visibility option;
   uf_default : Typed_ast.expr option;
 }
 
 type user_type_info = {
   ut_kind : Ty.user_type_kind;
+  ut_vis : Ast.visibility;
   ut_name : string;
   ut_span : Span.t;
   ut_fields : user_field list;
 }
+
+let vis_to_string = function
+  | Ast.VisPublic -> "public"
+  | Ast.VisProtected -> "protected"
+  | Ast.VisPrivate -> "private"
+  | Ast.VisInternal -> "internal"
+
+let is_vis_accessible = function
+  | Ast.VisPublic | Ast.VisInternal -> true
+  | Ast.VisProtected | Ast.VisPrivate -> false
 
 let user_types : (string, user_type_info) Hashtbl.t = Hashtbl.create 16
 

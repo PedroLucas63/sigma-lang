@@ -43,8 +43,9 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
       ]
   else begin
     let kind = ty_kind_of_ast td.td_kind in
+    let td_vis = match td.td_vis with Some v -> v | None -> Ast.VisPublic in
     Hashtbl.replace user_types td.td_name
-      { ut_kind = kind; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = [] };
+      { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = [] };
     let seen = Hashtbl.create 8 in
     let errs = ref [] in
     let tfields = ref [] in
@@ -57,45 +58,64 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
               (Printf.sprintf "duplicate field '%s' in '%s'" f.field_name td.td_name)
             :: !errs;
         Hashtbl.replace seen f.field_name ();
-        match Sema_types.resolve_type_expr f.field_type None with
+        let member_vis =
+          match f.field_vis with
+          | Some v -> v
+          | None -> if f.field_is_positional && kind = Ty.KindRecord then Ast.VisPublic else Ast.VisPrivate
+        in
+        match Sema_accessors.resolve_field_accessors ~kind ~field_name:f.field_name ~member_vis f.field_accessors with
         | Error err -> errs := err :: !errs
-        | Ok fty ->
-          if (kind = Ty.KindStruct || kind = Ty.KindRecord)
-             && value_type_reaches (Hashtbl.create 8) td.td_name fty
-          then
-            errs :=
-              Diagnostic.error
-                ~hint:"use 'class' instead of 'struct'/'record' for recursive self-referential types"
-                ~code:"E0120" ~span:f.field_span
-                (Printf.sprintf "recursive value type '%s' cannot contain itself by value" td.td_name)
-              :: !errs;
-          let def_opt =
-            match f.field_default with
-            | None -> Some None
-            | Some de ->
-              (match hooks.check_expr env de with
-               | Error err -> errs := err :: !errs; None
-               | Ok tde ->
-                 if not (Ty.equal tde.ty fty) then begin
-                   errs :=
-                     Diagnostic.error ~code:"E0104" ~span:tde.span
-                       (Printf.sprintf "type mismatch in default value for field '%s': expected '%s', found '%s'"
-                          f.field_name (Ty.to_string fty) (Ty.to_string tde.ty))
-                     :: !errs;
-                   None
-                 end else Some (Some tde))
-          in
-          (match def_opt with
-           | Some tdef ->
-             tfields := { Typed_ast.tuf_name = f.field_name; tuf_ty = fty; tuf_default = tdef } :: !tfields;
-             ufields := { uf_name = f.field_name; uf_idx = idx; uf_ty = fty; uf_default = tdef } :: !ufields
-           | None -> ()))
+        | Ok (uf_get, uf_set, uf_init) ->
+          (match Sema_types.resolve_type_expr f.field_type None with
+           | Error err -> errs := err :: !errs
+           | Ok fty ->
+             if (kind = Ty.KindStruct || kind = Ty.KindRecord)
+                && value_type_reaches (Hashtbl.create 8) td.td_name fty
+             then
+               errs :=
+                 Diagnostic.error
+                   ~hint:"use 'class' instead of 'struct'/'record' for recursive self-referential types"
+                   ~code:"E0120" ~span:f.field_span
+                   (Printf.sprintf "recursive value type '%s' cannot contain itself by value" td.td_name)
+                 :: !errs;
+             let def_opt =
+               match f.field_default with
+               | None -> Some None
+               | Some de ->
+                 (match hooks.check_expr env de with
+                  | Error err -> errs := err :: !errs; None
+                  | Ok tde ->
+                    if not (Ty.equal tde.ty fty) then begin
+                      errs :=
+                        Diagnostic.error ~code:"E0104" ~span:tde.span
+                          (Printf.sprintf "type mismatch in default value for field '%s': expected '%s', found '%s'"
+                             f.field_name (Ty.to_string fty) (Ty.to_string tde.ty))
+                        :: !errs;
+                      None
+                    end else Some (Some tde))
+             in
+             (match def_opt with
+              | Some tdef ->
+                tfields := { Typed_ast.tuf_name = f.field_name; tuf_ty = fty; tuf_default = tdef } :: !tfields;
+                ufields :=
+                  {
+                    uf_name = f.field_name;
+                    uf_idx = idx;
+                    uf_ty = fty;
+                    uf_vis = member_vis;
+                    uf_get;
+                    uf_set;
+                    uf_init;
+                    uf_default = tdef;
+                  }
+                  :: !ufields
+              | None -> ())))
       td.td_fields;
     match List.rev !errs with
     | [] ->
       let rev_ufields = List.rev !ufields in
       Hashtbl.replace user_types td.td_name
-        { ut_kind = kind; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = rev_ufields };
+        { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = rev_ufields };
       let tud : Typed_ast.user_type_decl =
         { tud_kind = kind; tud_name = td.td_name; tud_span = td.td_name_span; tud_fields = List.rev !tfields }
       in
@@ -154,19 +174,38 @@ let resolve_init_args hooks (env : env) ~span (info : user_type_info) (args : As
         (match target_idx_res with
          | Error e -> Error e
          | Ok idx ->
-           (match hooks.check_expr env a.arg_value with
+           let uf = fields_arr.(idx) in
+           let init_check =
+             match uf.uf_init, uf.uf_set with
+             | None, None ->
+               Error
+                 (Diagnostic.error ~code:"E0125" ~span:a.arg_value.span
+                    (Printf.sprintf "property '%s' of '%s' is read-only and cannot be initialized in 'new'"
+                       uf.uf_name info.ut_name))
+             | Some v, _ | None, Some v ->
+               if is_vis_accessible v then Ok ()
+               else
+                 Error
+                   (Diagnostic.error ~code:"E0124" ~span:a.arg_value.span
+                      (Printf.sprintf "cannot initialize %s property '%s' of '%s'"
+                         (vis_to_string v) uf.uf_name info.ut_name))
+           in
+           (match init_check with
             | Error e -> Error e
-            | Ok targ ->
-              let expected_ty = fields_arr.(idx).uf_ty in
-              if not (Ty.equal targ.ty expected_ty) then
-                Error
-                  (Diagnostic.error ~code:"E0104" ~span:targ.span
-                     (Printf.sprintf "type mismatch for field '%s' of '%s': expected '%s', found '%s'"
-                        fields_arr.(idx).uf_name info.ut_name (Ty.to_string expected_ty) (Ty.to_string targ.ty)))
-              else begin
-                slots.(idx) <- Some targ;
-                process rest
-              end))
+            | Ok () ->
+              (match hooks.check_expr env a.arg_value with
+               | Error e -> Error e
+               | Ok targ ->
+                 let expected_ty = uf.uf_ty in
+                 if not (Ty.equal targ.ty expected_ty) then
+                   Error
+                     (Diagnostic.error ~code:"E0104" ~span:targ.span
+                        (Printf.sprintf "type mismatch for field '%s' of '%s': expected '%s', found '%s'"
+                           uf.uf_name info.ut_name (Ty.to_string expected_ty) (Ty.to_string targ.ty)))
+                 else begin
+                   slots.(idx) <- Some targ;
+                   process rest
+                 end)))
   in
   match process args with
   | Error e -> Error e

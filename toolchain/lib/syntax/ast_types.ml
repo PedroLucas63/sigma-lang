@@ -254,19 +254,21 @@ and stmt = {
   span : Span.t;
 }
 
-and user_type_kind =
-  | KindClass
-  | KindStruct
-  | KindRecord
-
+and user_type_kind = KindClass | KindStruct | KindRecord
+and visibility = VisPublic | VisProtected | VisPrivate | VisInternal
+and accessor_kind = AccGet | AccSet | AccInit
+and accessor_spec = { acc_kind : accessor_kind; acc_vis : visibility option; acc_span : Span.t }
 and field_decl = {
+  field_vis : visibility option;
+  field_is_positional : bool;
   field_name : string;
   field_span : Span.t;
   field_type : type_expr;
+  field_accessors : accessor_spec list option;
   field_default : expr option;
 }
-
 and type_decl = {
+  td_vis : visibility option;
   td_kind : user_type_kind;
   td_name : string;
   td_name_span : Span.t;

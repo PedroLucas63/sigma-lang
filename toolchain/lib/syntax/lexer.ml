@@ -23,6 +23,10 @@ let keyword_or_ident st word =
   | "struct" -> Token.KW_STRUCT
   | "record" -> Token.KW_RECORD
   | "new" -> Token.KW_NEW
+  | "public" -> Token.KW_PUBLIC
+  | "protected" -> Token.KW_PROTECTED
+  | "private" -> Token.KW_PRIVATE
+  | "internal" -> Token.KW_INTERNAL
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT
