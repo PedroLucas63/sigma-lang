@@ -121,6 +121,18 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
     Printf.sprintf "((%s)->items[%d].u.%s)" (hooks.emit_expr target) idx (c_val_union_field e.ty)
   | Typed_ast.TExprStructInit { tsi_name; tsi_kind; tsi_args } ->
     Codegen_c_user_types.emit_struct_init hooks tsi_name tsi_kind tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    incr chain_counter;
+    let obj_v = Printf.sprintf "_sgm_nwi_%d" !chain_counter in
+    let sets =
+      nwi_inits
+      |> List.map (fun (idx, (ve : Typed_ast.expr)) ->
+           let c_v = emit_copy_if_struct ve (hooks.emit_expr ve) in
+           Printf.sprintf "%s->items[%d].u.%s = (%s);" obj_v idx (c_val_union_field ve.ty) c_v)
+      |> String.concat " "
+    in
+    Printf.sprintf "__extension__ ({ sgm_obj_t *%s = (%s); (void)%s; %s %s; })"
+      obj_v (hooks.emit_expr nwi_ctor) obj_v sets obj_v
   | Typed_ast.TExprUnary (unop, sub) -> Codegen_c_expr_ops.emit_unary hooks e unop sub
   | Typed_ast.TExprBinary (binop, lhs, rhs) -> Codegen_c_expr_ops.emit_binary hooks binop lhs rhs
   | Typed_ast.TExprChainCmp (e1, op1, e2, op2, e3) -> Codegen_c_expr_ops.emit_chain_cmp hooks e1 op1 e2 op2 e3

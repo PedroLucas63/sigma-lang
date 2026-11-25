@@ -94,11 +94,25 @@ let check_lvalue hooks (env : env) ~for_op (lval : Ast.lvalue)
   | Ast.LValIdent (name, name_span) ->
     (match Hashtbl.find_opt env name with
      | None ->
-       Error
-         (Diagnostic.error
-            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
-            ~code:"E0102" ~span:name_span
-            (Printf.sprintf "use of undeclared variable '%s'" name))
+       let undeclared () =
+         Error
+           (Diagnostic.error
+              ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
+              ~code:"E0102" ~span:name_span
+              (Printf.sprintf "use of undeclared variable '%s'" name))
+       in
+       (match !current_type_ctx with
+        | None -> undeclared ()
+        | Some (tname, _, is_static) ->
+          (match Hashtbl.find_opt user_types tname with
+           | Some info when List.exists (fun f -> f.uf_name = name) info.ut_fields ->
+             if is_static then
+               Error (Diagnostic.error ~code:"E0128" ~span:name_span
+                        (Printf.sprintf "cannot mutate instance field '%s' from a 'static' method" name))
+             else
+               Sema_user_fields.check_field_lvalue hooks env ~span:name_span ~for_op
+                 { Ast.desc = Ast.ExprThis; span = name_span } name
+           | _ -> undeclared ()))
      | Some info ->
        if info.const_kind = ShallowConst then
          let msg =

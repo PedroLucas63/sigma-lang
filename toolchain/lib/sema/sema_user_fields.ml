@@ -85,8 +85,14 @@ let check_field_lvalue hooks (env : env) ~span ~for_op (base : Ast.expr) (field 
                (Diagnostic.error ~code:"E0119" ~span
                   (Printf.sprintf "type '%s' has no field named '%s'" tname field))
            | Some f ->
+             let is_this_in_ctor =
+               !in_ctor && (match tbase.desc with Typed_ast.TExprIdent "this" -> true | _ -> false)
+             in
              let check_accessors label =
-               match f.uf_set with
+               if is_this_in_ctor then
+                 Ok (Typed_ast.TLValField (tbase, field, f.uf_idx), f.uf_ty, label)
+               else
+                 match f.uf_set with
                | None ->
                  if Option.is_some f.uf_init then
                    Error

@@ -90,6 +90,19 @@ let lower_expr hooks b (e : Typed_ast.expr) =
       (emit b
          (Ir.OP_NEW_USER { type_name = tsi_name; kind = tsi_kind; field_count = List.length tsi_args })
          e.span)
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    let tid = fresh_temp b in
+    hooks.lower_expr b nwi_ctor;
+    ignore (emit b (Ir.OP_SET_TEMP tid) e.span);
+    List.iter
+      (fun (fidx, ve) ->
+        ignore (emit b (Ir.OP_GET_TEMP tid) e.span);
+        hooks.lower_expr b ve;
+        Lower_user_types.emit_copy_if_struct b ve;
+        ignore (emit b (Ir.OP_SET_FIELD fidx) e.span);
+        ignore (emit b Ir.OP_POP e.span))
+      nwi_inits;
+    ignore (emit b (Ir.OP_GET_TEMP tid) e.span)
   | Typed_ast.TExprCall { callee; args; _ } ->
     hooks.lower_expr b callee;
     List.iter

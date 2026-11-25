@@ -43,6 +43,8 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
   | Typed_ast.TExprField (sub, _, _) -> collect_used_expr used sub
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.iter (collect_used_expr used) tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_used_expr used nwi_ctor; List.iter (fun (_, e) -> collect_used_expr used e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.iter
       (function

@@ -27,6 +27,8 @@ let rec collect_inner_captures_expr (e : Typed_ast.expr) : string list =
   | Typed_ast.TExprIndex (b, i) -> collect_inner_captures_expr b @ collect_inner_captures_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_inner_captures_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_inner_captures_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_inner_captures_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_inner_captures_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_inner_captures_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_inner_captures_expr p
@@ -91,6 +93,8 @@ let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
   | Typed_ast.TExprIndex (b, i) -> collect_out_vars_expr b @ collect_out_vars_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_out_vars_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_out_vars_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_out_vars_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_out_vars_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_out_vars_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_out_vars_expr p
@@ -177,6 +181,8 @@ let rec collect_all_funs_expr (e : Typed_ast.expr) : Typed_ast.fun_decl list =
   | Typed_ast.TExprIndex (b, i) -> collect_all_funs_expr b @ collect_all_funs_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_all_funs_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_all_funs_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_all_funs_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_all_funs_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_all_funs_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_all_funs_expr p

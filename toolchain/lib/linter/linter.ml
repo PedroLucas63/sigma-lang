@@ -46,6 +46,8 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     List.iter (fun (a : Typed_ast.typed_call_arg) -> mark_expr_usage tbl a.tca_expr) args
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.iter (mark_expr_usage tbl) tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    mark_expr_usage tbl nwi_ctor; List.iter (fun (_, e) -> mark_expr_usage tbl e) nwi_inits
   | Typed_ast.TExprField (base, _, _) ->
     mark_expr_usage tbl base
   | Typed_ast.TExprUnary (_, sub) ->

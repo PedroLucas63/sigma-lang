@@ -15,7 +15,15 @@ let check_return_stmt hooks (env : env) (s_span : Span.t) (eo : Ast.expr option)
   | RetExplicit ret_ty ->
     (match eo with
      | None ->
-       if ret_ty = Ty.Void then Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span }
+       if !in_ctor then
+         (match !current_type_ctx with
+          | Some (tname, kind, false) ->
+            let this_e =
+              { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = s_span }
+            in
+            Ok { Typed_ast.desc = Typed_ast.TStmtReturn (Some this_e); span = s_span }
+          | _ -> Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span })
+       else if ret_ty = Ty.Void then Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span }
        else
          ret_err
            (Printf.sprintf "'return' without a value in a function returning '%s'" (Ty.to_string ret_ty))

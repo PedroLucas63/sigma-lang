@@ -45,11 +45,37 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
     (match Hashtbl.find_opt env name with
      | Some info -> Ok { Typed_ast.desc = Typed_ast.TExprIdent name; ty = info.ty; span = e.span }
      | None ->
-       Error
-         (Diagnostic.error
-            ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
-            ~code:"E0102" ~span:e.span
-            (Printf.sprintf "use of undeclared variable '%s'" name)))
+       let not_found () =
+         Error
+           (Diagnostic.error
+              ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
+              ~code:"E0102" ~span:e.span
+              (Printf.sprintf "use of undeclared variable '%s'" name))
+       in
+       (match !current_type_ctx with
+        | None -> not_found ()
+        | Some (tname, _, is_static) ->
+          (match Hashtbl.find_opt user_types tname with
+           | None -> not_found ()
+           | Some info ->
+             if List.exists (fun f -> f.uf_name = name) info.ut_fields then begin
+               if is_static then
+                 Error (Diagnostic.error ~code:"E0128" ~span:e.span
+                          (Printf.sprintf "cannot access instance field '%s' from a 'static' method" name))
+               else
+                 Sema_user_fields.check_field_access hooks env ~span:e.span
+                   { Ast.desc = Ast.ExprThis; span = e.span } name
+             end else
+               match List.find_opt (fun m -> m.um_name = name) info.ut_methods with
+               | None -> not_found ()
+               | Some m when m.um_is_static ->
+                 Sema_methods.check_static_method_value ~span:e.span info name
+               | Some _ when is_static ->
+                 Error (Diagnostic.error ~code:"E0128" ~span:e.span
+                          (Printf.sprintf "cannot access instance method '%s' from a 'static' method" name))
+               | Some _ ->
+                 Sema_user_fields.check_field_access hooks env ~span:e.span
+                   { Ast.desc = Ast.ExprThis; span = e.span } name)))
   | Ast.ExprThis ->
     (match !current_type_ctx with
      | None ->
@@ -79,17 +105,32 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
        (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
         | Some res -> res
         | None ->
-          (match check_expr hooks env callee with
-           | Error err -> Error err
-           | Ok tcallee ->
-             (match tcallee.ty with
-              | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
-              | other ->
-                Error
-                  (Diagnostic.error
-                     ~hint:"only values of function type ('fun'/'act') can be called"
-                     ~code:"E0112" ~span:callee.span
-                     (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
+          let implicit_method_opt =
+            if Hashtbl.mem env name then None
+            else
+              match !current_type_ctx with
+              | Some (tname, _, false) ->
+                (match Hashtbl.find_opt user_types tname with
+                 | Some info when List.exists (fun m -> m.um_name = name && not m.um_is_static) info.ut_methods ->
+                   Sema_methods.try_check_method_call hooks env ~span:e.span ~call_expr:e ~callee
+                     { Ast.desc = Ast.ExprThis; span = callee.span } name args
+                 | _ -> None)
+              | _ -> None
+          in
+          (match implicit_method_opt with
+           | Some res -> res
+           | None ->
+             (match check_expr hooks env callee with
+              | Error err -> Error err
+              | Ok tcallee ->
+                (match tcallee.ty with
+                 | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
+                 | other ->
+                   Error
+                     (Diagnostic.error
+                        ~hint:"only values of function type ('fun'/'act') can be called"
+                        ~code:"E0112" ~span:callee.span
+                        (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))))
      | _ ->
        (match check_expr hooks env callee with
         | Error err -> Error err
@@ -104,8 +145,8 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                   (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
   | Ast.ExprStructInit (name, args) ->
     Sema_user_types.check_struct_init hooks env ~span:e.span name args
-  | Ast.ExprNew { new_name; new_is_ctor; new_args } ->
-    Sema_user_types.check_new_expr hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_args
+  | Ast.ExprNew { new_name; new_is_ctor; new_args; new_inits } ->
+    Sema_user_types.check_new_expr hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_args new_inits
   | Ast.ExprField (base, field) ->
     Sema_user_fields.check_field_access hooks env ~span:e.span base field
   | Ast.ExprLambda lam -> Sema_expr_special.check_lambda_expr hooks env e.span lam

@@ -41,6 +41,9 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
   | Typed_ast.TExprField (base, _, _) -> assigned_in_expr base acc
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.fold_left (fun s a -> assigned_in_expr a s) acc tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    let s1 = assigned_in_expr nwi_ctor acc in
+    List.fold_left (fun s (_, e) -> assigned_in_expr e s) s1 nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.fold_left
       (fun s part ->

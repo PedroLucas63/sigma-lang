@@ -114,10 +114,14 @@ decl_stmt     ::= var_decl
 
 visibility    ::= "public" | "protected" | "private" | "internal" ;
 
-type_decl     ::= visibility? ( "class" | "struct" ) IDENT "{" member_decl* "}"
+ctor_param    ::= IDENT ":" type_expr ( "=" expr )? ;
+ctor_params   ::= "(" ( ctor_param ( "," ctor_param )* ","? )? ")" ;
+
+type_decl     ::= visibility? ( "class" | "struct" ) IDENT ctor_params? "{" member_decl* "}"
                 | visibility? "record" IDENT "(" record_params? ")" ( "{" member_decl* "}" | ";" ) ;
-member_decl   ::= field_decl | method_decl ;
+member_decl   ::= field_decl | ctor_decl | method_decl ;
 field_decl    ::= visibility? IDENT ":" type_expr ( accessor_blk ( "=" expr )? ";"? | ( "=" expr )? ";" ) ;
+ctor_decl     ::= visibility? IDENT "(" params? ")" ( ":" "this" "(" call_args? ")" )? block_stmt ;
 method_decl   ::= visibility? "static"? ( "fun" IDENT "(" params? ")" ":" type_expr block_stmt
                                         | "act" IDENT "(" params? ")" block_stmt ) ;
 accessor_blk  ::= "{" accessor+ "}" ;
@@ -223,7 +227,8 @@ primary       ::= INT
 
 lambda_expr   ::= "fun" "(" params? ")" ( ":" type_expr )? "=>" lambda_body
                 | "act" "(" params? ")" "=>" lambda_body ;
-new_expr      ::= "new" IDENT ( "{" call_args? "}" | "(" call_args? ")" ) ;
+new_expr      ::= "new" IDENT "(" call_args? ")" ( "{" call_args? "}" )?
+                | "new" IDENT "{" call_args? "}" ;
 lambda_body   ::= block_stmt
                 | inline_stmt
                 | expr ;

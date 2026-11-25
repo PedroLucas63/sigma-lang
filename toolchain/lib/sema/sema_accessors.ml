@@ -75,6 +75,8 @@ let rec expr_mutates_this (e : Typed_ast.expr) : bool =
   | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
     List.exists (function Typed_ast.TItemExpr x | Typed_ast.TItemSpread x -> expr_mutates_this x) items
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.exists expr_mutates_this tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    expr_mutates_this nwi_ctor || List.exists (fun (_, e) -> expr_mutates_this e) nwi_inits
   | _ -> false
 
 and lval_mutates_this = function
@@ -108,3 +110,28 @@ let rec stmt_mutates_this (s : Typed_ast.stmt) : bool =
          (function Typed_ast.TTargetLVal (lv, _) -> lval_mutates_this lv | Typed_ast.TTargetDiscard -> false)
          tma_targets
   | _ -> false
+
+let rec value_type_reaches (visited : (string, unit) Hashtbl.t) (target : string) (ty : Ty.t) : bool =
+  match ty with
+  | Ty.Tuple sub -> List.exists (value_type_reaches visited target) sub
+  | Ty.Array (sub, _) | Ty.DynArray sub -> value_type_reaches visited target sub
+  | Ty.User (Ty.KindClass, _) -> false
+  | Ty.User ((Ty.KindStruct | Ty.KindRecord), name) ->
+    if name = target then true
+    else if Hashtbl.mem visited name then false
+    else begin
+      Hashtbl.replace visited name ();
+      match Hashtbl.find_opt user_types name with
+      | None -> false
+      | Some info -> List.exists (fun f -> value_type_reaches visited target f.uf_ty) info.ut_fields
+    end
+  | _ -> false
+
+let err_missing_new ~span (info : user_type_info) : ('a, Diagnostic.t) result =
+  let usage =
+    if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" info.ut_name
+    else Printf.sprintf "new %s { ... }" info.ut_name
+  in
+  Error
+    (Diagnostic.error ~hint:(Printf.sprintf "use '%s' to create an instance" usage) ~code:"E0122" ~span
+       (Printf.sprintf "missing 'new' keyword when instantiating '%s'" info.ut_name))

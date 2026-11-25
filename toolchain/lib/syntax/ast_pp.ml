@@ -90,7 +90,7 @@ and pp_expr fmt (e : expr) =
     Format.fprintf fmt "%s { %a }" tname
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
       args
-  | ExprNew { new_name; new_is_ctor; new_args } ->
+  | ExprNew { new_name; new_is_ctor; new_args; new_inits = _ } ->
     let pp_arg fmt (a : call_arg) =
       match a.arg_name with
       | None -> pp_expr fmt a.arg_value

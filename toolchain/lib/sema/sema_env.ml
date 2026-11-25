@@ -40,16 +40,31 @@ type user_method = {
   um_mutates_this : bool;
 }
 
+type user_ctor_param = {
+  ucp_name : string;
+  ucp_ty : Ty.t;
+  ucp_default : Typed_ast.expr option;
+}
+
+type user_ctor = {
+  uc_mangled : string;
+  uc_vis : Ast.visibility;
+  uc_params : user_ctor_param list;
+  uc_is_primary : bool;
+}
+
 type user_type_info = {
   ut_kind : Ty.user_type_kind;
   ut_vis : Ast.visibility;
   ut_name : string;
   ut_span : Span.t;
   ut_fields : user_field list;
+  ut_ctors : user_ctor list;
   ut_methods : user_method list;
 }
 
 let current_type_ctx : (string * Ty.user_type_kind * bool) option ref = ref None
+let in_ctor : bool ref = ref false
 
 let vis_to_string = function
   | Ast.VisPublic -> "public"

@@ -2,10 +2,7 @@
 
 open Sigma_common
 
-type unop =
-  | UnPos
-  | UnNeg
-  | UnNot
+type unop = UnPos | UnNeg | UnNot
 
 type binop =
   | BinAdd
@@ -136,11 +133,7 @@ and expr_desc =
   | ExprIndex of expr * expr
   | ExprField of expr * string
   | ExprStructInit of string * call_arg list
-  | ExprNew of {
-      new_name : string;
-      new_is_ctor : bool;
-      new_args : call_arg list;
-    }
+  | ExprNew of { new_name : string; new_is_ctor : bool; new_args : call_arg list; new_inits : call_arg list option }
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -270,14 +263,16 @@ and field_decl = {
   field_accessors : accessor_spec list option;
   field_default : expr option;
 }
+and ctor_param = { cp_name : string; cp_span : Span.t; cp_type : type_expr; cp_default : expr option }
+and ctor_decl = {
+  cd_vis : visibility option; cd_name : string; cd_name_span : Span.t;
+  cd_params : ctor_param list; cd_chain : call_arg list option; cd_body : stmt list; cd_span : Span.t;
+}
 and method_decl = { md_vis : visibility option; md_is_static : bool; md_fun : fun_decl; md_span : Span.t }
 and type_decl = {
-  td_vis : visibility option;
-  td_kind : user_type_kind;
-  td_name : string;
-  td_name_span : Span.t;
-  td_fields : field_decl list;
-  td_methods : method_decl list;
+  td_vis : visibility option; td_kind : user_type_kind; td_name : string; td_name_span : Span.t;
+  td_ctor_params : ctor_param list option; td_fields : field_decl list;
+  td_ctors : ctor_decl list; td_methods : method_decl list;
 }
 
 and fun_decl = {

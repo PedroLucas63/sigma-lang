@@ -57,6 +57,10 @@ and expr_desc =
       tsi_kind : Ty.user_type_kind;
       tsi_args : expr list;
     }
+  | TExprNewWithInits of {
+      nwi_ctor : expr;
+      nwi_inits : (int * expr) list;
+    }
   | TExprCall of {
       callee : expr;
       args : typed_call_arg list;
