@@ -62,20 +62,61 @@ let is_toplevel_decl_only (s : Typed_ast.stmt) : bool =
   | Typed_ast.TStmtDestruct _ -> true
   | _ -> false
 
-let detect_entry_point (prog : Typed_ast.program) : entry_point option =
-  if not (List.for_all is_toplevel_decl_only prog) then None
-  else
-    let rec find_main = function
-      | [] -> None
-      | { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; _ } :: _ when fd.tf_name = "main" ->
-        (match fd.tf_params, fd.tf_ret with
-         | [], Ty.Void -> Some EntryActNoArgs
-         | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Void ->
-           Some EntryActArgs
-         | [], Ty.Int -> Some EntryFunIntNoArgs
-         | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Int ->
-           Some EntryFunIntArgs
-         | _ -> None)
-      | _ :: rest -> find_main rest
-    in
-    find_main prog
+let detect_entry_point ?entry_name (prog : Typed_ast.program)
+    : ((string * entry_point) option, Diagnostic.t list) result =
+  let first_exec = List.find_opt (fun s -> not (is_toplevel_decl_only s)) prog in
+  let target_name = match entry_name with Some n -> n | None -> "main" in
+  let rec find_fn = function
+    | [] -> None
+    | { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; _ } :: _ when fd.tf_name = target_name ->
+      Some fd
+    | _ :: rest -> find_fn rest
+  in
+  let match_sig (fd : Typed_ast.fun_decl) =
+    match fd.tf_params, fd.tf_ret with
+    | [], Ty.Void -> Some EntryActNoArgs
+    | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Void ->
+      Some EntryActArgs
+    | [], Ty.Int -> Some EntryFunIntNoArgs
+    | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Int ->
+      Some EntryFunIntArgs
+    | _ -> None
+  in
+  match entry_name, first_exec with
+  | None, Some _ -> Ok None
+  | None, None ->
+    (match find_fn prog with
+     | None -> Ok None
+     | Some fd ->
+       (match match_sig fd with
+        | Some ep -> Ok (Some (target_name, ep))
+        | None -> Ok None))
+  | Some name, Some exec_stmt ->
+    Error
+      [
+        Diagnostic.error
+          ~hint:"remove top-level executable statements when invoking an explicit '--entry' function"
+          ~code:"E0123" ~span:exec_stmt.span
+          (Printf.sprintf "cannot invoke entry function '%s' in a file with top-level executable statements" name);
+      ]
+  | Some name, None ->
+    (match find_fn prog with
+     | None ->
+       Error
+         [
+           Diagnostic.error
+             ~hint:"declare a top-level 'act' or 'fun' matching one of: '()', '(args: string[])', '(): int', '(args: string[]): int'"
+             ~code:"E0123" ~span:Sigma_common.Span.dummy
+             (Printf.sprintf "entry point function '%s' not found at top level" name);
+         ]
+     | Some fd ->
+       (match match_sig fd with
+        | Some ep -> Ok (Some (name, ep))
+        | None ->
+          Error
+            [
+              Diagnostic.error
+                ~hint:"supported entry signatures: 'act f()', 'act f(args: string[])', 'fun f(): int', 'fun f(args: string[]): int'"
+                ~code:"E0123" ~span:fd.tf_name_span
+                (Printf.sprintf "incompatible signature for entry point function '%s'" name);
+            ]))

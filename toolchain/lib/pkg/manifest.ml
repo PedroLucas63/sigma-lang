@@ -191,8 +191,37 @@ let load ?(path = "sigma.toml") () : (t, string) result =
       parse_toml content
     with exn -> Error (Printexc.to_string exn)
 
+type script_target =
+  | ScriptCmd of string
+  | ScriptEntry of {
+      file : string;
+      fn_name : string;
+    }
+
 let find_script (script_name : string) (m : t) : string option =
   List.assoc_opt script_name m.scripts
+
+let resolve_script (script_name : string) (m : t) : script_target option =
+  match find_script script_name m with
+  | None -> None
+  | Some raw ->
+    let trimmed = String.trim raw in
+    let has_space = String.contains trimmed ' ' || String.contains trimmed '\t' in
+    if not has_space && String.starts_with ~prefix:":" trimmed && String.length trimmed > 1 then
+      let fn_name = String.sub trimmed 1 (String.length trimmed - 1) in
+      Some (ScriptEntry { file = m.entry; fn_name })
+    else if not has_space then
+      (match String.rindex_opt trimmed ':' with
+       | Some idx when idx > 0 && idx + 1 < String.length trimmed ->
+         let file = String.sub trimmed 0 idx in
+         let fn_name = String.sub trimmed (idx + 1) (String.length trimmed - idx - 1) in
+         if Filename.check_suffix file ".sgm" then
+           Some (ScriptEntry { file; fn_name })
+         else
+           Some (ScriptCmd raw)
+       | _ -> Some (ScriptCmd raw))
+    else
+      Some (ScriptCmd raw)
 
 let rec mkdir_p (dir : string) : unit =
   if dir <> "" && dir <> "." && dir <> "/" && not (Sys.file_exists dir) then begin

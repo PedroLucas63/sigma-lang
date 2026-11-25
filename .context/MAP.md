@@ -29,7 +29,7 @@
 | `sigma_codegen` | `Codegen_c` | [`codegen_c.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/codegen/codegen_c.mli) | `emit_c`, `write_c_file`, `compile_executable : ?test_mode:bool -> output_path:string -> Typed_ast.program -> (unit, string) result` |
 | `sigma_linter` | `Linter` | [`linter.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/linter/linter.mli) | `lint_program : Typed_ast.program -> Diagnostic.t list` (`W0001` unused var) |
 | `sigma_debugger` | `Debugger` | [`debugger.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/debugger/debugger.mli) | `trace_execution : Ir.program -> (string, string) result` |
-| `sigma_pkg` | `Manifest` | [`manifest.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/pkg/manifest.mli) | `t`, `default`, `to_toml`, `parse_toml`, `load`, `find_script`, `scaffold_project` |
+| `sigma_pkg` | `Manifest` | [`manifest.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/pkg/manifest.mli) | `t`, `script_target`, `default`, `to_toml`, `parse_toml`, `load`, `find_script`, `resolve_script`, `scaffold_project` |
 | `sigma_driver` | `Driver` | [`driver.mli`](file:///var/home/pedrolcs/Dev/ocaml/toolchain/lib/driver/driver.mli) | `compile_frontend`, `run_source`, `build_source`, `emit_c_source`, `lint_source`, `debug_source`, `test_mode`, `file_test_result`, `test_source`, `render_test_suite` |
 
 ## 3. Catálogo de Códigos de Diagnóstico Ativos
@@ -54,4 +54,5 @@
 - `E0116`: Incompatibilidade no modo de passagem de argumento ('ref'/'out'/valor) entre chamada e declaração.
 - `E0117`: Parâmetro 'out' deve ser definitivamente atribuído em todos os caminhos de execução antes do término/retorno da função.
 - `E0118`: Não é permitido capturar parâmetros 'ref' ou 'out' no escopo de closures internas.
+- `E0123`: Ponto de entrada explícito (`--entry` / `sigma.toml`) não encontrado, com assinatura incompatível ou em arquivo com instruções soltas no topo.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

@@ -10,4 +10,7 @@ type entry_point =
   | EntryFunIntArgs
 
 val check_program : Ast.program -> (Typed_ast.program, Diagnostic.t list) result
-val detect_entry_point : Typed_ast.program -> entry_point option
+val detect_entry_point :
+  ?entry_name:string ->
+  Typed_ast.program ->
+  ((string * entry_point) option, Diagnostic.t list) result

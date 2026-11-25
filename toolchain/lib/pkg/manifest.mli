@@ -26,7 +26,15 @@ val default :
 val to_toml : t -> string
 val parse_toml : string -> (t, string) result
 val load : ?path:string -> unit -> (t, string) result
+type script_target =
+  | ScriptCmd of string
+  | ScriptEntry of {
+      file : string;
+      fn_name : string;
+    }
+
 val find_script : string -> t -> string option
+val resolve_script : string -> t -> script_target option
 
 (** Cria a estrutura de diretórios e arquivos iniciais ([sigma.toml], [entry], [<test_dir>/main_test.sgm]). *)
 val scaffold_project : ?root_dir:string -> t -> (string list, string) result

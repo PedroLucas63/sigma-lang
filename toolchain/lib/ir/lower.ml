@@ -8,12 +8,11 @@ let rec hooks : hooks =
     lower_stmt = (fun b loops s -> Lower_stmt.lower_stmt hooks b loops s);
   }
 
-let lower_program (prog : Typed_ast.program) : Ir.program =
+let lower_program ?entry_name (prog : Typed_ast.program) : Ir.program =
   let b = create_builder () in
   List.iter (hooks.lower_stmt b []) prog;
-  (match Typecheck.detect_entry_point prog with
-   | None -> ()
-   | Some ep ->
+  (match Typecheck.detect_entry_point ?entry_name prog with
+   | Ok (Some (fn_name, ep)) ->
      let fn_ty =
        match ep with
        | Typecheck.EntryActNoArgs -> Ty.Fun ([], Ty.Void)
@@ -23,7 +22,7 @@ let lower_program (prog : Typed_ast.program) : Ir.program =
        | Typecheck.EntryFunIntArgs ->
          Ty.Fun ([ { Ty.pty = Ty.DynArray Ty.String; pmode = Ty.ParamVal } ], Ty.Int)
      in
-     ignore (emit b (get_global_opcode fn_ty "main") Span.dummy);
+     ignore (emit b (get_global_opcode fn_ty fn_name) Span.dummy);
      (match ep with
       | Typecheck.EntryActNoArgs ->
         ignore (emit b (Ir.OP_CALL []) Span.dummy);
@@ -38,6 +37,7 @@ let lower_program (prog : Typed_ast.program) : Ir.program =
       | Typecheck.EntryFunIntArgs ->
         ignore (emit b Ir.OP_GET_ARGS Span.dummy);
         ignore (emit b (Ir.OP_CALL [ 0 ]) Span.dummy);
-        ignore (emit b Ir.OP_SET_EXIT_CODE Span.dummy)));
+        ignore (emit b Ir.OP_SET_EXIT_CODE Span.dummy))
+   | Ok None | Error _ -> ());
   ignore (emit b Ir.OP_HALT Span.dummy);
   Array.sub b.code 0 b.len

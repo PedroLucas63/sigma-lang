@@ -2,4 +2,4 @@
 
 open Sigma_sema
 
-val lower_program : Typed_ast.program -> Ir.program
+val lower_program : ?entry_name:string -> Typed_ast.program -> Ir.program

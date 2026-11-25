@@ -8,7 +8,7 @@ open Sigma_codegen
 open Sigma_linter
 open Sigma_debugger
 
-let compile_frontend (src : Source.t) :
+let compile_frontend ?entry_name (src : Source.t) :
     (Typed_ast.program * Ir.program, Diagnostic.t list) result =
   match Lexer.tokenize src with
   | Error errs -> Error errs
@@ -19,8 +19,11 @@ let compile_frontend (src : Source.t) :
        (match Typecheck.check_program ast with
         | Error errs -> Error errs
         | Ok typed_ast ->
-          let ir = Lower.lower_program typed_ast in
-          Ok (typed_ast, ir)))
+          (match Typecheck.detect_entry_point ?entry_name typed_ast with
+           | Error errs -> Error errs
+           | Ok _ ->
+             let ir = Lower.lower_program ?entry_name typed_ast in
+             Ok (typed_ast, ir))))
 
 let extract_stdin_directives (content : string) : string list option =
   let lines = String.split_on_char '\n' content in
@@ -45,9 +48,9 @@ let extract_stdin_directives (content : string) : string list option =
   | [] -> None
   | xs -> Some xs
 
-let run_source_with_exit ?stdin_lines ?(stream_stdout = false) ?(args = []) (src : Source.t) :
+let run_source_with_exit ?stdin_lines ?(stream_stdout = false) ?(args = []) ?entry_name (src : Source.t) :
     (string * int, Diagnostic.t list) result =
-  match compile_frontend src with
+  match compile_frontend ?entry_name src with
   | Error errs -> Error errs
   | Ok (_typed_ast, ir) ->
     let stdin_lines =
@@ -60,30 +63,30 @@ let run_source_with_exit ?stdin_lines ?(stream_stdout = false) ?(args = []) (src
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0900" ~span:Span.dummy msg ])
 
-let run_source ?stdin_lines ?(stream_stdout = false) ?(args = []) (src : Source.t) :
+let run_source ?stdin_lines ?(stream_stdout = false) ?(args = []) ?entry_name (src : Source.t) :
     (string, Diagnostic.t list) result =
-  match run_source_with_exit ?stdin_lines ~stream_stdout ~args src with
+  match run_source_with_exit ?stdin_lines ~stream_stdout ~args ?entry_name src with
   | Ok (out, _) -> Ok out
   | Error errs -> Error errs
 
-let build_source ~output_path (src : Source.t) : (unit, Diagnostic.t list) result =
-  match compile_frontend src with
+let build_source ?entry_name ~output_path (src : Source.t) : (unit, Diagnostic.t list) result =
+  match compile_frontend ?entry_name src with
   | Error errs -> Error errs
   | Ok (typed_ast, _ir) ->
-    (match Codegen_c.compile_executable ~output_path typed_ast with
+    (match Codegen_c.compile_executable ?entry_name ~output_path typed_ast with
      | Ok () -> Ok ()
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ])
 
-let emit_c_source ?output_path (src : Source.t) : (string, Diagnostic.t list) result =
-  match compile_frontend src with
+let emit_c_source ?output_path ?entry_name (src : Source.t) : (string, Diagnostic.t list) result =
+  match compile_frontend ?entry_name src with
   | Error errs -> Error errs
   | Ok (typed_ast, _ir) ->
-    let c_code = Codegen_c.emit_c typed_ast in
+    let c_code = Codegen_c.emit_c ?entry_name typed_ast in
     (match output_path with
      | None -> Ok c_code
      | Some path ->
-       (match Codegen_c.write_c_file ~output_path:path typed_ast with
+       (match Codegen_c.write_c_file ?entry_name ~output_path:path typed_ast with
         | Ok () -> Ok c_code
         | Error msg ->
           Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ]))
