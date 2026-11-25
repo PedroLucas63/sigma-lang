@@ -3,12 +3,18 @@ name: Release & Deploy — Main
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'toolchain/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'editors/vscode/**'
+      - 'sigma.toml'
+      - 'install.sh'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: release-main
@@ -78,6 +84,19 @@ jobs:
           chmod +x scripts/package.sh
           ./scripts/package.sh "" toolchain/_build/default/bin/main.exe dist
 
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Empacotar Extensão VSCode (.vsix)
+        run: |
+          cd editors/vscode
+          VSIX_VER=$(node -p 'require("./package.json").version')
+          npx --yes @vscode/vsce package --out "../../dist/sigma-lang-${VSIX_VER}.vsix"
+          cd ../../dist
+          sha256sum *.tar.gz *.zip *.deb *.vsix > SHA256SUMS.txt
+
       - name: Salvar Artefatos para Release
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -135,49 +154,3 @@ jobs:
               --generate-notes \
               --target "${{ github.sha }}"
           fi
-
-  # 4. Deploy no GitHub Pages (Site, Playground e Documentação)
-  deploy-pages:
-    name: Deploy GitHub Pages
-    if: github.ref == 'refs/heads/main'
-    needs: [test]
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout do Repositório
-        uses: actions/checkout@v7.0.1
-
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v6.0.0
-        with:
-          enablement: true
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: '22'
-
-      - name: Construir Wiki VitePress (web/)
-        run: |
-          cd web
-          npm install
-          npm run docs:build
-
-      - name: Preparar Diretório do Site & Documentação
-        run: |
-          mkdir -p _site
-          cp -r web/.vitepress/dist/* _site/
-          mkdir -p _site/docs
-          cp -r docs/* _site/docs/
-          touch _site/.nojekyll
-
-      - name: Carregar Artefatos do Site
-        uses: actions/upload-pages-artifact@v5.0.0
-        with:
-          path: _site
-
-      - name: Realizar Deploy no GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5.0.1

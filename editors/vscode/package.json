@@ -3,6 +3,12 @@
   "displayName": "Sigma Language (.sgm)",
   "description": "Official VSCode support for the Sigma scientific and general-purpose programming language",
   "version": "0.2.3",
+  "publisher": "sigma-lang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PedroLucas63/sigma-lang.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
