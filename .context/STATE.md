@@ -50,7 +50,7 @@
 4. [x] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
 5. [x] **Modificadores de acesso em estruturas (membros) (`public`, `protected`, `private`, `internal`) com modificadores `get`, `set` e `init` como no `C#`.**
 6. [x] **Métodos de Instância e Estáticos para Estruturas com modificadores de acesso.**
-7. [x] **Importação e Exportação Preguiçosa (`import`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso, incluindo no arquivo compilável em C --- exportação através de modificadores nas estruturas e em funções / ações (`public fun add(a: int, b: int): int`)**.
+7. [x] **Importação e Exportação Preguiçosa (`import`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso, incluindo no arquivo compilável em C --- exportação através de modificadores nas estruturas e em funções / ações (`public fun add(a: int, b: int): int`).
 8. [ ] **Suporte a criação de bibliotecas em C ou C++, com extensão para outras linguagens.**
 9. [ ] **Importação a partir de URL (`import "https://github.com/user/project/lib.sgm"`).**
 10. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
@@ -59,7 +59,9 @@
 13. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
 14. [ ] **Biblioteca de ciência de dados (C/C++), com computação adiantada de métricas e abertura de arquivos `csv` (inclusive com `import` e URL: `import "data.csv" as df` e `import "https://github.com/user/project/data.csv" as df`).**
 15. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (C/C++, Multi-etapas, estilo NumPy).**
-16. [ ] **Gerenciador de Pacotes Completo & Bibliotecas Empacotadas:** cache global na pasta do usuário com referências no projeto (estilo `node_modules`), suporte a *mirrors*/registros (estilo npm/pip/Maven) ou URL direta de repositório/projeto, opção de criar projeto `lib` (`sigma pkg init`), controle de versões (SemVer/lockfile) e geração de pacotes binários/compilados compactos (`.dll`/`.so`/`.dylib` e pacotes de biblioteca estilo `.jar`/`.javac`).
+16. [ ] **Projetos de Biblioteca (`lib`) & Empacotamento Binário:** opção de gerar projeto `lib` no `sigma pkg init` e geração de pacotes binários/compilados compactos (`.dll`/`.so`/`.dylib` e pacotes completos estilo `.jar`/`.javac`).
+17. [ ] **Gerenciador de Pacotes & Controle de Versões:** cache global na pasta do usuário com referências no projeto (estilo `node_modules`) e controle de versões (SemVer/*lockfile*).
+18. [ ] **Mirrors & Repositórios Diretos:** suporte a *mirrors*/registros agrupadores (estilo npm/pip/Maven) e instalação direta via link de repositório/projeto.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
