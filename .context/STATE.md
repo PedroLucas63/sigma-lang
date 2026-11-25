@@ -44,13 +44,17 @@
 2. [x] **Estruturas `class`, `struct` e `record` (Fase 1 — Campos e Igualdade):** `class` (igualdade por referência), `struct` (igualdade por valor) e `record` (imutável, igualdade por valor), com inicialização `{}`/`()`, acesso `.campo` e `==`/`!=` (`ADR-035`).
 3. [x] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
 4. [x] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
-5. [ ] **Importação e Exportação Preguiçosa (`import` / `export`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso.
-6. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
-7. [ ] **Métodos de Instância e Estáticos para Estruturas (`class`, `struct`, `record`) e modificadores de acesso (public, protected, private, internal).**
-8. [ ] **Biblioteca de Estruturas de Dados Dinâmicas:** `list`, `stack`, `queue`, `set`, `dict`.
-9. [ ] **Biblioteca Matemática Simples (`math`):** `sum`, `max`, `min`, `sin`, `cos` e constantes matemáticas.
-10. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
-11. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas, estilo NumPy).**
+5. [ ] **Modificadores de acesso em estruturas (membros) (`public`, `protected`, `private`, `internal`) com modificadores `get`, `set` e `init` como no `C#`.**
+6. [ ] **Métodos de Instância e Estáticos para Estruturas com modificadores de acesso.**
+7. [ ] **Importação e Exportação Preguiçosa (`import`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso, incluindo no arquivo compilável em C --- exportação através de modificadores nas estruturas e em funções / ações (`public fun add(a: int, b: int): int`)**.
+8. [ ] **Suporte a criação de bibliotecas em C ou C++, com extensão para outras linguagens.**
+9. [ ] **Importação a partir de URL (`import "https://github.com/user/project/lib.sgm"`).**
+10. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
+11. [ ] **Biblioteca de Estruturas de Dados Dinâmicas (em C/C++):** `list`, `stack`, `queue`, `set`, `dict`.
+12. [ ] **Biblioteca Matemática Simples (`math`) (em C/C++):** `sum`, `max`, `min`, `sin`, `cos` e constantes matemáticas.
+13. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
+14. [ ] **Biblioteca de ciência de dados (C/C++), com computação adiantada de métricas e abertura de arquivos `csv` (inclusive com `import` e URL: `import "data.csv" as df` e `import "https://github.com/user/project/data.csv" as df`).**
+15. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (C/C++, Multi-etapas, estilo NumPy).**
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
