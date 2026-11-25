@@ -28,6 +28,9 @@ type kind =
   | KW_INTERNAL
   | KW_STATIC
   | KW_THIS
+  | KW_IMPORT
+  | KW_FROM
+  | KW_AS
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

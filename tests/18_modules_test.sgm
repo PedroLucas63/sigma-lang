@@ -1,0 +1,31 @@
+# Suite 18: Sistema de modulos, exportacao via modificadores e importacao preguicosa
+
+import mod_math;
+import mod_math as mm;
+from mod_math import dobro_mais_um, PI as pi_val, Vetor, funcao_nunca_usada_no_tree_shaking;
+
+# 1. Acesso via modulo e alias
+assert(mod_math.dobro_mais_um(5), 11, "chamada via nome do modulo");
+assert(mm.PI, 3.14159d, "constante via alias de modulo");
+
+# 2. Acesso via from ... import ... e alias de simbolo
+assert(dobro_mais_um(7), 15, "funcao importada diretamente");
+assert(pi_val, 3.14159d, "constante importada com alias");
+
+# 3. Classe importada com construtor primario e metodo
+var v := new Vetor(3, 4);
+assert(v.norma_sq(), 25, "classe importada com construtor e metodo");
+
+# 4. Importacao local dentro de funcao (escopo no ponto de uso)
+fun calcular_local(a: int, b: int): int {
+    import mod_math as local_m;
+    return local_m.somar(a, b);
+}
+assert(calcular_local(10, 20), 30, "importacao local dentro de funcao");
+
+# 5. Diagnosticos E0129 (modulo nao encontrado) e E0130 (nao exportado / inexistente)
+assert_error("E0129", "import modulo_inexistente_xyz;", "modulo inexistente deve falhar com E0129");
+assert_error("E0130", "from \"tests/mod_math.sgm\" import auxiliar_dobro;", "funcao private nao pode ser importada");
+assert_error("E0130", "from \"tests/mod_math.sgm\" import SEGREDO;", "constante private nao pode ser importada");
+assert_error("E0130", "from \"tests/mod_math.sgm\" import nao_existe;", "simbolo inexistente no modulo");
+assert_error("E0130", "import \"tests/mod_math.sgm\" as m; var x := m.SEGREDO;", "acesso a private via modulo deve falhar");

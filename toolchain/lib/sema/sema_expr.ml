@@ -43,7 +43,15 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
   | Ast.ExprInput { prompt; mode } -> Sema_expr_special.check_input_expr hooks env e.span prompt mode
   | Ast.ExprIdent name ->
     (match Hashtbl.find_opt env name with
-     | Some info -> Ok { Typed_ast.desc = Typed_ast.TExprIdent name; ty = info.ty; span = e.span }
+     | Some info ->
+       let actual_name =
+         match Hashtbl.find_opt lazy_imports name with
+         | Some (m, orig_sym, ExpVal { exp_mangled; _ }) ->
+           Sema_modules.mark_used m orig_sym;
+           exp_mangled
+         | _ -> name
+       in
+       Ok { Typed_ast.desc = Typed_ast.TExprIdent actual_name; ty = info.ty; span = e.span }
      | None ->
        let not_found () =
          Error
@@ -146,6 +154,9 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
   | Ast.ExprStructInit (name, args) ->
     Sema_user_types.check_struct_init hooks env ~span:e.span name args
   | Ast.ExprNew { new_name; new_is_ctor; new_args; new_inits } ->
+    (match Hashtbl.find_opt lazy_imports new_name with
+     | Some (m, orig_sym, ExpType _) -> Sema_modules.mark_used m orig_sym
+     | _ -> ());
     Sema_user_types.check_new_expr hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_args new_inits
   | Ast.ExprField (base, field) ->
     Sema_user_fields.check_field_access hooks env ~span:e.span base field

@@ -289,9 +289,9 @@ and pp_stmt fmt (s : stmt) =
     Format.fprintf fmt "(%a) = %a;"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_t)
       ma_targets pp_expr ma_rhs
-  | StmtReturn None -> Format.fprintf fmt "return;"
-  | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
-  | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e
+  | StmtReturn None -> Format.fprintf fmt "return;" | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
+  | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e | StmtImport _ -> Format.fprintf fmt "import ...;"
+  | StmtVis (_, s) -> pp_stmt fmt s
 
 let pp_program fmt prog =
   Format.pp_print_list

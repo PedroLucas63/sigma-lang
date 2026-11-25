@@ -29,6 +29,9 @@ let keyword_or_ident st word =
   | "internal" -> Token.KW_INTERNAL
   | "static" -> Token.KW_STATIC
   | "this" -> Token.KW_THIS
+  | "import" -> Token.KW_IMPORT
+  | "from" -> Token.KW_FROM
+  | "as" -> Token.KW_AS
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT

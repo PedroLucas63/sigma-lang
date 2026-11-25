@@ -31,6 +31,9 @@
 | Palavra-chave | `KW_INTERNAL` | `internal` |
 | Palavra-chave | `KW_STATIC` | `static` |
 | Palavra-chave | `KW_THIS` | `this` |
+| Palavra-chave | `KW_IMPORT` | `import` |
+| Palavra-chave | `KW_FROM` | `from` |
+| Palavra-chave | `KW_AS` | `as` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -104,13 +107,15 @@ program       ::= stmt* EOF ;
 
 stmt          ::= type_decl
                 | decl_stmt ";"
+                | import_stmt ";"
                 | non_decl_stmt ;
 
-decl_stmt     ::= var_decl
-                | const_decl
-                | destruct_decl
-                | fun_decl
-                | act_decl ;
+decl_stmt     ::= visibility? ( var_decl | const_decl | destruct_decl | fun_decl | act_decl ) ;
+
+import_target ::= IDENT | STRING ;
+import_item   ::= IDENT ( "as" IDENT )? ;
+import_stmt   ::= "import" import_target ( "as" IDENT )?
+                | "from" import_target "import" import_item ( "," import_item )* ","? ;
 
 visibility    ::= "public" | "protected" | "private" | "internal" ;
 

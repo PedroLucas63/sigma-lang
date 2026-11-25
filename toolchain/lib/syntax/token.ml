@@ -26,6 +26,9 @@ type kind =
   | KW_INTERNAL
   | KW_STATIC
   | KW_THIS
+  | KW_IMPORT
+  | KW_FROM
+  | KW_AS
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -125,6 +128,9 @@ let kind_to_string = function
   | KW_INTERNAL -> "'internal'"
   | KW_STATIC -> "'static'"
   | KW_THIS -> "'this'"
+  | KW_IMPORT -> "'import'"
+  | KW_FROM -> "'from'"
+  | KW_AS -> "'as'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

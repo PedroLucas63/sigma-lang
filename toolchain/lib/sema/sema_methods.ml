@@ -221,6 +221,7 @@ let try_check_method_call hooks (env : env) ~span ~call_expr ~(callee : Ast.expr
     : (Typed_ast.expr, Diagnostic.t) result option =
   let is_static_type =
     match base.desc with
+    | Ast.ExprIdent tname when Hashtbl.mem module_aliases tname -> true
     | Ast.ExprIdent tname when not (Hashtbl.mem env tname) -> Hashtbl.mem user_types tname
     | _ -> false
   in

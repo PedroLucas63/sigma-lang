@@ -29,7 +29,19 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   let saved_fun = !current_fun in
   let saved_outer = !fn_outer in
   let saved_user_types = Hashtbl.copy user_types in
+  let saved_mod_cache = Hashtbl.copy module_cache in
+  let saved_mod_order = !module_load_order in
+  let saved_imp_stack = !import_stack in
+  let saved_vis_map = Hashtbl.copy top_vis_map in
+  let saved_mod_aliases = Hashtbl.copy module_aliases in
+  let saved_lazy = Hashtbl.copy lazy_imports in
   Hashtbl.clear user_types;
+  Hashtbl.clear module_cache;
+  module_load_order := [];
+  import_stack := [];
+  Hashtbl.clear top_vis_map;
+  Hashtbl.clear module_aliases;
+  Hashtbl.clear lazy_imports;
   root_scope_ref := Some root_scope;
   current_fun := RetNone;
   fn_outer := None;
@@ -39,13 +51,20 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
       | Ok ts -> tstmts := ts :: !tstmts
       | Error errs -> all_errors := List.rev_append errs !all_errors)
     prog;
+  let used_mod_stmts = Sema_modules.collect_used_module_stmts () in
   root_scope_ref := saved_root;
   current_fun := saved_fun;
   fn_outer := saved_outer;
   Hashtbl.clear user_types;
   Hashtbl.iter (Hashtbl.replace user_types) saved_user_types;
+  Hashtbl.clear module_cache; Hashtbl.iter (Hashtbl.replace module_cache) saved_mod_cache;
+  module_load_order := saved_mod_order;
+  import_stack := saved_imp_stack;
+  Hashtbl.clear top_vis_map; Hashtbl.iter (Hashtbl.replace top_vis_map) saved_vis_map;
+  Hashtbl.clear module_aliases; Hashtbl.iter (Hashtbl.replace module_aliases) saved_mod_aliases;
+  Hashtbl.clear lazy_imports; Hashtbl.iter (Hashtbl.replace lazy_imports) saved_lazy;
   match List.rev !all_errors with
-  | [] -> Ok (List.rev !tstmts)
+  | [] -> Ok (used_mod_stmts @ List.rev !tstmts)
   | errs -> Error errs
 
 type entry_point =

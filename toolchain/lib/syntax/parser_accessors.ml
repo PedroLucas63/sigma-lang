@@ -202,3 +202,73 @@ let parse_ctor_decl hooks st ~vis_opt name_tok cd_name : (Ast.ctor_decl, Diagnos
                 cd_params; cd_chain; cd_body; cd_span = Span.merge sp0 span }
          | Ok _ -> err_at ob "internal error: constructor body must be a block"
        end)
+
+let parse_import_target st : (string * bool * Span.t, Diagnostic.t) result =
+  let tok = cur st in
+  match tok.kind with
+  | Token.IDENT name -> bump st; Ok (name, false, tok.span)
+  | Token.STRING path -> bump st; Ok (path, true, tok.span)
+  | _ ->
+    err_at tok ~hint:"specify a module name (e.g. 'math') or path string (e.g. '\"sub/math.sgm\"')"
+      (Printf.sprintf "expected module name or path string, found %s" (Token.kind_to_string tok.kind))
+
+let parse_opt_alias st : ((string * Span.t) option, Diagnostic.t) result =
+  if (cur st).kind <> Token.KW_AS then Ok None
+  else begin
+    bump st;
+    let tok = cur st in
+    match tok.kind with
+    | Token.IDENT alias -> bump st; Ok (Some (alias, tok.span))
+    | _ -> err_at tok (Printf.sprintf "expected alias identifier after 'as', found %s" (Token.kind_to_string tok.kind))
+  end
+
+let parse_import_stmt st kw_tok : (Ast.stmt, Diagnostic.t) result =
+  match parse_import_target st with
+  | Error e -> Error e
+  | Ok (mod_path, mod_is_path, mod_span) ->
+    (match parse_opt_alias st with
+     | Error e -> Error e
+     | Ok mod_alias ->
+       (match expect_semi st kw_tok.Token.span with
+        | Error e -> Error e
+        | Ok full_span ->
+          Ok { Ast.desc = Ast.StmtImport (Ast.ImportModule { mod_path; mod_is_path; mod_span; mod_alias });
+               span = full_span }))
+
+let parse_from_import_stmt st kw_tok : (Ast.stmt, Diagnostic.t) result =
+  match parse_import_target st with
+  | Error e -> Error e
+  | Ok (mod_path, mod_is_path, mod_span) ->
+    let imp_tok = cur st in
+    if imp_tok.kind <> Token.KW_IMPORT then
+      err_at imp_tok ~hint:"use 'from <module> import <sym1>, <sym2>;'"
+        (Printf.sprintf "expected 'import' after module target, found %s" (Token.kind_to_string imp_tok.kind))
+    else begin
+      bump st;
+      let rec loop acc =
+        let tok = cur st in
+        match tok.kind with
+        | Token.IDENT imp_name ->
+          bump st;
+          (match parse_opt_alias st with
+           | Error e -> Error e
+           | Ok imp_alias ->
+             let item : Ast.import_item = { imp_name; imp_name_span = tok.span; imp_alias } in
+             let acc = item :: acc in
+             if (cur st).kind = Token.COMMA then begin
+               bump st;
+               if (cur st).kind = Token.SEMI then Ok (List.rev acc) else loop acc
+             end else Ok (List.rev acc))
+        | _ ->
+          err_at tok (Printf.sprintf "expected symbol name in 'from ... import', found %s" (Token.kind_to_string tok.kind))
+      in
+      match loop [] with
+      | Error e -> Error e
+      | Ok [] -> err_at imp_tok "expected at least one symbol after 'import'"
+      | Ok mod_items ->
+        (match expect_semi st kw_tok.Token.span with
+         | Error e -> Error e
+         | Ok full_span ->
+           Ok { Ast.desc = Ast.StmtImport (Ast.ImportFrom { mod_path; mod_is_path; mod_span; mod_items });
+                span = full_span })
+    end

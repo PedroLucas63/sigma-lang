@@ -12,11 +12,26 @@ let rec root_var_const_kind (env : env) (e : Typed_ast.expr) : const_kind option
 
 let check_field_access hooks (env : env) ~span (base : Ast.expr) (field : string)
     : (Typed_ast.expr, Diagnostic.t) result =
-  let static_opt =
+  let mod_opt =
     match base.desc with
-    | Ast.ExprIdent tname when not (Hashtbl.mem env tname) -> Hashtbl.find_opt user_types tname
+    | Ast.ExprIdent mod_alias -> Sema_modules.check_module_member_expr ~span mod_alias field
     | _ -> None
   in
+  match mod_opt with
+  | Some res -> res
+  | None ->
+    let static_opt =
+      match base.desc with
+      | Ast.ExprIdent tname when not (Hashtbl.mem env tname) ->
+        (match Hashtbl.find_opt user_types tname with
+         | Some info ->
+           (match Hashtbl.find_opt lazy_imports tname with
+            | Some (m, orig_sym, ExpType _) -> Sema_modules.mark_used m orig_sym
+            | _ -> ());
+           Some info
+         | None -> None)
+      | _ -> None
+    in
   match static_opt with
   | Some info -> Sema_methods.check_static_method_value ~span info field
   | None ->

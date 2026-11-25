@@ -45,10 +45,7 @@ type incdec_op =
   | PostInc
   | PostDec
 
-type align =
-  | AlignLeft
-  | AlignRight
-  | AlignCenter
+type align = AlignLeft | AlignRight | AlignCenter
 
 type format_spec = {
   fill : string;
@@ -191,6 +188,10 @@ and foreach_head = {
   ty_annot : type_expr option;
 }
 
+and import_item = { imp_name : string; imp_name_span : Span.t; imp_alias : (string * Span.t) option }
+and import_spec =
+  | ImportModule of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_alias : (string * Span.t) option }
+  | ImportFrom of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_items : import_item list }
 and stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -244,6 +245,8 @@ and stmt_desc =
     }
   | StmtReturn of expr option
   | StmtExpr of expr
+  | StmtImport of import_spec
+  | StmtVis of visibility * stmt
 
 and stmt = {
   desc : stmt_desc;

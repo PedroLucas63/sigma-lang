@@ -66,6 +66,35 @@ type user_type_info = {
 let current_type_ctx : (string * Ty.user_type_kind * bool) option ref = ref None
 let in_ctor : bool ref = ref false
 
+type export_kind =
+  | ExpVal of {
+      exp_mangled : string;
+      exp_ty : Ty.t;
+      exp_param_names : string list option;
+    }
+  | ExpType of {
+      exp_mangled_type : string;
+      exp_info : user_type_info;
+    }
+
+type loaded_module = {
+  mod_id : int;
+  mod_key : string;
+  mod_prefix : string;
+  mod_exports : (string, Ast.visibility * export_kind) Hashtbl.t;
+  mod_stmts : (string list * Typed_ast.stmt) list;
+  mod_deps : (string, string list) Hashtbl.t;
+  mod_used : (string, unit) Hashtbl.t;
+}
+
+let module_cache : (string, loaded_module) Hashtbl.t = Hashtbl.create 16
+let module_load_order : loaded_module list ref = ref []
+let import_stack : string list ref = ref []
+let next_mod_id : int ref = ref 0
+let top_vis_map : (string, Ast.visibility) Hashtbl.t = Hashtbl.create 16
+let module_aliases : (string, loaded_module) Hashtbl.t = Hashtbl.create 16
+let lazy_imports : (string, loaded_module * string * export_kind) Hashtbl.t = Hashtbl.create 16
+
 let vis_to_string = function
   | Ast.VisPublic -> "public"
   | Ast.VisProtected -> "protected"
