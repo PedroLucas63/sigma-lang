@@ -142,6 +142,11 @@ let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
           List.filter_map (fun (b : Typed_ast.destruct_binding) -> Option.map (fun n -> (n, b.ty)) b.name) d.bindings
         | Typed_ast.TStmtFunDecl fd ->
           [ (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)) ]
+        | Typed_ast.TStmtTypeDecl tud ->
+          List.map
+            (fun (fd : Typed_ast.fun_decl) ->
+              (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)))
+            tud.tud_methods
         | _ -> []
       in
       out_vars @ base)
@@ -182,6 +187,8 @@ and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
   | Typed_ast.TStmtVarDecl v -> collect_all_funs_expr v.init
   | Typed_ast.TStmtDestruct d -> collect_all_funs_expr d.init
   | Typed_ast.TStmtFunDecl fd -> fd :: List.concat_map collect_all_funs fd.tf_body
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.concat_map (fun (fd : Typed_ast.fun_decl) -> fd :: List.concat_map collect_all_funs fd.tf_body) tud.tud_methods
   | Typed_ast.TStmtBlock stmts -> List.concat_map collect_all_funs stmts
   | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
     collect_all_funs_expr cond @ collect_all_funs then_branch

@@ -68,6 +68,7 @@ and pp_expr fmt (e : expr) =
       else mode_s
     in
     Format.fprintf fmt "%s(%s)" fn args_s
+  | ExprThis -> Format.fprintf fmt "this"
   | ExprTuple items ->
     Format.fprintf fmt "(%a)"
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_collection_item)

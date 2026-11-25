@@ -24,6 +24,8 @@ type kind =
   | KW_PROTECTED
   | KW_PRIVATE
   | KW_INTERNAL
+  | KW_STATIC
+  | KW_THIS
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -121,6 +123,8 @@ let kind_to_string = function
   | KW_PROTECTED -> "'protected'"
   | KW_PRIVATE -> "'private'"
   | KW_INTERNAL -> "'internal'"
+  | KW_STATIC -> "'static'"
+  | KW_THIS -> "'this'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

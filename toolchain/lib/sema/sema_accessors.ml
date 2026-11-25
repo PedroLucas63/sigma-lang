@@ -62,3 +62,49 @@ let resolve_field_accessors ~(kind : Ty.user_type_kind) ~(field_name : string) ~
               else (i := Some eff_v; loop rest)))
     in
     loop accs
+
+let rec expr_mutates_this (e : Typed_ast.expr) : bool =
+  match e.desc with
+  | Typed_ast.TExprAssign (lv, _, rhs) -> lval_mutates_this lv || expr_mutates_this rhs
+  | Typed_ast.TExprIncDec (_, lv) -> lval_mutates_this lv
+  | Typed_ast.TExprCall { callee; args; _ } ->
+    expr_mutates_this callee || List.exists (fun (a : Typed_ast.typed_call_arg) -> expr_mutates_this a.tca_expr) args
+  | Typed_ast.TExprUnary (_, s) | Typed_ast.TExprField (s, _, _) -> expr_mutates_this s
+  | Typed_ast.TExprBinary (_, a, b) | Typed_ast.TExprIndex (a, b) -> expr_mutates_this a || expr_mutates_this b
+  | Typed_ast.TExprChainCmp (a, _, b, _, c) -> expr_mutates_this a || expr_mutates_this b || expr_mutates_this c
+  | Typed_ast.TExprTuple items | Typed_ast.TExprArray items ->
+    List.exists (function Typed_ast.TItemExpr x | Typed_ast.TItemSpread x -> expr_mutates_this x) items
+  | Typed_ast.TExprStructInit { tsi_args; _ } -> List.exists expr_mutates_this tsi_args
+  | _ -> false
+
+and lval_mutates_this = function
+  | Typed_ast.TLValField (base, _, _) ->
+    (match base.desc with Typed_ast.TExprIdent "this" -> true | _ -> lval_mutates_this_expr base)
+  | Typed_ast.TLValIndex (base, _) -> lval_mutates_this_expr base
+  | Typed_ast.TLValIdent _ -> false
+
+and lval_mutates_this_expr (e : Typed_ast.expr) : bool =
+  match e.desc with
+  | Typed_ast.TExprIdent "this" -> true
+  | Typed_ast.TExprField (s, _, _) | Typed_ast.TExprIndex (s, _) -> lval_mutates_this_expr s
+  | _ -> false
+
+let rec stmt_mutates_this (s : Typed_ast.stmt) : bool =
+  match s.desc with
+  | Typed_ast.TStmtVarDecl v -> expr_mutates_this v.init
+  | Typed_ast.TStmtDestruct d -> expr_mutates_this d.init
+  | Typed_ast.TStmtBlock ss -> List.exists stmt_mutates_this ss
+  | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
+    expr_mutates_this cond || stmt_mutates_this then_branch
+    || (match else_branch with Some b -> stmt_mutates_this b | None -> false)
+  | Typed_ast.TStmtWhile { cond; body; _ } -> expr_mutates_this cond || stmt_mutates_this body
+  | Typed_ast.TStmtFor { cond; step; body; _ } ->
+    expr_mutates_this cond || expr_mutates_this step || stmt_mutates_this body
+  | Typed_ast.TStmtForeach { collection; body; _ } -> expr_mutates_this collection || stmt_mutates_this body
+  | Typed_ast.TStmtReturn (Some e) | Typed_ast.TStmtExpr e -> expr_mutates_this e
+  | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
+    expr_mutates_this tma_rhs
+    || List.exists
+         (function Typed_ast.TTargetLVal (lv, _) -> lval_mutates_this lv | Typed_ast.TTargetDiscard -> false)
+         tma_targets
+  | _ -> false

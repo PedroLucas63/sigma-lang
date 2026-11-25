@@ -92,8 +92,11 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
                let vname = match a.tca_expr.desc with Typed_ast.TExprIdent nm -> nm | _ -> "tmp" in
                Printf.sprintf "%s[%d] = sgm_val_ref(&(%s));" av j (ident_c_expr vname)
              | Ty.ParamVal ->
-               Printf.sprintf "%s[%d] = %s;" av j
-                 (emit_box_val a.tca_expr.ty (emit_copy_if_struct a.tca_expr (hooks.emit_expr a.tca_expr))))
+               let c_val =
+                 if a.tca_is_this then hooks.emit_expr a.tca_expr
+                 else emit_copy_if_struct a.tca_expr (hooks.emit_expr a.tca_expr)
+               in
+               Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.tca_expr.ty c_val))
            args)
     in
     let idxs =

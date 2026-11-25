@@ -166,6 +166,7 @@ let parse_primary hooks st : (Ast.expr, Diagnostic.t) result =
       Parser_type_decl.parse_struct_init hooks st name tok.span
     else
       Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
+  | Token.KW_THIS -> bump st; Ok { Ast.desc = Ast.ExprThis; span = tok.span }
   | Token.KW_FUN ->
     bump st;
     hooks.parse_lambda_expr st tok ~is_act:false

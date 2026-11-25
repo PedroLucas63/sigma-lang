@@ -48,12 +48,18 @@ let emit_fun_def (buf : Buffer.t) (fd : Typed_ast.fun_decl) : unit =
   List.iter (hooks.emit_stmt buf "  ") fd.tf_body;
   Buffer.add_string buf "  return sgm_val_i64(0);\n}\n\n"
 
-let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
+let rec emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : unit =
   match s.desc with
   | Typed_ast.TStmtVarDecl v ->
-    Buffer.add_string buf
-      (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident v.name)
-         (emit_copy_if_struct v.init (hooks.emit_expr v.init)))
+    let c_init = emit_copy_if_struct v.init (hooks.emit_expr v.init) in
+    if Hashtbl.mem current_boxed v.name then begin
+      Buffer.add_string buf
+        (Printf.sprintf "%ssgm_val_t *sgm_cell_%s = sgm_cell_make(%s);\n"
+           indent v.name (emit_box_val v.ty c_init));
+      Hashtbl.replace current_cells v.name
+        (Printf.sprintf "(sgm_cell_%s->u.%s)" v.name (c_val_union_field v.ty))
+    end else
+      Buffer.add_string buf (Printf.sprintf "%s%s = %s;\n" indent (mangle_ident v.name) c_init)
   | Typed_ast.TStmtDestruct d ->
     incr chain_counter;
     let tmp_obj = Printf.sprintf "_sgm_destr_%d" !chain_counter in
@@ -87,6 +93,10 @@ let emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) :
         (Printf.sprintf "%s%s = sgm_fn_make(%s, INT64_C(%d), %s);\n"
            indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params) env_var)
     end
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> emit_toplevel_stmt buf indent { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | _ -> hooks.emit_stmt buf indent s
 
 let emit_c ?(test_mode = false) ?entry_name (prog : Typed_ast.program) : string =

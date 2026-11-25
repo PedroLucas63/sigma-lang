@@ -50,8 +50,31 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
             ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;'" name name)
             ~code:"E0102" ~span:e.span
             (Printf.sprintf "use of undeclared variable '%s'" name)))
+  | Ast.ExprThis ->
+    (match !current_type_ctx with
+     | None ->
+       Error (Diagnostic.error ~code:"E0128" ~span:e.span "'this' can only be used inside an instance method")
+     | Some (_, _, true) ->
+       Error (Diagnostic.error ~code:"E0128" ~span:e.span "'this' cannot be used inside a 'static' method")
+     | Some (tname, kind, false) ->
+       Ok { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = e.span })
   | Ast.ExprCall (callee, args) ->
     (match callee.desc with
+     | Ast.ExprField (base, mname) ->
+       (match Sema_methods.try_check_method_call hooks env ~span:e.span ~call_expr:e ~callee base mname args with
+        | Some res -> res
+        | None ->
+          (match check_expr hooks env callee with
+           | Error err -> Error err
+           | Ok tcallee ->
+             (match tcallee.ty with
+              | Ty.Fun (ptys, ret) -> hooks.check_call env e tcallee ptys ret callee args
+              | other ->
+                Error
+                  (Diagnostic.error
+                     ~hint:"only values of function type ('fun'/'act') can be called"
+                     ~code:"E0112" ~span:callee.span
+                     (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
      | Ast.ExprIdent name ->
        (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
         | Some res -> res

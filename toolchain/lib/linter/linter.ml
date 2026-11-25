@@ -194,7 +194,10 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     List.iter (lint_stmt tbl decl_order) fd.tf_body;
     (* Restaura entradas escondidas por parâmetros/locais da função. *)
     Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> lint_stmt tbl decl_order { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     mark_expr_usage tbl tma_rhs;
     List.iter

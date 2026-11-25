@@ -130,6 +130,7 @@ and expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprThis
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
@@ -269,12 +270,14 @@ and field_decl = {
   field_accessors : accessor_spec list option;
   field_default : expr option;
 }
+and method_decl = { md_vis : visibility option; md_is_static : bool; md_fun : fun_decl; md_span : Span.t }
 and type_decl = {
   td_vis : visibility option;
   td_kind : user_type_kind;
   td_name : string;
   td_name_span : Span.t;
   td_fields : field_decl list;
+  td_methods : method_decl list;
 }
 
 and fun_decl = {

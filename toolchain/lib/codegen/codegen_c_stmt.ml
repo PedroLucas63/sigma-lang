@@ -154,7 +154,10 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
   | Typed_ast.TStmtReturn (Some e) ->
     let c_e = emit_copy_if_struct e (hooks.emit_expr e) in
     Buffer.add_string buf (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty c_e))
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> hooks.emit_stmt buf indent { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     Codegen_c_user_types.emit_multi_assign hooks buf indent tma_targets tma_rhs
   | Typed_ast.TStmtFunDecl fd ->

@@ -29,13 +29,27 @@ type user_field = {
   uf_default : Typed_ast.expr option;
 }
 
+type user_method = {
+  um_name : string;
+  um_mangled : string;
+  um_vis : Ast.visibility;
+  um_is_static : bool;
+  um_params : Ty.fun_param list;
+  um_param_names : string list;
+  um_ret : Ty.t;
+  um_mutates_this : bool;
+}
+
 type user_type_info = {
   ut_kind : Ty.user_type_kind;
   ut_vis : Ast.visibility;
   ut_name : string;
   ut_span : Span.t;
   ut_fields : user_field list;
+  ut_methods : user_method list;
 }
+
+let current_type_ctx : (string * Ty.user_type_kind * bool) option ref = ref None
 
 let vis_to_string = function
   | Ast.VisPublic -> "public"
@@ -46,6 +60,14 @@ let vis_to_string = function
 let is_vis_accessible = function
   | Ast.VisPublic | Ast.VisInternal -> true
   | Ast.VisProtected | Ast.VisPrivate -> false
+
+let is_vis_accessible_in_type (target_type : string) (vis : Ast.visibility) : bool =
+  match vis with
+  | Ast.VisPublic | Ast.VisInternal -> true
+  | Ast.VisProtected | Ast.VisPrivate ->
+    (match !current_type_ctx with
+     | Some (cur_t, _, _) when cur_t = target_type -> true
+     | _ -> false)
 
 let user_types : (string, user_type_info) Hashtbl.t = Hashtbl.create 16
 

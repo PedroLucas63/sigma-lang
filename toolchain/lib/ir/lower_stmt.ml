@@ -231,7 +231,10 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
          fd.tf_ret)
     in
     ignore (emit b (def_global_opcode fty fd.tf_name) s.span)
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> hooks.lower_stmt b [] { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     Lower_user_types.lower_multi_assign hooks b s.span tma_targets tma_rhs
   | Typed_ast.TStmtReturn None -> ignore (emit b Ir.OP_RETURN_VOID s.span)

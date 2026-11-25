@@ -158,7 +158,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                           Typed_ast.tca_idx = i;
                           tca_expr = targ;
                           tca_mode = expected_param.pmode;
-                          tca_is_out_var = true;
+                          tca_is_out_var = true; tca_is_this = false;
                         }
                       in
                       loop (tca :: acc) rest))
@@ -190,7 +190,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                             Typed_ast.tca_idx = i;
                             tca_expr = targ;
                             tca_mode = expected_param.pmode;
-                            tca_is_out_var = false;
+                            tca_is_out_var = false; tca_is_this = false;
                           }
                         in
                         loop (tca :: acc) rest)
@@ -208,7 +208,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                          Typed_ast.tca_idx = i;
                          tca_expr = targ;
                          tca_mode = expected_param.pmode;
-                         tca_is_out_var = false;
+                         tca_is_out_var = false; tca_is_this = false;
                        }
                      in
                      loop (tca :: acc) rest

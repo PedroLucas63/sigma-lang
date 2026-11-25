@@ -27,6 +27,8 @@ let keyword_or_ident st word =
   | "protected" -> Token.KW_PROTECTED
   | "private" -> Token.KW_PRIVATE
   | "internal" -> Token.KW_INTERNAL
+  | "static" -> Token.KW_STATIC
+  | "this" -> Token.KW_THIS
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT

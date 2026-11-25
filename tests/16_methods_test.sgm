@@ -1,0 +1,128 @@
+# Suite 16: Metodos de instancia e estaticos (class, struct, record), this, primeira classe e visibilidade
+
+public class Conta {
+    public titular: string;
+    public saldo: decimal { get; private set; } = 0.0m;
+    private pin: int = 1234;
+    protected limite: decimal = 500.0m;
+
+    public act depositar(valor: decimal) {
+        if (valor > 0.0m) {
+            this.saldo += valor;
+        }
+    }
+
+    public fun sacar(valor: decimal): bool {
+        if (valor > 0.0m and valor <= this.saldo + this.limite) {
+            this.saldo -= valor;
+            return true;
+        }
+        return false;
+    }
+
+    public fun validar_pin(tentativa: int): bool {
+        return this.pin == tentativa;
+    }
+
+    # Acesso a membros privados de outra instancia do mesmo tipo
+    public act transferir_para(destino: Conta, valor: decimal) {
+        if (this.sacar(valor)) {
+            destino.depositar(valor);
+        }
+    }
+
+    private fun resumo_interno(): string {
+        return "${this.titular}:${this.saldo}";
+    }
+
+    public fun resumo(): string {
+        return this.resumo_interno();
+    }
+
+    public static fun criar_zerada(nome: string): Conta {
+        return new Conta { titular = nome, saldo = 0.0m };
+    }
+
+    private static fun taxa_interna(): decimal {
+        return 2.5m;
+    }
+
+    public static fun taxa_padrao(): decimal {
+        return Conta.taxa_interna();
+    }
+}
+
+public struct Ponto {
+    public x: int { get; set; }
+    public y: int { get; set; }
+
+    public fun manhattan(): int {
+        return this.x + this.y;
+    }
+
+    public act mover(dx: int, dy: int) {
+        this.x += dx;
+        this.y += dy;
+    }
+
+    public static fun origem(): Ponto {
+        return new Ponto { x = 0, y = 0 };
+    }
+}
+
+public record Config(host: string, porta: int = 8080) {
+    private segredo: string = "ok";
+
+    public fun url(): string {
+        return "${this.host}:${this.porta}:${this.segredo}";
+    }
+}
+
+# 1. Metodos estaticos e de instancia em class
+var c1 := Conta.criar_zerada("Ana");
+var c2 := Conta.criar_zerada("Bia");
+c1.depositar(100.0m);
+assert(c1.saldo, 100.0m, "metodo de instancia muta private set da class");
+assert(c1.validar_pin(1234), true, "metodo le campo private da class");
+assert(c1.resumo(), "Ana:100", "metodo publico chama metodo privado");
+assert(Conta.taxa_padrao(), 2.5m, "metodo estatico chama metodo estatico privado");
+
+c1.transferir_para(c2, 40.0m);
+assert((c1.saldo, c2.saldo), (60.0m, 40.0m), "transferencia entre instancias");
+
+# 2. Argumentos nomeados e aplicacao parcial em metodos
+c2.depositar(valor = 10.0m);
+assert(c2.saldo, 50.0m, "argumento nomeado em metodo");
+var sac_c1 := c1.sacar;
+assert(sac_c1(10.0m), true, "metodo de instancia como valor de primeira classe");
+assert(c1.saldo, 50.0m, "chamada via closure ligada muta instancia");
+
+var criar_fn := Conta.criar_zerada;
+var c3 := criar_fn("Carlos");
+assert(c3.titular, "Carlos", "metodo estatico como valor de primeira classe");
+
+# 3. Struct: metodos que leem vs metodos que mutam this, e const struct
+var p := Ponto.origem();
+p.mover(3, 4);
+assert((p.x, p.y, p.manhattan()), (3, 4, 7), "metodo de struct muta o receptor");
+
+const p_const := new Ponto { x = 5, y = 6 };
+assert(p_const.manhattan(), 11, "metodo nao-mutante permitido em const struct");
+
+# 4. Record com metodo acessando campo private do corpo
+var cfg := new Config("localhost");
+assert(cfg.url(), "localhost:8080:ok", "metodo de record acessa campo privado");
+
+# 5. Diagnosticos estaticos
+assert_error("E0124", "class A { private fun f(): int { return 1; } } var a := new A {}; var x := a.f();", "metodo private inacessivel fora do tipo");
+assert_error("E0124", "class A { protected fun f(): int { return 1; } } var a := new A {}; var x := a.f();", "metodo protected inacessivel fora do tipo");
+assert_error("E0124", "class A { private static fun f(): int { return 1; } } var x := A.f();", "metodo estatico private inacessivel");
+assert_error("E0127", "class A { public fun f(): int { return 1; } } var x := A.f();", "metodo de instancia nao pode ser chamado via tipo");
+assert_error("E0127", "class A { public static fun f(): int { return 1; } } var a := new A {}; var x := a.f();", "metodo estatico nao pode ser chamado via instancia");
+assert_error("E0127", "class A {} var x := A.nao_existe();", "metodo estatico inexistente");
+assert_error("E0128", "var x := this;", "this fora de metodo de instancia");
+assert_error("E0128", "class A { public static fun f(): int { var x := this; return 1; } }", "this dentro de metodo static");
+assert_error("E0107", "struct S { public x: int; public act inc() { this.x++; } } const s := new S { 1 }; s.inc();", "metodo mutante bloqueado em const struct");
+assert_error("E0107", "record R(x: int) { public act setx(v: int) { this.x = v; } }", "metodo de record nao pode mutar this");
+assert_error("E0110", "class A { public fun f(): int { var x := 1; } }", "metodo fun sem retorno garantido");
+assert_error("E0103", "class A { public x: int; public fun x(): int { return 1; } }", "conflito de nome entre campo e metodo");

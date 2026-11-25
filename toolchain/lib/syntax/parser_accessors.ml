@@ -50,3 +50,48 @@ let parse_accessor_blk st : (Ast.accessor_spec list * Span.t, Diagnostic.t) resu
            loop (spec :: acc))
   in
   loop []
+
+let try_parse_multi_assign hooks st open_tok : (Ast.stmt, Diagnostic.t) result option =
+  let saved = st.idx in
+  bump st;
+  let rec parse_targets acc =
+    let t = cur st in
+    let item_res =
+      match t.kind with
+      | Token.IDENT "_" -> bump st; Ok (Ast.TargetDiscard t.span)
+      | _ ->
+        (match hooks.parse_expr st with
+         | Error e -> Error e
+         | Ok e ->
+           (match expr_to_lvalue e with
+            | Some lv -> Ok (Ast.TargetLVal lv)
+            | None -> Error (Diagnostic.error ~code:"E0002" ~span:e.span "invalid target in multiple assignment")))
+    in
+    match item_res with
+    | Error _ -> None
+    | Ok item ->
+      let acc = item :: acc in
+      let nt = cur st in
+      if nt.kind = Token.COMMA then begin
+        bump st;
+        if (cur st).kind = Token.RPAREN then (bump st; Some (List.rev acc))
+        else parse_targets acc
+      end else if nt.kind = Token.RPAREN then begin
+        bump st;
+        Some (List.rev acc)
+      end else None
+  in
+  match parse_targets [] with
+  | Some targets when List.length targets >= 2 && (cur st).kind = Token.EQUAL ->
+    bump st;
+    Some
+      (match hooks.parse_expr st with
+       | Error e -> Error e
+       | Ok ma_rhs ->
+         (match expect_semi st open_tok.Token.span with
+          | Error e -> Error e
+          | Ok full_sp ->
+            Ok ({ Ast.desc = Ast.StmtMultiAssign { ma_targets = targets; ma_rhs }; span = full_sp } : Ast.stmt)))
+  | _ ->
+    st.idx <- saved;
+    None

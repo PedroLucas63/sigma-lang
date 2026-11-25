@@ -108,7 +108,7 @@ let lower_expr hooks b (e : Typed_ast.expr) =
            | _ -> hooks.lower_expr b a.tca_expr)
         | Ty.ParamVal ->
           hooks.lower_expr b a.tca_expr;
-          Lower_user_types.emit_copy_if_struct b a.tca_expr)
+          if not a.tca_is_this then Lower_user_types.emit_copy_if_struct b a.tca_expr)
       args;
     ignore (emit b (Ir.OP_CALL (List.map (fun a -> a.Typed_ast.tca_idx) args)) e.span)
   | Typed_ast.TExprUnary (unop, sub) -> Lower_expr_ops.lower_unary hooks b e unop sub

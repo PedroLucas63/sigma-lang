@@ -36,6 +36,7 @@ and typed_call_arg = {
   tca_expr : expr;
   tca_mode : Ty.param_mode;
   tca_is_out_var : bool;
+  tca_is_this : bool;
 }
 
 and expr_desc =
@@ -199,6 +200,7 @@ and user_type_decl = {
   tud_name : string;
   tud_span : Span.t;
   tud_fields : user_field_decl list;
+  tud_methods : fun_decl list;
 }
 
 and stmt = {

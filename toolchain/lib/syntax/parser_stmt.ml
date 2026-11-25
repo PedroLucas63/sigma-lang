@@ -197,7 +197,7 @@ let rec parse_non_decl_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_ASSERT -> bump st; parse_assert_stmt hooks st tok ~require_semi:true
   | Token.KW_ASSERT_ERROR -> bump st; parse_assert_error_stmt hooks st tok ~require_semi:true
   | Token.LPAREN ->
-    (match Parser_type_decl.try_parse_multi_assign hooks st tok with
+    (match Parser_accessors.try_parse_multi_assign hooks st tok with
      | Some res -> res
      | None ->
        (match hooks.parse_expr st with

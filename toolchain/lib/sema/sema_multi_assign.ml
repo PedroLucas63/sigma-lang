@@ -37,7 +37,7 @@ let resolve_destruct_tys ~span (rhs_ty : Ty.t) (pat_len : int) : (Ty.t list, Dia
                 Error
                   (Diagnostic.error ~code:"E0124" ~span
                      (Printf.sprintf "cannot destructure '%s': property '%s' has no 'get' accessor" name f.uf_name))
-              | Some v when not (is_vis_accessible v) ->
+              | Some v when not (is_vis_accessible_in_type name v) ->
                 Error
                   (Diagnostic.error ~code:"E0124" ~span
                      (Printf.sprintf "cannot destructure '%s': property '%s' is %s" name f.uf_name (vis_to_string v)))

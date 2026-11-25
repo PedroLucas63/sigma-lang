@@ -26,6 +26,8 @@ type kind =
   | KW_PROTECTED
   | KW_PRIVATE
   | KW_INTERNAL
+  | KW_STATIC
+  | KW_THIS
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

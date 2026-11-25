@@ -45,7 +45,7 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
     let kind = ty_kind_of_ast td.td_kind in
     let td_vis = match td.td_vis with Some v -> v | None -> Ast.VisPublic in
     Hashtbl.replace user_types td.td_name
-      { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = [] };
+      { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = []; ut_methods = [] };
     let seen = Hashtbl.create 8 in
     let errs = ref [] in
     let tfields = ref [] in
@@ -114,12 +114,28 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
     match List.rev !errs with
     | [] ->
       let rev_ufields = List.rev !ufields in
-      Hashtbl.replace user_types td.td_name
-        { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span; ut_fields = rev_ufields };
-      let tud : Typed_ast.user_type_decl =
-        { tud_kind = kind; tud_name = td.td_name; tud_span = td.td_name_span; tud_fields = List.rev !tfields }
-      in
-      Ok { Typed_ast.desc = Typed_ast.TStmtTypeDecl tud; span }
+      (match Sema_methods.check_method_sigs ~type_name:td.td_name ~seen_members:seen td.td_methods with
+       | Error mes ->
+         Hashtbl.remove user_types td.td_name;
+         Error mes
+       | Ok umethods ->
+         Hashtbl.replace user_types td.td_name
+           { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span;
+             ut_fields = rev_ufields; ut_methods = umethods };
+         (match Sema_methods.check_method_bodies hooks env (ref 10000) ~type_name:td.td_name ~kind
+                  td.td_methods umethods with
+          | Error bes ->
+            Hashtbl.remove user_types td.td_name;
+            Error bes
+          | Ok (final_ums, typed_methods) ->
+            Hashtbl.replace user_types td.td_name
+              { ut_kind = kind; ut_vis = td_vis; ut_name = td.td_name; ut_span = td.td_name_span;
+                ut_fields = rev_ufields; ut_methods = final_ums };
+            let tud : Typed_ast.user_type_decl =
+              { tud_kind = kind; tud_name = td.td_name; tud_span = td.td_name_span;
+                tud_fields = List.rev !tfields; tud_methods = typed_methods }
+            in
+            Ok { Typed_ast.desc = Typed_ast.TStmtTypeDecl tud; span }))
     | es ->
       Hashtbl.remove user_types td.td_name;
       Error es
@@ -183,7 +199,7 @@ let resolve_init_args hooks (env : env) ~span (info : user_type_info) (args : As
                     (Printf.sprintf "property '%s' of '%s' is read-only and cannot be initialized in 'new'"
                        uf.uf_name info.ut_name))
              | Some v, _ | None, Some v ->
-               if is_vis_accessible v then Ok ()
+               if is_vis_accessible_in_type info.ut_name v then Ok ()
                else
                  Error
                    (Diagnostic.error ~code:"E0124" ~span:a.arg_value.span
@@ -251,23 +267,20 @@ let check_new_expr hooks (env : env) ~span ~(is_ctor : bool) (type_name : string
            (Printf.sprintf "record '%s' must be instantiated with parentheses, not '{ ... }'" type_name))
     else resolve_init_args hooks env ~span info args
 
+let err_missing_new ~span (info : user_type_info) : ('a, Diagnostic.t) result =
+  let usage =
+    if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" info.ut_name
+    else Printf.sprintf "new %s { ... }" info.ut_name
+  in
+  Error
+    (Diagnostic.error ~hint:(Printf.sprintf "use '%s' to create an instance" usage) ~code:"E0122" ~span
+       (Printf.sprintf "missing 'new' keyword when instantiating '%s'" info.ut_name))
+
 let check_struct_init _hooks _env ~span (type_name : string) (_args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result =
   match Hashtbl.find_opt user_types type_name with
-  | None ->
-    Error
-      (Diagnostic.error ~code:"E0101" ~span
-         (Printf.sprintf "unknown type '%s'" type_name))
-  | Some info ->
-    let usage =
-      if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" type_name
-      else Printf.sprintf "new %s { ... }" type_name
-    in
-    Error
-      (Diagnostic.error
-         ~hint:(Printf.sprintf "use '%s' to create an instance" usage)
-         ~code:"E0122" ~span
-         (Printf.sprintf "missing 'new' keyword when instantiating '%s'" type_name))
+  | None -> Error (Diagnostic.error ~code:"E0101" ~span (Printf.sprintf "unknown type '%s'" type_name))
+  | Some info -> err_missing_new ~span info
 
 let check_record_ctor _hooks (env : env) ~span (type_name : string) (_args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result option =
@@ -275,14 +288,4 @@ let check_record_ctor _hooks (env : env) ~span (type_name : string) (_args : Ast
   else
     match Hashtbl.find_opt user_types type_name with
     | None -> None
-    | Some info ->
-      let usage =
-        if info.ut_kind = Ty.KindRecord then Printf.sprintf "new %s(...)" type_name
-        else Printf.sprintf "new %s { ... }" type_name
-      in
-      Some
-        (Error
-           (Diagnostic.error
-              ~hint:(Printf.sprintf "use '%s' to create an instance" usage)
-              ~code:"E0122" ~span
-              (Printf.sprintf "missing 'new' keyword when instantiating '%s'" type_name)))
+    | Some info -> Some (err_missing_new ~span info)
