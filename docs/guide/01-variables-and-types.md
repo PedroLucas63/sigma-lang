@@ -40,16 +40,16 @@ Para computação científica, estatística e financeira, a Sigma distingue expl
 - **`decimal` (128 bits Base-10 Exato):** Exige o sufixo `m` (`10m`, `10.9m`), preservando até **38 dígitos significativos** sem erros de arredondamento binário.
 
 ```sigma
-// float (32 bits)
+# float (32 bits)
 var taxa := 10.0;
 var escala : float = 1.5e2;
 var f_zero : float;
 
-// double (64 bits)
+# double (64 bits)
 var pi : double = 3.141592653589793d;
 var d_zero : double;
 
-// decimal (128 bits base-10 exato — até 38 dígitos significativos)
+# decimal (128 bits base-10 exato — até 38 dígitos significativos)
 var preco := 10.90m;
 var alta_precisao : decimal = 123_456_789.012_345_678_901_234_567_89m;
 var m_zero : decimal;
@@ -146,13 +146,13 @@ var (dia, mes, ano) := prompt("Data: ", "${int}/${int}/${int}"); # -> (int, int,
 A Sigma **nunca** faz coerção implícita entre tipos distintos:
 
 ```sigma
-// ERRO E0104: expected 'double', found 'float' (faltou o sufixo 'd')
+# ERRO E0104: expected 'double', found 'float' (faltou o sufixo 'd')
 var a : double = 10.0;
 
-// ERRO E0104: expected 'string', found 'char'
+# ERRO E0104: expected 'string', found 'char'
 var b : string = 'a';
 
-// ERRO E0104: expected 'int', found 'bool'
+# ERRO E0104: expected 'int', found 'bool'
 var c : int = true;
 ```
 
