@@ -11,16 +11,25 @@ let run_with_source target f =
 let () =
   let args = Array.to_list Sys.argv |> List.tl in
   match args with
-  | [ "run" ] ->
-    let _m, entry = resolve_entry_or_exit () in
-    ignore (run_with_source entry (Driver.run_source ~stream_stdout:true))
-  | [ "run"; target ] ->
-    if Sys.file_exists target || Filename.check_suffix target ".sgm" then
-      ignore (run_with_source target (Driver.run_source ~stream_stdout:true))
-    else
-      (match Manifest.load () with
-       | Ok m when Option.is_some (Manifest.find_script target m) -> ignore (run_manifest_script target m)
-       | _ -> ignore (run_with_source target (Driver.run_source ~stream_stdout:true)))
+  | "run" :: rest ->
+    let run_file target prog_args =
+      let _, code = run_with_source target (Driver.run_source_with_exit ~stream_stdout:true ~args:(target :: prog_args)) in
+      if code <> 0 then exit code
+    in
+    (match rest with
+     | [] ->
+       let _m, entry = resolve_entry_or_exit () in
+       run_file entry []
+     | [ target ] ->
+       if Sys.file_exists target || Filename.check_suffix target ".sgm" then
+         run_file target []
+       else
+         (match Manifest.load () with
+          | Ok m when Option.is_some (Manifest.find_script target m) -> ignore (run_manifest_script target m)
+          | _ -> run_file target [])
+     | target :: extra ->
+       let prog_args = match extra with "--" :: tl -> tl | _ -> extra in
+       run_file target prog_args)
   | [ "build" ] ->
     let m, entry = resolve_entry_or_exit () in
     run_with_source entry (Driver.build_source ~output_path:m.name);

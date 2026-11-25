@@ -7,7 +7,7 @@ let rec ty_contains_fun (ty : Ty.t) : bool =
   match ty with
   | Ty.Fun _ -> true
   | Ty.Tuple tys -> List.exists ty_contains_fun tys
-  | Ty.Array (t, _) -> ty_contains_fun t
+  | Ty.Array (t, _) | Ty.DynArray t -> ty_contains_fun t
   | _ -> false
 
 let rec eval_const_int (env : env) (e : Typed_ast.expr) : int64 option =
@@ -31,6 +31,7 @@ let check_binary_type (op : Ast.binop) (lty : Ty.t) (rty : Ty.t) : Ty.t option =
   match lty, rty, op with
   | Ty.Tuple _, Ty.Tuple _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
   | Ty.Array _, Ty.Array _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
+  | Ty.DynArray _, Ty.DynArray _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
   | Ty.User _, Ty.User _, (Ast.BinEq | Ast.BinNe) when Ty.equal lty rty -> Some Ty.Bool
   | Ty.Array (t1, n1), Ty.Array (t2, n2), Ast.BinAdd when Ty.equal t1 t2 ->
     Some (Ty.Array (t1, n1 + n2))

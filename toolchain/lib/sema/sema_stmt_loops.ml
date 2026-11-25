@@ -111,7 +111,8 @@ let check_foreach_stmt hooks (env : env) (loop_stack : active_loop list) (next_l
     | None -> None
     | Some tc ->
       (match tc.ty with
-       | Ty.Array (elem_ty, len) -> Some (tc, elem_ty, len)
+       | Ty.Array (elem_ty, len) -> Some (tc, elem_ty, Some len)
+       | Ty.DynArray elem_ty -> Some (tc, elem_ty, None)
        | _ ->
          errs :=
            Diagnostic.error

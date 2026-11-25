@@ -27,6 +27,7 @@ and t =
   | String
   | Tuple of t list
   | Array of t * int
+  | DynArray of t
   | User of user_type_kind * string
   | Fun of fun_param list * t  (** Função/procedimento: parâmetros restantes e retorno ([Void] para [act]). *)
   | Void  (** Retorno de [act]; só aparece como retorno de [Fun] ou como tipo de chamada de [act]. *)

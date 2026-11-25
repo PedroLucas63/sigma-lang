@@ -13,8 +13,17 @@ val compile_frontend :
 val run_source :
   ?stdin_lines:string list ->
   ?stream_stdout:bool ->
+  ?args:string list ->
   Source.t ->
   (string, Diagnostic.t list) result
+
+(** Executa um código-fonte no interpretador (VM) e retorna [(stdout, exit_code)]. *)
+val run_source_with_exit :
+  ?stdin_lines:string list ->
+  ?stream_stdout:bool ->
+  ?args:string list ->
+  Source.t ->
+  (string * int, Diagnostic.t list) result
 
 (** Compila um código-fonte para um executável nativo via C99 backend. *)
 val build_source :

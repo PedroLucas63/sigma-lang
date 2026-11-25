@@ -534,6 +534,9 @@ type opcode =
   | OP_SET_GLOBAL_OBJ of string
   | OP_UNDEF_GLOBAL of string
   | OP_POP
+  | OP_ARRAY_LEN
+  | OP_GET_ARGS
+  | OP_SET_EXIT_CODE
   | OP_PRINT_I64
   | OP_PRINT_F32
   | OP_PRINT_F64

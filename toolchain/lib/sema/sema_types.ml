@@ -12,7 +12,7 @@ let resolve_input_type (ty_name : string) (sp : Span.t) : (Ty.t, Diagnostic.t) r
          ~code:"E0101" ~span:sp
          (Printf.sprintf "unknown or unsupported input type '%s'" ty_name))
 
-let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
+let rec resolve_type_expr ?(allow_unsized = false) (te : Ast.type_expr) (init_ty_opt : Ty.t option)
     : (Ty.t, Diagnostic.t) result =
   match te with
   | Ast.TypeNamed (ty_name, ty_span) ->
@@ -93,6 +93,7 @@ let rec resolve_type_expr (te : Ast.type_expr) (init_ty_opt : Ty.t option)
         | None ->
           (match init_len_opt, init_ty_opt with
            | Some ilen, _ -> Ok (Ty.Array (elem_ty, ilen))
+           | None, None when allow_unsized -> Ok (Ty.DynArray elem_ty)
            | None, None ->
              Error
                (Diagnostic.error
@@ -122,6 +123,8 @@ let rec default_expr_for_type ?(visited = []) (ty : Ty.t) (span : Span.t) : Type
   | Ty.Array (elem_ty, n) ->
     let items = List.init n (fun _ -> Typed_ast.TItemExpr (default_expr_for_type ~visited elem_ty span)) in
     { Typed_ast.desc = Typed_ast.TExprArray items; ty; span }
+  | Ty.DynArray _ ->
+    { Typed_ast.desc = Typed_ast.TExprArray []; ty; span }
   | Ty.User (kind, name) ->
     if List.mem name visited then
       { Typed_ast.desc = Typed_ast.TExprNull; ty; span }
@@ -168,7 +171,7 @@ let resolve_fun_params (raw_params : Ast.fun_param list)
           | Ast.ParamRef -> Ty.ParamRef
           | Ast.ParamOut -> Ty.ParamOut
         in
-        match resolve_type_expr p.param_type None with
+        match resolve_type_expr ~allow_unsized:true p.param_type None with
         | Ok ty -> Some { Typed_ast.tp_name = pname; tp_mode = pmode; tp_ty = ty }
         | Error err -> errs := err :: !errs; None)
       raw_params

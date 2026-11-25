@@ -151,7 +151,7 @@ and stmt_desc =
       head : foreach_head;
       collection : expr;
       elem_ty : Ty.t;
-      len : int;
+      len : int option;
       body : stmt;
     }
   | TStmtBreak of {

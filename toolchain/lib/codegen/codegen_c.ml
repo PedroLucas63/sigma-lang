@@ -122,12 +122,38 @@ let emit_c ?(test_mode = false) (prog : Typed_ast.program) : string =
     Buffer.add_string buf "\n";
     List.iter (emit_fun_def buf) all_funs
   end;
-  Buffer.add_string buf "int main(void) {\n";
+  Buffer.add_string buf "int main(int argc, char **argv) {\n  (void)argc;\n  (void)argv;\n";
   Hashtbl.clear current_cells;
   Hashtbl.clear current_boxed;
   List.iter (fun name -> Hashtbl.replace current_boxed name ()) (List.concat_map collect_inner_captures prog);
   List.iter (if all_funs <> [] then emit_toplevel_stmt buf "  " else hooks.emit_stmt buf "  ") prog;
-  Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n";
+  (match Typecheck.detect_entry_point prog with
+   | None -> Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n"
+   | Some ep ->
+     let main_var = mangle_ident "main" in
+     (match ep with
+      | Typecheck.EntryActNoArgs ->
+        Buffer.add_string buf (Printf.sprintf "  (void)sgm_fn_invoke(%s);\n" main_var);
+        Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n"
+      | Typecheck.EntryFunIntNoArgs ->
+        Buffer.add_string buf (Printf.sprintf "  sgm_val_t _sgm_entry_ret = sgm_fn_invoke(%s);\n" main_var);
+        Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : (int)_sgm_entry_ret.u.i64;\n}\n"
+      | Typecheck.EntryActArgs | Typecheck.EntryFunIntArgs ->
+        Buffer.add_string buf "  sgm_obj_t *_sgm_cli_args = sgm_obj_alloc(false, (int64_t)argc);\n";
+        Buffer.add_string buf "  for (int i = 0; i < argc; i++) {\n";
+        Buffer.add_string buf "    *sgm_obj_slot(_sgm_cli_args, (int64_t)i) = sgm_val_str(argv[i]);\n";
+        Buffer.add_string buf "  }\n";
+        Buffer.add_string buf "  sgm_val_t _sgm_entry_argv[1] = { sgm_val_obj(_sgm_cli_args) };\n";
+        Buffer.add_string buf "  int64_t _sgm_entry_idxs[1] = { 0 };\n";
+        Buffer.add_string buf
+          (Printf.sprintf "  sgm_val_t _sgm_entry_ret = sgm_fn_invoke(sgm_fn_bind(%s, 1, _sgm_entry_idxs, _sgm_entry_argv));\n"
+             main_var);
+        if ep = Typecheck.EntryFunIntArgs then
+          Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : (int)_sgm_entry_ret.u.i64;\n}\n"
+        else begin
+          Buffer.add_string buf "  (void)_sgm_entry_ret;\n";
+          Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n"
+        end));
   Buffer.contents buf
 
 let write_c_file ?(test_mode = false) ~output_path (prog : Typed_ast.program) : (unit, string) result =

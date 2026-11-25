@@ -78,6 +78,8 @@ let check_index_access hooks (env : env) ~span:_ (target : Ast.expr) (idx : Ast.
                     (Printf.sprintf "array index %Ld out of bounds for array of type '%s' (length %d)"
                        k (Ty.to_string ttarget.ty) len))
              | _ -> Ok (ttarget, tidx, elem_ty))
+          | Ty.DynArray elem_ty ->
+            Ok (ttarget, tidx, elem_ty)
           | _ ->
             Error
               (Diagnostic.error

@@ -71,9 +71,14 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
     let inner_indent = indent ^ "  " in
     let body_indent = inner_indent ^ "  " in
     let coll_var = Printf.sprintf "_sgm_fcoll_%d" loop_id and idx_var = Printf.sprintf "_sgm_fidx_%d" loop_id in
+    let bound_expr =
+      match len with
+      | Some n -> Printf.sprintf "INT64_C(%d)" n
+      | None -> Printf.sprintf "%s->len" coll_var
+    in
     Buffer.add_string buf
-      (Printf.sprintf "%s{\n%ssgm_obj_t *%s = %s;\n%s(void)%s;\n%sfor (int64_t %s = 0; %s < INT64_C(%d); %s++) {\n"
-         indent inner_indent coll_var (hooks.emit_expr collection) inner_indent coll_var inner_indent idx_var idx_var len idx_var);
+      (Printf.sprintf "%s{\n%ssgm_obj_t *%s = %s;\n%s(void)%s;\n%sfor (int64_t %s = 0; %s < %s; %s++) {\n"
+         indent inner_indent coll_var (hooks.emit_expr collection) inner_indent coll_var inner_indent idx_var idx_var bound_expr idx_var);
     (match head with
      | Typed_ast.TForeachVar { name = None; _ } -> ()
      | Typed_ast.TForeachVar { name = Some name; is_const; ty; _ } ->
@@ -115,7 +120,7 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
         | Ty.Decimal -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_dec(%s), stdout);\n" indent c_e)
         | Ty.Bool -> Buffer.add_string buf (Printf.sprintf "%sfputs((%s) ? \"true\" : \"false\", stdout);\n" indent c_e)
         | Ty.Char | Ty.String -> Buffer.add_string buf (Printf.sprintf "%sfputs(%s, stdout);\n" indent c_e)
-        | Ty.Tuple _ | Ty.Array _ | Ty.User _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
+        | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
         | Ty.Fun _ -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n%sfputs(\"<function>\", stdout);\n" indent c_e indent)
         | Ty.Void -> ())
       args;

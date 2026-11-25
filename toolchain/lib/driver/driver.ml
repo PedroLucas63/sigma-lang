@@ -45,8 +45,8 @@ let extract_stdin_directives (content : string) : string list option =
   | [] -> None
   | xs -> Some xs
 
-let run_source ?stdin_lines ?(stream_stdout = false) (src : Source.t) :
-    (string, Diagnostic.t list) result =
+let run_source_with_exit ?stdin_lines ?(stream_stdout = false) ?(args = []) (src : Source.t) :
+    (string * int, Diagnostic.t list) result =
   match compile_frontend src with
   | Error errs -> Error errs
   | Ok (_typed_ast, ir) ->
@@ -55,10 +55,16 @@ let run_source ?stdin_lines ?(stream_stdout = false) (src : Source.t) :
       | Some _ -> stdin_lines
       | None -> extract_stdin_directives src.content
     in
-    (match Vm.run ?stdin_lines ~stream_stdout ir with
-     | Ok out -> Ok out
+    (match Vm.run_with_exit ?stdin_lines ~stream_stdout ~args ir with
+     | Ok res -> Ok res
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0900" ~span:Span.dummy msg ])
+
+let run_source ?stdin_lines ?(stream_stdout = false) ?(args = []) (src : Source.t) :
+    (string, Diagnostic.t list) result =
+  match run_source_with_exit ?stdin_lines ~stream_stdout ~args src with
+  | Ok (out, _) -> Ok out
+  | Error errs -> Error errs
 
 let build_source ~output_path (src : Source.t) : (unit, Diagnostic.t list) result =
   match compile_frontend src with

@@ -86,6 +86,23 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
          Error (Printf.sprintf "Runtime error: index %Ld out of bounds (length %d)" idx len)
        else (arr.(Int64.to_int idx) <- v; st.stack <- v :: rest; Ok ())
      | _ -> Error "VM type error or stack underflow on OP_INDEX_SET")
+  | Ir.OP_ARRAY_LEN ->
+    (match st.stack with
+     | VArray arr :: rest ->
+       st.stack <- VInt (Int64.of_int (Array.length arr)) :: rest;
+       Ok ()
+     | _ -> Error "VM type error or stack underflow on OP_ARRAY_LEN")
+  | Ir.OP_GET_ARGS ->
+    let arr = Array.of_list (List.map (fun s -> VString s) st.args) in
+    st.stack <- VArray arr :: st.stack;
+    Ok ()
+  | Ir.OP_SET_EXIT_CODE ->
+    (match st.stack with
+     | VInt code :: rest ->
+       st.exit_code <- Int64.to_int code;
+       st.stack <- rest;
+       Ok ()
+     | _ -> Error "VM type error or stack underflow on OP_SET_EXIT_CODE")
   | Ir.OP_NEW_USER { type_name; kind; field_count } ->
     (match pop_n field_count st.stack with
      | Some (items, rest) ->

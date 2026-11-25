@@ -127,7 +127,11 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
     ignore (emit b (Ir.OP_SET_TEMP t_idx) s.span);
     let cond_ip = cur_ip b in
     ignore (emit b (Ir.OP_GET_TEMP t_idx) s.span);
-    ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int len)) s.span);
+    (match len with
+     | Some n -> ignore (emit b (Ir.OP_CONST_I64 (Int64.of_int n)) s.span)
+     | None ->
+       ignore (emit b (Ir.OP_GET_TEMP t_arr) s.span);
+       ignore (emit b Ir.OP_ARRAY_LEN s.span));
     ignore (emit b Ir.OP_LT_I64 s.span);
     let j_exit = emit b (Ir.OP_JUMP_IF_FALSE 0) s.span in
     ignore (emit b (Ir.OP_GET_TEMP t_arr) s.span);
@@ -188,7 +192,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
-          | Ty.Tuple _ | Ty.Array _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
+          | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;

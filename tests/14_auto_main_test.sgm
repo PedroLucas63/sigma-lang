@@ -1,0 +1,33 @@
+# Suíte 14: Ponto de Entrada Automático (main) e Parâmetro string[]
+
+record AppConfig(name: string, version: int);
+
+const APP_NAME := "SigmaApp";
+var global_counter := 10;
+
+fun helper(x: int): int {
+    return x + global_counter;
+}
+
+fun main(args: string[]): int {
+    var cfg := new AppConfig(APP_NAME, 1);
+    assert(cfg.name, "SigmaApp", "const global disponível em main");
+    assert(cfg.version, 1, "record global disponível em main");
+    assert(helper(5), 15, "var global e função auxiliar disponíveis em main");
+
+    global_counter += 5;
+    assert(global_counter, 15, "mutação de var global dentro de main");
+
+    var seen := 0;
+    foreach (var a in args) {
+        if (a != "") {
+            seen++;
+        }
+    }
+    assert(seen >= 0, true, "foreach sobre args: string[]");
+
+    # Array sem tamanho fixo fora de parâmetro continua exigindo inicializador (E0106)
+    assert_error("E0106", "var bad: string[];", "T[] sem inicializador fora de parâmetro");
+
+    return 0;
+}

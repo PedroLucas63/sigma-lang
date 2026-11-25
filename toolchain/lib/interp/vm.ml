@@ -4,11 +4,12 @@ include Vm_state
 
 let step = Vm_exec.step
 
-let run ?stdin_lines ?(stream_stdout = false) (prog : Ir.program) : (string, string) result =
-  let st = create_state ?stdin_lines ~stream_stdout () in
+let run_with_exit ?stdin_lines ?(stream_stdout = false) ?(args = []) (prog : Ir.program)
+    : (string * int, string) result =
+  let st = create_state ?stdin_lines ~stream_stdout ~args () in
   let out_buf = Buffer.create 64 in
   let rec loop () =
-    if st.halted then Ok (Buffer.contents out_buf)
+    if st.halted then Ok (Buffer.contents out_buf, st.exit_code)
     else
       match step ~out_buf prog st with
       | Ok () -> loop ()
@@ -16,8 +17,13 @@ let run ?stdin_lines ?(stream_stdout = false) (prog : Ir.program) : (string, str
   in
   loop ()
 
-let run_tests ?stdin_lines (prog : Ir.program) : (test_report, string) result =
-  let st = create_state ~collect_assertions:true ?stdin_lines () in
+let run ?stdin_lines ?(stream_stdout = false) ?(args = []) (prog : Ir.program) : (string, string) result =
+  match run_with_exit ?stdin_lines ~stream_stdout ~args prog with
+  | Ok (out, _) -> Ok out
+  | Error msg -> Error msg
+
+let run_tests ?stdin_lines ?(args = []) (prog : Ir.program) : (test_report, string) result =
+  let st = create_state ~collect_assertions:true ?stdin_lines ~args () in
   let out_buf = Buffer.create 64 in
   let rec loop () =
     if st.halted then begin

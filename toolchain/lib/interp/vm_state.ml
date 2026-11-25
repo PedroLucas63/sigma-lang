@@ -62,12 +62,14 @@ type state = {
   mutable assertions_rev : assertion_result list;
   mutable stdin_lines : string list option;
   mutable stream_stdout : bool;
+  mutable args : string list;
+  mutable exit_code : int;
   mutable frames : frame list;
 }
 
 let max_call_depth = 100_000
 
-let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = false) () =
+let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = false) ?(args = []) () =
   {
     ip = 0;
     stack = [];
@@ -77,6 +79,8 @@ let create_state ?(collect_assertions = false) ?stdin_lines ?(stream_stdout = fa
     assertions_rev = [];
     stdin_lines;
     stream_stdout;
+    args;
+    exit_code = 0;
     frames = [];
   }
 

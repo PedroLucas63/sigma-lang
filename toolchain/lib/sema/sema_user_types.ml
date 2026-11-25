@@ -11,7 +11,7 @@ let ty_kind_of_ast = function
 let rec value_type_reaches (visited : (string, unit) Hashtbl.t) (target : string) (ty : Ty.t) : bool =
   match ty with
   | Ty.Tuple sub -> List.exists (value_type_reaches visited target) sub
-  | Ty.Array (sub, _) -> value_type_reaches visited target sub
+  | Ty.Array (sub, _) | Ty.DynArray sub -> value_type_reaches visited target sub
   | Ty.User (Ty.KindClass, _) -> false
   | Ty.User ((Ty.KindStruct | Ty.KindRecord), name) ->
     if name = target then true

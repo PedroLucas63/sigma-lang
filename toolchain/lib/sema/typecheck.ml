@@ -47,3 +47,35 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   match List.rev !all_errors with
   | [] -> Ok (List.rev !tstmts)
   | errs -> Error errs
+
+type entry_point =
+  | EntryActNoArgs
+  | EntryActArgs
+  | EntryFunIntNoArgs
+  | EntryFunIntArgs
+
+let is_toplevel_decl_only (s : Typed_ast.stmt) : bool =
+  match s.desc with
+  | Typed_ast.TStmtTypeDecl _
+  | Typed_ast.TStmtFunDecl _
+  | Typed_ast.TStmtVarDecl _
+  | Typed_ast.TStmtDestruct _ -> true
+  | _ -> false
+
+let detect_entry_point (prog : Typed_ast.program) : entry_point option =
+  if not (List.for_all is_toplevel_decl_only prog) then None
+  else
+    let rec find_main = function
+      | [] -> None
+      | { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; _ } :: _ when fd.tf_name = "main" ->
+        (match fd.tf_params, fd.tf_ret with
+         | [], Ty.Void -> Some EntryActNoArgs
+         | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Void ->
+           Some EntryActArgs
+         | [], Ty.Int -> Some EntryFunIntNoArgs
+         | [ { tp_mode = Ty.ParamVal; tp_ty = Ty.DynArray Ty.String; _ } ], Ty.Int ->
+           Some EntryFunIntArgs
+         | _ -> None)
+      | _ :: rest -> find_main rest
+    in
+    find_main prog

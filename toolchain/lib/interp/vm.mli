@@ -66,6 +66,8 @@ type state = {
   mutable assertions_rev : assertion_result list;
   mutable stdin_lines : string list option;
   mutable stream_stdout : bool;
+  mutable args : string list;
+  mutable exit_code : int;
   mutable frames : frame list;
 }
 
@@ -73,6 +75,7 @@ val create_state :
   ?collect_assertions:bool ->
   ?stdin_lines:string list ->
   ?stream_stdout:bool ->
+  ?args:string list ->
   unit ->
   state
 
@@ -83,8 +86,21 @@ val step : out_buf:Buffer.t -> Ir.program -> state -> (unit, string) result
 val run :
   ?stdin_lines:string list ->
   ?stream_stdout:bool ->
+  ?args:string list ->
   Ir.program ->
   (string, string) result
 
+(** Executa todo o programa de IR e retorna [(stdout, exit_code)]. *)
+val run_with_exit :
+  ?stdin_lines:string list ->
+  ?stream_stdout:bool ->
+  ?args:string list ->
+  Ir.program ->
+  (string * int, string) result
+
 (** Executa o programa de IR em modo de teste, coletando todos os resultados de [assert] e [assert_error]. *)
-val run_tests : ?stdin_lines:string list -> Ir.program -> (test_report, string) result
+val run_tests :
+  ?stdin_lines:string list ->
+  ?args:string list ->
+  Ir.program ->
+  (test_report, string) result

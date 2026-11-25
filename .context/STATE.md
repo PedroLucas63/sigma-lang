@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M3.1 — Estruturas Definidas pelo Usuário, new e Atribuição Múltipla`
-- **Git Flow:** Branch ativa `develop` (`feature/new-and-multi-assign` mesclada).
+- **Milestone:** `M3.2 — Ponto de Entrada Automático (main)`
+- **Git Flow:** Branch ativa `develop` (`feature/auto-main-entrypoint` mesclada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -30,7 +30,8 @@
 - [x] Funções e procedimentos anônimos `[fun|act]({<param>})[:<return-type>] => <command>` com inferência opcional do tipo de retorno em `fun`, corpo em expressão direta, comando inline sem chaves ou bloco `{ ... }`, closures léxicas, `ref`/`out`, currying, argumentos nomeados e IIFE (`tests/12_anonymous_functions_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 428 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (13 suítes).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 434 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (14 suítes).
+- [x] Ponto de entrada automático `main` (`act main()`, `act main(args: string[])`, `fun main(): int`, `fun main(args: string[]): int`) quando o arquivo não possui instruções executáveis no topo, com suporte a `args[0]` + argumentos CLI e propagação de exit code (`tests/14_auto_main_test.sgm`).
 - [x] Estruturas definidas pelo usuário (`class`, `struct`, `record` — Fase 1) com instanciação obrigatória via `new` (`new T { ... }` / `new R(...)`, `E0122`), atribuição múltipla com parênteses `(a, b) = rhs;` (swap seguro e desempacotamento de tuplas, estruturas e arrays com *rest slice* no último alvo `var (a, b) := [1, 2, 3, 4]`), acesso `.campo`, operadores compostos/`++`/`--` e diagnósticos `E0119`..`E0122` (`tests/13_user_defined_types_test.sgm`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
 - [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
@@ -40,7 +41,7 @@
 ## Próximos Passos Planejados (Roadmap Oficial em Ordem de Execução)
 1. [x] **Manutenção e Modularização do Código:** Todos os 100 arquivos `.ml`/`.mli` reduzidos para $\le 300$ linhas, com guardrail `check_file_sizes.sh --strict` ativo no CI.
 2. [x] **Estruturas `class`, `struct` e `record` (Fase 1 — Campos e Igualdade):** `class` (igualdade por referência), `struct` (igualdade por valor) e `record` (imutável, igualdade por valor), com inicialização `{}`/`()`, acesso `.campo` e `==`/`!=` (`ADR-035`).
-3. [ ] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
+3. [x] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
 4. [ ] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
 5. [ ] **Importação e Exportação Preguiçosa (`import` / `export`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso.
 6. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
@@ -60,3 +61,4 @@
 - **2026-11-02:** Streaming de stdout imediato (`v0.2.2`), funções/procedimentos (`fun`/`act`), currying, parâmetros nomeados (`ADR-028`), closures com captura léxica (`ADR-029`) e parâmetros `shallow const`, `ref`, `out` e `out var` (`ADR-030`, 334 asserções).
 - **2026-11-08:** Funções e procedimentos anônimos `[fun,act]({<param>})[:<ret>] => <command>` com inferência de retorno, comandos inline/bloco e paridade VM/C99 (`ADR-031`, 379 asserções em 12 suítes).
 - **2026-11-24:** Refatoração modular completa da toolchain (`syntax`, `sema`, `ir`, `interp`, `codegen`, `common`, `bin`, `test`) com 100 arquivos $\le 300$ linhas e `check_file_sizes.sh --strict` no CI (`ADR-034`), seguida da Fase 1 de `class`, `struct` e `record` com 415 asserções em 13 suítes (`ADR-035`).
+- **2026-11-25:** Ponto de entrada automático `main` (`act`/`fun`, com/sem `args: string[]`, exit code e `Ty.DynArray`) com 434 asserções em 14 suítes.
