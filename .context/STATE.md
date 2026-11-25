@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `M3.3 — Scripts com Funções de Entrada no sigma.toml`
-- **Git Flow:** Branch ativa `develop` (`feature/toml-entry-scripts` mesclada).
+- **Milestone:** `v0.2.3 — Release (Estruturas, main Automático, Scripts sigma.toml & Wiki VitePress)`
+- **Git Flow:** Branch ativa `develop` (`v0.2.3` lançada).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)

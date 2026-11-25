@@ -42,6 +42,14 @@
           "match": "\\b(fun|act)\\b"
         },
         {
+          "name": "keyword.declaration.type.sigma",
+          "match": "\\b(class|struct|record)\\b"
+        },
+        {
+          "name": "keyword.operator.new.sigma",
+          "match": "\\b(new)\\b"
+        },
+        {
           "name": "storage.modifier.parameter.sigma",
           "match": "\\b(ref|out)\\b"
         },
@@ -173,6 +181,10 @@
         {
           "name": "keyword.operator.spread.sigma",
           "match": "\\.\\."
+        },
+        {
+          "name": "punctuation.accessor.dot.sigma",
+          "match": "\\."
         },
         {
           "name": "keyword.operator.increment-decrement.sigma",

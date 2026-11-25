@@ -144,5 +144,75 @@
       "\"\\${${1:expr}:${2:.2}}\""
     ],
     "description": "Interpolated string with format specifier ([fill][<|>|^][+][0][width][.prec])"
+  },
+  "Class Declaration": {
+    "prefix": "class",
+    "body": [
+      "class ${1:Name} {",
+      "  ${2:field}: ${3:int};",
+      "}"
+    ],
+    "description": "Declare a mutable reference-semantics class"
+  },
+  "Struct Declaration": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "  ${2:field}: ${3:int};",
+      "}"
+    ],
+    "description": "Declare a mutable value-semantics struct"
+  },
+  "Record Declaration": {
+    "prefix": "record",
+    "body": [
+      "record ${1:Name}(${2:field}: ${3:int});"
+    ],
+    "description": "Declare an immutable value-semantics record"
+  },
+  "New Instance": {
+    "prefix": "new",
+    "body": [
+      "new ${1:Type} { ${2:field} = ${3:value} }"
+    ],
+    "description": "Instantiate a class or struct using new"
+  },
+  "Main Procedure (act main)": {
+    "prefix": "maina",
+    "body": [
+      "act main(${1:args: string[]}) {",
+      "  $0",
+      "}"
+    ],
+    "description": "Declare an automatic entry point procedure"
+  },
+  "Main Function (fun main)": {
+    "prefix": "mainf",
+    "body": [
+      "fun main(${1:args: string[]}): int {",
+      "  $0",
+      "  return 0;",
+      "}"
+    ],
+    "description": "Declare an automatic entry point function returning an exit code"
+  },
+  "Function Declaration": {
+    "prefix": "fun",
+    "body": [
+      "fun ${1:name}(${2:params}): ${3:int} {",
+      "  $0",
+      "  return ${4:0};",
+      "}"
+    ],
+    "description": "Declare a Sigma function"
+  },
+  "Action Procedure Declaration": {
+    "prefix": "act",
+    "body": [
+      "act ${1:name}(${2:params}) {",
+      "  $0",
+      "}"
+    ],
+    "description": "Declare a Sigma void procedure (act)"
   }
 }
