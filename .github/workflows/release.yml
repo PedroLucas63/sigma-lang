@@ -154,10 +154,21 @@ jobs:
         with:
           enablement: true
 
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Construir Wiki VitePress (web/)
+        run: |
+          cd web
+          npm install
+          npm run docs:build
+
       - name: Preparar Diretório do Site & Documentação
         run: |
           mkdir -p _site
-          cp -r web/* _site/
+          cp -r web/.vitepress/dist/* _site/
           mkdir -p _site/docs
           cp -r docs/* _site/docs/
           touch _site/.nojekyll

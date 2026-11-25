@@ -9,7 +9,7 @@ Arquivos de código-fonte Sigma utilizam a extensão **`.sgm`** (codificação U
 - **Comentários:**
   - Comentário de linha: `# ...` até o final da linha.
   - Comentário de bloco (multi-linha): `/* ... */` (erro `E0001` se não fechado antes do fim do arquivo).
-- **Palavras-chave:** `var`, `const`, `fun`, `act`, `return`, `ref`, `out`, `void`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `input`, `prompt`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
+- **Palavras-chave:** `var`, `const`, `fun`, `act`, `return`, `ref`, `out`, `void`, `class`, `struct`, `record`, `new`, `if`, `else`, `while`, `for`, `foreach`, `in`, `break`, `continue`, `print`, `println`, `input`, `prompt`, `assert`, `assert_error`, `and`, `or`, `xor`, `not`
 - **Literais Booleanos (`bool`):** `true`, `false`
 - **Literais Inteiros (`int64`):** Sequências de dígitos decimais que podem conter `_` como separador visual **estritamente entre dois dígitos**:
   - Válidos: `10`, `1000000`, `1_000_000`, `10_00_00_00`
@@ -224,4 +224,18 @@ format_spec   ::= ( fill? ( "<" | ">" | "^" ) )? "+"? "0"? width? ( "." precisio
 | `E0107` | Sema | Erro | Tentativa de modificação, atribuição ou incremento/decremento em símbolo constante imutável ou elemento de tupla. |
 | `E0108` | Sema | Erro | Índice constante fora dos limites, índice de tupla não-constante, tamanho de array `<= 0` ou repetição de array por fator `<= 0`. |
 | `E0109` | Sema | Erro | Uso de `break` ou `continue` fora de um laço de repetição ou referenciando um rótulo de laço inexistente/inativo. |
+| `E0110` | Sema | Erro | Função `fun` sem `return` em todos os caminhos ou incompatibilidade de retorno/argumentos. |
+| `E0111` | Sema | Erro | `return` fora de `fun`/`act` ou retorno com valor dentro de `act`. |
+| `E0112` | Sema | Erro | Parâmetro duplicado ou argumento nomeado repetido. |
+| `E0113` | Sema | Erro | Uso ilegal de `void` como tipo de valor/variável/retorno de `fun`. |
+| `E0114` | Sema | Erro | Parâmetro nomeado desconhecido ou excesso de argumentos na chamada. |
+| `E0115` | Sema | Erro | Argumento para `ref` ou `out` não é um lvalue mutável. |
+| `E0116` | Sema | Erro | Incompatibilidade no modo de passagem (`ref`/`out`/valor). |
+| `E0117` | Sema | Erro | Parâmetro `out` não atribuído em todos os caminhos de execução. |
+| `E0118` | Sema | Erro | Captura ilegal de parâmetro `ref` ou `out` em closure interna. |
+| `E0119` | Sema | Erro | Tipo de estrutura indefinido ou ciclo inválido em `struct`/`record` por valor. |
+| `E0120` | Sema | Erro | Campo inexistente em estrutura ou inicializador `new`. |
+| `E0121` | Sema | Erro | Campo duplicado ou incompatível em inicializador `new`. |
+| `E0122` | Sema | Erro | Instanciação de `class`/`struct`/`record` sem a palavra-chave obrigatória `new`. |
+| `E0123` | Sema | Erro | Ponto de entrada explícito (`--entry` / `sigma.toml`) não encontrado, com assinatura incompatível ou em arquivo com instruções soltas no topo. |
 | `W0001` | Linter | Aviso | Variável declarada e nunca utilizada (suprimido se o nome iniciar com `_`). |

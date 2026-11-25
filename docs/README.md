@@ -7,11 +7,14 @@ Bem-vindo à documentação oficial da **Sigma**, uma linguagem de programação
 1. **Especificação da Linguagem (`spec/`)**
    - [Gramática, Sistema de Tipos, Precedência, IR e Diagnósticos](./spec/grammar-and-types.md)
 2. **Guia de Aprendizado (`guide/`)**
+   - [00. Instalação e Primeiros Passos](./guide/00-getting-started.md)
    - [01. Variáveis, Tipos Primitivos, Ponto Flutuante Exato (`decimal`), Strings Formatadas (`${expr:spec}`) e Entrada/Saída (`input`, `prompt`, `print`, `println`)](./guide/01-variables-and-types.md)
    - [02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais, Atribuições Compostas e Incremento/Decremento](./guide/02-operators-and-expressions.md)
    - [03. Estruturas Condicionais (`if`/`else`), Laços (`while`, `for`, `foreach`), Rótulos (`break`/`continue`) e Blocos (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
    - [04. Testes Nativos (`assert`, `assert_error`), Test Runner (`sigma test`) e Gerenciador de Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)
    - [05. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos (`T[N]` / `T[]`), Spread (`..`) e Semântica de Referência](./guide/05-tuples-and-arrays.md)
    - [06. Funções (`fun`), Procedimentos (`act`), Funções Anônimas (`=>`), Closures, `ref`/`out` e Chamadas Parciais](./guide/06-functions-and-actions.md)
+   - [07. Estruturas Definidas pelo Usuário (`class`, `struct`, `record`), `new` e Atribuição Múltipla](./guide/07-user-defined-types.md)
+   - [08. Ponto de Entrada `main` Automático e Scripts no `sigma.toml`](./guide/08-entry-points-and-scripts.md)
 3. **Ferramentas e CLI Unificada (`tools/`)**
    - [Referência da CLI `sigma` (Interpretador, Compilador Nativo, Linter, Debugger e Pacotes)](./tools/cli-reference.md)

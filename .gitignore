@@ -9,6 +9,8 @@ node_modules/
 dist/
 out/
 *.vsix
+web/.vitepress/cache/
+web/.vitepress/dist/
 
 # OS / Editor
 .DS_Store
