@@ -59,6 +59,7 @@
 13. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
 14. [ ] **Biblioteca de ciência de dados (C/C++), com computação adiantada de métricas e abertura de arquivos `csv` (inclusive com `import` e URL: `import "data.csv" as df` e `import "https://github.com/user/project/data.csv" as df`).**
 15. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (C/C++, Multi-etapas, estilo NumPy).**
+16. [ ] **Gerenciador de Pacotes Completo & Bibliotecas Empacotadas:** cache global na pasta do usuário com referências no projeto (estilo `node_modules`), suporte a *mirrors*/registros (estilo npm/pip/Maven) ou URL direta de repositório/projeto, opção de criar projeto `lib` (`sigma pkg init`), controle de versões (SemVer/lockfile) e geração de pacotes binários/compilados compactos (`.dll`/`.so`/`.dylib` e pacotes de biblioteca estilo `.jar`/`.javac`).
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
