@@ -19,6 +19,12 @@ type dep_spec =
       url : string;
       version : string option;
     }
+  | DepGit of {
+      git : string;
+      tag : string option;
+      branch : string option;
+      rev : string option;
+    }
 
 type t = {
   name : string;
@@ -32,6 +38,7 @@ type t = {
   scripts : (string * string) list;
   native : native_config;
   dependencies : (string * dep_spec) list;
+  mirrors : (string * string * int) list;
 }
 
 val default :
@@ -45,6 +52,7 @@ val default :
   ?scripts:(string * string) list ->
   ?native:native_config ->
   ?dependencies:(string * dep_spec) list ->
+  ?mirrors:(string * string * int) list ->
   name:string ->
   unit ->
   t

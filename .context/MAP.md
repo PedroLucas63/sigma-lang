@@ -70,4 +70,6 @@
 - `E0136`: Erro ao localizar, extrair ou carregar pacote `.sgmpkg`.
 - `E0137`: Expressão SemVer inválida ou `sigma.lock` ausente/desatualizado no modo `--frozen`.
 - `E0138`: Dependência não encontrada no store/origem ou conflito de versão SemVer.
+- `E0139`: Falha ao clonar repositório Git direto, `tag`/`branch`/`rev` inválida ou `sigma.toml` ausente.
+- `E0140`: Erro de configuração/consulta de mirror ou pacote não encontrado nos mirrors ativos.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

@@ -17,6 +17,12 @@ type dep_spec =
       url : string;
       version : string option;
     }
+  | DepGit of {
+      git : string;
+      tag : string option;
+      branch : string option;
+      rev : string option;
+    }
 
 type t = {
   name : string;
@@ -30,27 +36,10 @@ type t = {
   scripts : (string * string) list;
   native : native_config;
   dependencies : (string * dep_spec) list;
+  mirrors : (string * string * int) list;
 }
 
 let default_native = { sources = []; libs = []; cflags = []; cxxflags = []; ldflags = [] }
-
-let default_scripts_app =
-  [
-    ("start", "sigma run");
-    ("build", "sigma build");
-    ("test", "sigma test");
-    ("test-parity", "sigma test --parity");
-    ("lint", "sigma lint");
-  ]
-
-let default_scripts_lib =
-  [
-    ("build", "sigma build --lib");
-    ("pack", "sigma pkg pack");
-    ("test", "sigma test");
-    ("test-parity", "sigma test --parity");
-    ("lint", "sigma lint");
-  ]
 
 let default
     ?(version = "0.1.0")
@@ -63,6 +52,7 @@ let default
     ?scripts
     ?(native = default_native)
     ?(dependencies = [])
+    ?(mirrors = [])
     ~name
     ()
   =
@@ -74,9 +64,9 @@ let default
   let scripts =
     match scripts with
     | Some s -> s
-    | None -> if kind = KindLib then default_scripts_lib else default_scripts_app
+    | None -> if kind = KindLib then Pkg_scripts.default_scripts_lib else Pkg_scripts.default_scripts_app
   in
-  { name; version; kind; description; authors; src_dir; entry; test_dir; scripts; native; dependencies }
+  { name; version; kind; description; authors; src_dir; entry; test_dir; scripts; native; dependencies; mirrors }
 
 open Pkg_toml
 
@@ -109,13 +99,28 @@ let to_toml (m : t) : string =
             | DepPath p -> Printf.sprintf "%s = { path = %s }" k (toml_quote p)
             | DepUrl { url; version = None } -> Printf.sprintf "%s = { url = %s }" k (toml_quote url)
             | DepUrl { url; version = Some v } ->
-              Printf.sprintf "%s = { url = %s, version = %s }" k (toml_quote url) (toml_quote v))
+              Printf.sprintf "%s = { url = %s, version = %s }" k (toml_quote url) (toml_quote v)
+            | DepGit { git; tag; branch; rev } ->
+              let parts =
+                [ Printf.sprintf "git = %s" (toml_quote git) ]
+                @ (match tag with Some t -> [ Printf.sprintf "tag = %s" (toml_quote t) ] | None -> [])
+                @ (match branch with Some b -> [ Printf.sprintf "branch = %s" (toml_quote b) ] | None -> [])
+                @ (match rev with Some r -> [ Printf.sprintf "rev = %s" (toml_quote r) ] | None -> [])
+              in
+              Printf.sprintf "%s = { %s }" k (String.concat ", " parts))
           m.dependencies
       in
       "\n[dependencies]\n" ^ String.concat "\n" lines ^ "\n"
   in
+  let mirrors_sec =
+    m.mirrors
+    |> List.map (fun (n, u, p) ->
+           Printf.sprintf "\n[[mirrors]]\nname = %s\nurl = %s\npriority = %d\n"
+             (toml_quote n) (toml_quote u) p)
+    |> String.concat ""
+  in
   Printf.sprintf
-    "[package]\nname = %s\nversion = %s\nkind = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n%s%s"
+    "[package]\nname = %s\nversion = %s\nkind = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n%s%s%s"
     (toml_quote m.name)
     (toml_quote m.version)
     (toml_quote kind_str)
@@ -127,6 +132,7 @@ let to_toml (m : t) : string =
     scripts_lines
     native_sec
     deps_sec
+    mirrors_sec
 
 let parse_toml (content : string) : (t, string) result =
   let lines = String.split_on_char '\n' content in
@@ -143,6 +149,12 @@ let parse_toml (content : string) : (t, string) result =
   let nat_sources = ref [] and nat_libs = ref [] in
   let nat_cflags = ref [] and nat_cxxflags = ref [] and nat_ldflags = ref [] in
   let deps_rev = ref [] in
+  let mirrors_rev = ref [] in
+  let m_name = ref "" and m_url = ref "" and m_prio = ref 10 and in_mirror = ref false in
+  let flush_mirror () =
+    if !in_mirror && !m_name <> "" && !m_url <> "" then
+      mirrors_rev := (!m_name, !m_url, !m_prio) :: !mirrors_rev
+  in
   let err = ref None in
   List.iteri
     (fun idx raw_line ->
@@ -150,9 +162,16 @@ let parse_toml (content : string) : (t, string) result =
         let line = strip_comment raw_line in
         if line <> "" then begin
           let len = String.length line in
-          if line.[0] = '[' && line.[len - 1] = ']' then
+          if line = "[[mirrors]]" then begin
+            flush_mirror ();
+            in_mirror := true;
+            m_name := ""; m_url := ""; m_prio := 10;
+            section := "mirrors"
+          end else if line.[0] = '[' && line.[len - 1] = ']' then begin
+            flush_mirror ();
+            in_mirror := false;
             section := String.trim (String.sub line 1 (len - 2))
-          else
+          end else
             match String.index_opt line '=' with
             | None ->
               err := Some (Printf.sprintf "sigma.toml line %d: expected 'key = value'" (idx + 1))
@@ -191,18 +210,28 @@ let parse_toml (content : string) : (t, string) result =
                                     unquote (String.sub part (i + 1) (String.length part - i - 1)))
                             | None -> None)
                    in
-                   (match List.assoc_opt "path" kvs, List.assoc_opt "url" kvs with
-                    | Some p, _ -> deps_rev := (k, DepPath p) :: !deps_rev
-                    | None, Some u ->
+                   (match List.assoc_opt "path" kvs, List.assoc_opt "url" kvs, List.assoc_opt "git" kvs with
+                    | Some p, _, _ -> deps_rev := (k, DepPath p) :: !deps_rev
+                    | None, Some u, _ ->
                       deps_rev := (k, DepUrl { url = u; version = List.assoc_opt "version" kvs }) :: !deps_rev
-                    | None, None ->
+                    | None, None, Some g ->
+                      deps_rev :=
+                        (k, DepGit { git = g; tag = List.assoc_opt "tag" kvs;
+                                     branch = List.assoc_opt "branch" kvs; rev = List.assoc_opt "rev" kvs })
+                        :: !deps_rev
+                    | None, None, None ->
                       err := Some (Printf.sprintf "sigma.toml line %d: invalid dependency table for '%s'" (idx + 1) k))
                  else
                    deps_rev := (k, DepSemver (unquote raw_val)) :: !deps_rev
+               | "mirrors", "name" -> m_name := unquote raw_val
+               | "mirrors", "url" -> m_url := unquote raw_val
+               | "mirrors", "priority" ->
+                 (match int_of_string_opt (unquote raw_val) with Some p -> m_prio := p | None -> ())
                | _ -> ())
         end
       end)
     lines;
+  flush_mirror ();
   match !err with
   | Some msg -> Error msg
   | None ->
@@ -226,6 +255,7 @@ let parse_toml (content : string) : (t, string) result =
             ldflags = !nat_ldflags;
           };
         dependencies = List.rev !deps_rev;
+        mirrors = List.rev !mirrors_rev;
       }
 
 let load ?(path = "sigma.toml") () : (t, string) result =
@@ -240,7 +270,7 @@ let load ?(path = "sigma.toml") () : (t, string) result =
       parse_toml content
     with exn -> Error (Printexc.to_string exn)
 
-type script_target =
+type script_target = Pkg_scripts.script_target =
   | ScriptCmd of string
   | ScriptEntry of {
       file : string;
@@ -251,26 +281,7 @@ let find_script (script_name : string) (m : t) : string option =
   List.assoc_opt script_name m.scripts
 
 let resolve_script (script_name : string) (m : t) : script_target option =
-  match find_script script_name m with
-  | None -> None
-  | Some raw ->
-    let trimmed = String.trim raw in
-    let has_space = String.contains trimmed ' ' || String.contains trimmed '\t' in
-    if not has_space && String.starts_with ~prefix:":" trimmed && String.length trimmed > 1 then
-      let fn_name = String.sub trimmed 1 (String.length trimmed - 1) in
-      Some (ScriptEntry { file = m.entry; fn_name })
-    else if not has_space then
-      (match String.rindex_opt trimmed ':' with
-       | Some idx when idx > 0 && idx + 1 < String.length trimmed ->
-         let file = String.sub trimmed 0 idx in
-         let fn_name = String.sub trimmed (idx + 1) (String.length trimmed - idx - 1) in
-         if Filename.check_suffix file ".sgm" then
-           Some (ScriptEntry { file; fn_name })
-         else
-           Some (ScriptCmd raw)
-       | _ -> Some (ScriptCmd raw))
-    else
-      Some (ScriptCmd raw)
+  Option.map (Pkg_scripts.resolve_script_raw ~entry:m.entry) (find_script script_name m)
 
 let scaffold_project ?(root_dir = ".") (m : t) : (string list, string) result =
   Pkg_scaffold.scaffold ~root_dir ~name:m.name ~version:m.version

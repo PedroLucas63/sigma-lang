@@ -31,6 +31,7 @@ let usage () =
   prerr_endline "  sigma pkg install [--frozen]              Install dependencies from sigma.toml/sigma.lock";
   prerr_endline "  sigma pkg update [name]                   Update dependencies within SemVer ranges";
   prerr_endline "  sigma pkg list                            List locked dependencies";
+  prerr_endline "  sigma pkg mirror add|remove|list          Manage package registry mirrors";
   prerr_endline "  sigma pkg run <script>                    Execute a script from [scripts] in sigma.toml";
   exit 1
 
@@ -190,6 +191,23 @@ let run_pkg_list () =
       (fun (e : Pkg_lock.lock_entry) ->
         Printf.printf "%s@%s (%s)\n" e.name e.version e.source)
       lock
+
+let run_pkg_mirror_add ~name ~url ~priority =
+  match Pkg_mirror.add_global_mirror ~name ~url ~priority with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok () -> Printf.printf "Added mirror '%s' (%s, priority=%d)\n" name url priority
+
+let run_pkg_mirror_remove name =
+  match Pkg_mirror.remove_global_mirror name with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok () -> Printf.printf "Removed mirror '%s'\n" name
+
+let run_pkg_mirror_list () =
+  match Pkg_mirror.load_global_mirrors () with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok [] -> print_endline "No mirrors configured."
+  | Ok ms ->
+    List.iter (fun (m : Pkg_mirror.mirror_entry) -> Printf.printf "[%d] %s -> %s\n" m.priority m.name m.url) ms
 
 let run_test_command rest_args =
   let mode = ref Driver.ModeVm in

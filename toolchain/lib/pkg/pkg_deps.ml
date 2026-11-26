@@ -12,8 +12,12 @@ let store_dir () : string =
     Filename.concat (Filename.concat home ".sigma") "store"
 
 let copy_dir_contents src dst =
+  (if Sys.file_exists dst then ignore (Sys.command (Printf.sprintf "rm -rf %s" (Filename.quote dst))));
   mkdir_p dst;
-  let cmd = Printf.sprintf "cp -R %s/. %s/ 2>&1" (Filename.quote src) (Filename.quote dst) in
+  let cmd =
+    Printf.sprintf "tar --exclude=.git -C %s -cf - . | tar -C %s -xf - 2>&1"
+      (Filename.quote src) (Filename.quote dst)
+  in
   if Sys.command cmd = 0 then Ok ()
   else Error (Printf.sprintf "failed to copy '%s' to '%s'" src dst)
 
@@ -52,7 +56,38 @@ let available_store_versions (name : string) : (Pkg_semver.version * string) lis
            | Ok v -> Some (v, Filename.concat pkg_dir vstr)
            | Error _ -> None)
 
-let resolve_single_dep ~root_dir ~(locked : Pkg_lock.lock_entry option) (name : string) (spec : Manifest.dep_spec)
+let fetch_url_to_file (url : string) (dst : string) : bool =
+  if String.starts_with ~prefix:"file://" url then
+    let local_p = String.sub url 7 (String.length url - 7) in
+    if not (Sys.file_exists local_p) then false
+    else Sys.command (Printf.sprintf "cp %s %s 2>/dev/null" (Filename.quote local_p) (Filename.quote dst)) = 0
+  else
+    Sys.command (Printf.sprintf "curl -fsSL --max-time 20 %s -o %s 2>/dev/null" (Filename.quote url) (Filename.quote dst)) = 0
+
+let install_sgmpkg_url ~root_dir ~name ~ver_opt ~url =
+  let tmp = Filename.temp_file "sigma_dep_" ".sgmpkg" in
+  if not (fetch_url_to_file url tmp) then begin
+    (if Sys.file_exists tmp then try Sys.remove tmp with _ -> ());
+    Error (Printf.sprintf "E0138: failed to download package '%s' from '%s'" name url)
+  end else
+    let res =
+      match Pkg_pack.unpack_to_cache tmp with
+      | Error e -> Error e
+      | Ok (cdir, pm) ->
+        let ver = Option.value ver_opt ~default:pm.version in
+        let dest = Filename.concat (Filename.concat (store_dir ()) name) ver in
+        (match copy_dir_contents cdir dest with
+         | Error e -> Error e
+         | Ok () ->
+           (match link_to_modules ~root_dir ~name ~store_pkg_dir:dest with
+            | Error e -> Error e
+            | Ok () ->
+              Ok (ver, pm.entry)))
+    in
+    (if Sys.file_exists tmp then try Sys.remove tmp with _ -> ());
+    res
+
+let resolve_single_dep ~root_dir ~mirrors ~(locked : Pkg_lock.lock_entry option) (name : string) (spec : Manifest.dep_spec)
     : (Pkg_lock.lock_entry, string) result =
   match spec with
   | Manifest.DepPath p ->
@@ -84,28 +119,25 @@ let resolve_single_dep ~root_dir ~(locked : Pkg_lock.lock_entry option) (name : 
              | Ok () ->
                Ok { Pkg_lock.name; version = pm.version; source = "path:" ^ p; checksum = "local"; entry = pm.entry })))
   | Manifest.DepUrl { url; version } ->
-    let tmp = Filename.temp_file "sigma_dep_" ".sgmpkg" in
-    let cmd = Printf.sprintf "curl -fsSL --max-time 20 %s -o %s 2>/dev/null" (Filename.quote url) (Filename.quote tmp) in
-    if Sys.command cmd <> 0 then begin
-      (if Sys.file_exists tmp then try Sys.remove tmp with _ -> ());
-      Error (Printf.sprintf "E0138: failed to download package '%s' from '%s'" name url)
-    end else
-      let res =
-        match Pkg_pack.unpack_to_cache tmp with
-        | Error e -> Error e
-        | Ok (cdir, pm) ->
-          let ver = Option.value version ~default:pm.version in
-          let dest = Filename.concat (Filename.concat (store_dir ()) name) ver in
-          (match copy_dir_contents cdir dest with
+    (match install_sgmpkg_url ~root_dir ~name ~ver_opt:version ~url with
+     | Error e -> Error e
+     | Ok (ver, entry) ->
+       Ok { Pkg_lock.name; version = ver; source = "url:" ^ url; checksum = Digest.to_hex (Digest.string url); entry })
+  | Manifest.DepGit { git; tag; branch; rev } ->
+    (match Pkg_git.clone_to_cache ~url:git ~tag ~branch ~rev with
+     | Error e -> Error e
+     | Ok repo_dir ->
+       (match Manifest.load ~path:(Filename.concat repo_dir "sigma.toml") () with
+        | Error e -> Error ("E0139: " ^ e)
+        | Ok pm ->
+          let dest = Filename.concat (Filename.concat (store_dir ()) name) pm.version in
+          (match copy_dir_contents repo_dir dest with
            | Error e -> Error e
            | Ok () ->
              (match link_to_modules ~root_dir ~name ~store_pkg_dir:dest with
               | Error e -> Error e
               | Ok () ->
-                Ok { Pkg_lock.name; version = ver; source = "url:" ^ url; checksum = Digest.to_hex (Digest.string url); entry = pm.entry }))
-      in
-      (if Sys.file_exists tmp then try Sys.remove tmp with _ -> ());
-      res
+                Ok { Pkg_lock.name; version = pm.version; source = "git:" ^ git; checksum = "git"; entry = pm.entry }))))
   | Manifest.DepSemver range_str ->
     (match Pkg_semver.parse_range range_str with
      | Error e -> Error e
@@ -130,8 +162,6 @@ let resolve_single_dep ~root_dir ~(locked : Pkg_lock.lock_entry option) (name : 
             | Some bv -> List.find_opt (fun (v, _) -> Pkg_semver.compare v bv = 0) avail)
        in
        match chosen with
-       | None ->
-         Error (Printf.sprintf "E0138: no version of '%s' matching '%s' found in store" name range_str)
        | Some (v, dir) ->
          let pm_entry =
            match Manifest.load ~path:(Filename.concat dir "sigma.toml") () with
@@ -142,10 +172,26 @@ let resolve_single_dep ~root_dir ~(locked : Pkg_lock.lock_entry option) (name : 
           | Error e -> Error e
           | Ok () ->
             let vstr = Pkg_semver.to_string v in
-            Ok { Pkg_lock.name; version = vstr; source = "store"; checksum = "store:" ^ vstr; entry = pm_entry }))
+            Ok { Pkg_lock.name; version = vstr; source = "store"; checksum = "store:" ^ vstr; entry = pm_entry })
+       | None ->
+         if mirrors = [] then
+           Error (Printf.sprintf "E0138: no version of '%s' matching '%s' found in store" name range_str)
+         else
+           (match Pkg_mirror.resolve_from_mirrors ~mirrors ~name ~range with
+            | Error e -> Error e
+            | Ok iv ->
+              (match install_sgmpkg_url ~root_dir ~name ~ver_opt:(Some iv.version) ~url:iv.url with
+               | Error e -> Error e
+               | Ok (ver, entry) ->
+                 Ok { Pkg_lock.name; version = ver; source = "mirror:" ^ iv.url; checksum = iv.checksum; entry })))
 
 let install_all ?(root_dir = ".") ~frozen (m : Manifest.t) : (Pkg_lock.t, string) result =
   let lock_path = Filename.concat root_dir "sigma.lock" in
+  let global_mirrors = match Pkg_mirror.load_global_mirrors () with Ok ms -> ms | Error _ -> [] in
+  let proj_mirrors =
+    List.map (fun (name, url, priority) -> { Pkg_mirror.name; url; priority }) m.mirrors
+  in
+  let mirrors = proj_mirrors @ global_mirrors in
   match Pkg_lock.load ~path:lock_path () with
   | Error e -> Error e
   | Ok existing_lock ->
@@ -166,7 +212,7 @@ let install_all ?(root_dir = ".") ~frozen (m : Manifest.t) : (Pkg_lock.t, string
              | Ok () -> Ok final_lock)
         | (name, spec) :: tl ->
           let locked = List.find_opt (fun (e : Pkg_lock.lock_entry) -> e.name = name) existing_lock in
-          (match resolve_single_dep ~root_dir ~locked name spec with
+          (match resolve_single_dep ~root_dir ~mirrors ~locked name spec with
            | Error e -> Error e
            | Ok entry -> loop (entry :: acc) tl)
       in
@@ -178,7 +224,12 @@ let add_dependency ?(root_dir = ".") ~target ~version_opt () : (string * string,
   | Error e -> Error e
   | Ok m ->
     let name, spec =
-      if String.starts_with ~prefix:"http://" target || String.starts_with ~prefix:"https://" target then
+      if Pkg_git.is_git_url target then
+        let url, tag_opt = Pkg_git.parse_git_spec target in
+        let b = Filename.basename url in
+        let n = if Filename.check_suffix b ".git" then Filename.chop_suffix b ".git" else b in
+        (n, Manifest.DepGit { git = url; tag = tag_opt; branch = None; rev = None })
+      else if String.starts_with ~prefix:"http://" target || String.starts_with ~prefix:"https://" target then
         let b = Filename.basename target in
         let n = match String.index_opt b '-' with Some i -> String.sub b 0 i | None -> Filename.remove_extension b in
         (n, Manifest.DepUrl { url = target; version = version_opt })

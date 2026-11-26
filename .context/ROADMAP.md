@@ -18,7 +18,7 @@
 9. [x] **Importação a partir de URL:** suporte a imports remotos (`http://`/`https://`, normalização GitHub `blob`→`raw`, cache local em `~/.cache/sigma/url_modules/`, resolução relativa encadeada, `E0134`/`E0129`, `tests/20_url_import_test.sgm`).
 10. [x] **Projetos de Biblioteca (`lib`) & Empacotamento Binário:** `sigma pkg init --lib [--native]`, `sigma build --lib` (`.so`/`.dylib`/`.dll` + `.h` + `.sgm`), `sigma pkg pack` (`.sgmpkg`), e `import` direto de diretórios `lib`/`.sgmpkg` (`E0135`..`E0136`, `Test_lib_pkg`).
 11. [x] **Gerenciador de Pacotes & Controle de Versões:** cache/store global (`~/.sigma/store/`), referências locais em `.sigma_modules/`, `sigma.lock`, motor SemVer (`Pkg_semver`) e comandos `sigma pkg add|remove|install|update|list` (`E0137`..`E0138`, `Test_pkg_manager`).
-12. [ ] **Mirrors & Repositórios Diretos:** suporte a *mirrors*/registros agrupadores (estilo npm/pip/Maven) e instalação direta via link de repositório/projeto.
+12. [x] **Mirrors & Repositórios Diretos:** suporte a *mirrors*/registros estáticos (`~/.sigma/config.toml` + `[[mirrors]]` no `sigma.toml`, `index.toml` por pacote) e instalação direta de repositórios Git (`Pkg_git`, `tag`/`branch`/`rev`, `E0139`..`E0140`, `Test_mirrors_git`).
 
 ---
 

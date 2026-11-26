@@ -143,6 +143,9 @@ let () =
   | [ "pkg"; "update" ] -> run_pkg_update None
   | [ "pkg"; "update"; name ] -> run_pkg_update (Some name)
   | [ "pkg"; "list" ] -> run_pkg_list ()
+  | [ "pkg"; "mirror"; "add"; name; url ] -> run_pkg_mirror_add ~name ~url ~priority:10
+  | [ "pkg"; "mirror"; "remove"; name ] -> run_pkg_mirror_remove name
+  | [ "pkg"; "mirror"; "list" ] -> run_pkg_mirror_list ()
   | "pkg" :: "run" :: script_name :: extra ->
     let extra_args = match extra with "--" :: tl -> tl | _ -> extra in
     let m, _ = resolve_entry_or_exit () in
