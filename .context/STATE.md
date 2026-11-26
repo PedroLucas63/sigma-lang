@@ -30,7 +30,7 @@
 - [x] Funções e procedimentos anônimos `[fun|act]({<param>})[:<return-type>] => <command>` com inferência opcional do tipo de retorno em `fun`, corpo em expressão direta, comando inline sem chaves ou bloco `{ ... }`, closures léxicas, `ref`/`out`, currying, argumentos nomeados e IIFE (`tests/12_anonymous_functions_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 538 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (19 suítes).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 541 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (20 suítes).
 - [x] Ponto de entrada automático `main` (`act main()`, `act main(args: string[])`, `fun main(): int`, `fun main(args: string[]): int`) quando o arquivo não possui instruções executáveis no topo, com suporte a `args[0]` + argumentos CLI e propagação de exit code (`tests/14_auto_main_test.sgm`).
 - [x] Scripts com funções de entrada no `sigma.toml` (`:fn`, `arquivo.sgm:fn`) e flag `--entry <fn>` em `sigma run`/`build`/`emit-c` com diagnóstico `E0123`.
 - [x] Estruturas definidas pelo usuário (`class`, `struct`, `record` — Fase 1) com instanciação obrigatória via `new` (`new T { ... }` / `new R(...)`, `E0122`), atribuição múltipla com parênteses `(a, b) = rhs;` (swap seguro e desempacotamento de tuplas, estruturas e arrays com *rest slice* no último alvo `var (a, b) := [1, 2, 3, 4]`), acesso `.campo`, operadores compostos/`++`/`--` e diagnósticos `E0119`..`E0122` (`tests/13_user_defined_types_test.sgm`).
@@ -44,8 +44,8 @@
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
 ## Próximos Passos Planejados (Resumo — ver [`.context/ROADMAP.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/ROADMAP.md))
-- **1–8. Concluídos** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++ `extern`).
-- **9–12 (Fase A — Dependências & Distribuição):** `import` por URL, projetos `lib`/empacotamento binário, gerenciador de pacotes/SemVer e *mirrors*/repositórios diretos.
+- **1–9. Concluídos** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL).
+- **10–12 (Fase A — Dependências & Distribuição):** projetos `lib`/empacotamento binário, gerenciador de pacotes/SemVer e *mirrors*/repositórios diretos.
 - **13–15 (Fase B — Generics & `io`):** templates/generics (`<T>`, `<?>`, `where`, `<Ts...>`), intrínsecos nativos (`__PRINT_*`, `__READ_*`) e separação da stdlib `io`.
 - **16–20 (Fase C — OOP Avançado):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
 - **21–24 (Fase D — Coleções, `math` & Runtime):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.

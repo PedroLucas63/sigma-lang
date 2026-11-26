@@ -51,12 +51,34 @@ let is_exported_vis = function
   | Ast.VisPublic | Ast.VisInternal -> true
   | Ast.VisProtected | Ast.VisPrivate -> false
 
+let load_source_for_target ~span ~(is_path : bool) (target : string)
+    : (string * Source.t, Diagnostic.t list) result =
+  if Sema_remote_import.is_url target || Sema_remote_import.is_url span.Span.file then
+    let eff_url =
+      if Sema_remote_import.is_url target then target
+      else
+        let rel = if is_path then target else target ^ ".sgm" in
+        Sema_remote_import.resolve_relative_url span.Span.file rel
+    in
+    match Sema_remote_import.fetch_url ~span eff_url with
+    | Ok (canon_url, src) -> Ok (canon_url, src)
+    | Error d -> Error [ d ]
+  else
+    match resolve_module_path ~from_file:span.Span.file ~is_path target with
+    | None ->
+      Error [ Diagnostic.error ~code:"E0129" ~span (Printf.sprintf "module '%s' not found" target) ]
+    | Some canon_path ->
+      (match Source.load canon_path with
+       | Error msg ->
+         Error [ Diagnostic.error ~code:"E0129" ~span
+                   (Printf.sprintf "failed to load module '%s': %s" target msg) ]
+       | Ok src -> Ok (canon_path, src))
+
 let load_module hooks ~span ~(is_path : bool) (target : string)
     : (loaded_module, Diagnostic.t list) result =
-  match resolve_module_path ~from_file:span.Span.file ~is_path target with
-  | None ->
-    Error [ Diagnostic.error ~code:"E0129" ~span (Printf.sprintf "module '%s' not found" target) ]
-  | Some canon_path ->
+  match load_source_for_target ~span ~is_path target with
+  | Error es -> Error es
+  | Ok (canon_path, source) ->
     if List.mem canon_path !import_stack then
       Error [ Diagnostic.error ~code:"E0129" ~span
                 (Printf.sprintf "circular import detected involving '%s'" target) ]
@@ -64,10 +86,7 @@ let load_module hooks ~span ~(is_path : bool) (target : string)
       match Hashtbl.find_opt module_cache canon_path with
       | Some m -> Ok m
       | None ->
-        match Source.load canon_path with
-         | Error msg ->
-           Error [ Diagnostic.error ~code:"E0129" ~span (Printf.sprintf "failed to load module '%s': %s" target msg) ]
-         | Ok source ->
+        begin
           (match Lexer.tokenize source with
            | Error es -> Error es
            | Ok tokens ->
@@ -156,6 +175,7 @@ let load_module hooks ~span ~(is_path : bool) (target : string)
                   Hashtbl.replace module_cache canon_path m;
                   module_load_order := !module_load_order @ [ m ];
                   Ok m))
+        end
 
 let check_import_stmt hooks (env : env) (scope_vars : string list ref) (spec : Ast.import_spec)
     : (Typed_ast.stmt, Diagnostic.t list) result =

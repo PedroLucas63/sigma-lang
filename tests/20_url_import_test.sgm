@@ -1,0 +1,5 @@
+# Suite 20: Importacao a partir de URL (diagnosticos de esquema e rede)
+
+assert_error("E0134", "import \"ftp://example.com/lib.sgm\";", "esquema ftp:// deve falhar com E0134");
+assert_error("E0134", "import \"file:///tmp/lib.sgm\";", "esquema file:// deve falhar com E0134");
+assert_error("E0129", "import \"http://127.0.0.1:1/nao_existe.sgm\";", "URL inacessivel deve falhar com E0129");

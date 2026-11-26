@@ -65,4 +65,5 @@
 - `E0131`: Linguagem ou ABI `extern` desconhecida ou não suportada.
 - `E0132`: Tipo ou modo de parâmetro (`ref`/`out`) incompatível com a fronteira FFI `extern`.
 - `E0133`: Fonte/biblioteca nativa não encontrada, erro de compilação C/C++ ou símbolo ausente no binário.
+- `E0134`: Esquema de URL inválido ou não suportado em `import` remoto (apenas `http://` e `https://`).
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

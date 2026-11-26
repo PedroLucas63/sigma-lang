@@ -17,4 +17,5 @@ let () =
   Test_ops_matrix.test_linter_unused_variable ();
   Test_ops_matrix.test_debugger_trace ();
   Test_errors.test_syntax_and_semantic_errors ();
+  Test_url_import.test_url_import_parity ();
   print_endline "All Sigma variable & arithmetic tests passed!"
