@@ -31,6 +31,7 @@ type kind =
   | KW_IMPORT
   | KW_FROM
   | KW_AS
+  | KW_EXTERN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT

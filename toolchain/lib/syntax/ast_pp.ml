@@ -291,6 +291,7 @@ and pp_stmt fmt (s : stmt) =
       ma_targets pp_expr ma_rhs
   | StmtReturn None -> Format.fprintf fmt "return;" | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
   | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e | StmtImport _ -> Format.fprintf fmt "import ...;"
+  | StmtExtern { ext_lang; _ } -> Format.fprintf fmt "extern %S ...;" ext_lang
   | StmtVis (_, s) -> pp_stmt fmt s
 
 let pp_program fmt prog =

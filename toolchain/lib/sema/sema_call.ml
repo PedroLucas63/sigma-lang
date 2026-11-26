@@ -202,7 +202,13 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                 (match hooks.check_expr env a.arg_value with
                  | Error err -> Error err
                  | Ok targ ->
-                   if Ty.equal targ.ty expected_param.pty then
+                   let arg_type_ok =
+                     Ty.equal targ.ty expected_param.pty
+                     || (match expected_param.pty, targ.ty with
+                         | Ty.DynArray e_exp, Ty.Array (e_act, _) -> Ty.equal e_exp e_act
+                         | _ -> false)
+                   in
+                   if arg_type_ok then
                      let tca =
                        {
                          Typed_ast.tca_idx = i;

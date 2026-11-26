@@ -29,6 +29,7 @@ type kind =
   | KW_IMPORT
   | KW_FROM
   | KW_AS
+  | KW_EXTERN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -131,6 +132,7 @@ let kind_to_string = function
   | KW_IMPORT -> "'import'"
   | KW_FROM -> "'from'"
   | KW_AS -> "'as'"
+  | KW_EXTERN -> "'extern'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"

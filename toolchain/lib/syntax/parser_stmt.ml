@@ -227,6 +227,9 @@ let parse_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
     bump st;
     Parser_decl.parse_fun_decl hooks st tok ~is_act:true
+  | Token.KW_EXTERN ->
+    bump st;
+    Parser_extern.parse_extern_stmt st tok
   | Token.KW_PUBLIC | Token.KW_PROTECTED | Token.KW_PRIVATE | Token.KW_INTERNAL ->
     let vis =
       match tok.kind with
@@ -258,6 +261,8 @@ let parse_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
        bump st; wrap_res (Parser_decl.parse_fun_decl hooks st nt ~is_act:false)
      | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
        bump st; wrap_res (Parser_decl.parse_fun_decl hooks st nt ~is_act:true)
+     | Token.KW_EXTERN ->
+       bump st; wrap_res (Parser_extern.parse_extern_stmt st nt)
      | _ ->
        err_at nt ~hint:"visibility modifiers at top level apply to 'class', 'struct', 'record', 'fun', 'act', 'var', or 'const'"
          (Printf.sprintf "unexpected %s after %s" (Token.kind_to_string nt.kind) (Token.kind_to_string tok.kind)))

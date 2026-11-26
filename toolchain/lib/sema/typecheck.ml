@@ -77,6 +77,7 @@ let is_toplevel_decl_only (s : Typed_ast.stmt) : bool =
   match s.desc with
   | Typed_ast.TStmtTypeDecl _
   | Typed_ast.TStmtFunDecl _
+  | Typed_ast.TStmtExtern _
   | Typed_ast.TStmtVarDecl _
   | Typed_ast.TStmtDestruct _ -> true
   | _ -> false

@@ -62,4 +62,7 @@
 - `E0128`: Uso ilegal de `this` fora de método de instância ou dentro de método `static`.
 - `E0129`: Módulo não encontrado, erro de leitura ou ciclo de importação detectado.
 - `E0130`: Símbolo importado/acessado inexistente no módulo ou inacessível por não ser `public`/`internal`.
+- `E0131`: Linguagem ou ABI `extern` desconhecida ou não suportada.
+- `E0132`: Tipo ou modo de parâmetro (`ref`/`out`) incompatível com a fronteira FFI `extern`.
+- `E0133`: Fonte/biblioteca nativa não encontrada, erro de compilação C/C++ ou símbolo ausente no binário.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

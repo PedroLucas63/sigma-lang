@@ -146,6 +146,11 @@ let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
           List.filter_map (fun (b : Typed_ast.destruct_binding) -> Option.map (fun n -> (n, b.ty)) b.name) d.bindings
         | Typed_ast.TStmtFunDecl fd ->
           [ (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)) ]
+        | Typed_ast.TStmtExtern exts ->
+          List.map
+            (fun (ext : Typed_ast.extern_decl) ->
+              (ext.te_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) ext.te_params, ext.te_ret)))
+            exts
         | Typed_ast.TStmtTypeDecl tud ->
           List.map
             (fun (fd : Typed_ast.fun_decl) ->

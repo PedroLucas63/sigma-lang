@@ -3,6 +3,7 @@ let stmt_defined_names (s : Typed_ast.stmt) : string list =
   | Typed_ast.TStmtVarDecl v -> [ v.name ]
   | Typed_ast.TStmtDestruct d -> List.filter_map (fun (b : Typed_ast.destruct_binding) -> b.name) d.bindings
   | Typed_ast.TStmtFunDecl fd -> [ fd.tf_name ]
+  | Typed_ast.TStmtExtern exts -> List.map (fun (e : Typed_ast.extern_decl) -> e.te_name) exts
   | Typed_ast.TStmtTypeDecl tud -> [ tud.tud_name ]
   | _ -> []
 
@@ -156,6 +157,9 @@ let rename_toplevel_stmt prefix top_vals top_types (s : Typed_ast.stmt) : Typed_
     | Typed_ast.TStmtFunDecl fd ->
       let fd' = rename_fun prefix top_vals top_types locals deps fd in
       Typed_ast.TStmtFunDecl { fd' with tf_name = prefix ^ fd.tf_name }
+    | Typed_ast.TStmtExtern exts ->
+      Typed_ast.TStmtExtern
+        (List.map (fun (e : Typed_ast.extern_decl) -> { e with te_name = prefix ^ e.te_name }) exts)
     | Typed_ast.TStmtTypeDecl tud ->
       let fields' = List.map (fun (f : Typed_ast.user_field_decl) ->
         { f with tuf_default = Option.map (rename_expr prefix top_vals top_types locals deps) f.tuf_default }) tud.tud_fields

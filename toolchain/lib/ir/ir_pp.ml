@@ -151,6 +151,8 @@ let pp_opcode fmt = function
       (String.concat ", " params) (String.concat ", " captures) entry
   | OP_CALL idxs ->
     Format.fprintf fmt "OP_CALL [%s]" (String.concat "; " (List.map string_of_int idxs))
+  | OP_CALL_EXTERN { ext_lang; ext_symbol; _ } ->
+    Format.fprintf fmt "OP_CALL_EXTERN %s %s" ext_lang ext_symbol
   | OP_RETURN -> Format.fprintf fmt "OP_RETURN"
   | OP_RETURN_VOID -> Format.fprintf fmt "OP_RETURN_VOID"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"

@@ -34,6 +34,7 @@
 | Palavra-chave | `KW_IMPORT` | `import` |
 | Palavra-chave | `KW_FROM` | `from` |
 | Palavra-chave | `KW_AS` | `as` |
+| Palavra-chave | `KW_EXTERN` | `extern` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -116,6 +117,8 @@ import_target ::= IDENT | STRING ;
 import_item   ::= IDENT ( "as" IDENT )? ;
 import_stmt   ::= "import" import_target ( "as" IDENT )?
                 | "from" import_target "import" import_item ( "," import_item )* ","? ;
+extern_item   ::= ( "fun" | "act" ) IDENT "(" [ param_list ] ")" [ ":" type_expr ] [ "as" STRING ] ";" ;
+extern_decl   ::= [ visibility ] "extern" STRING [ "from" STRING ] ( "{" { extern_item } "}" | extern_item ) ;
 
 visibility    ::= "public" | "protected" | "private" | "internal" ;
 

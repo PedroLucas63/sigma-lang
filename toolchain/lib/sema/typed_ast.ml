@@ -190,6 +190,17 @@ and stmt_desc =
     }
   | TStmtReturn of expr option
   | TStmtExpr of expr
+  | TStmtExtern of extern_decl list
+
+and extern_decl = {
+  te_name : string;
+  te_name_span : Span.t;
+  te_lang : string;
+  te_from : string option;
+  te_symbol : string;
+  te_params : typed_param list;
+  te_ret : Ty.t;
+}
 
 and user_field_decl = {
   tuf_name : string;

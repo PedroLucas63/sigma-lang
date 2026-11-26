@@ -32,6 +32,7 @@ let keyword_or_ident st word =
   | "import" -> Token.KW_IMPORT
   | "from" -> Token.KW_FROM
   | "as" -> Token.KW_AS
+  | "extern" -> Token.KW_EXTERN
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT

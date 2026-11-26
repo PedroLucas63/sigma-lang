@@ -177,6 +177,8 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
     st.stack <- VFun { entry; fname; pnames = Array.of_list params; bound = Array.make (List.length params) None; env } :: st.stack;
     Ok ()
   | Ir.OP_CALL idxs -> exec_call st idxs
+  | Ir.OP_CALL_EXTERN { ext_lang; ext_from; ext_symbol; ext_params; ext_ret } ->
+    Vm_ffi.exec_call_extern st ~ext_lang ~ext_from ~ext_symbol ~ext_params ~ext_ret
   | Ir.OP_RETURN ->
     (match st.stack, st.frames with
      | v :: _, fr :: rest_frames -> st.frames <- rest_frames; st.stack <- v :: fr.saved_stack; st.ip <- fr.ret_ip; Ok ()

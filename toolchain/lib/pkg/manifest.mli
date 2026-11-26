@@ -1,5 +1,13 @@
 (** Gerenciador de pacotes, projetos e manifesto [sigma.toml]. *)
 
+type native_config = {
+  sources : string list;
+  libs : string list;
+  cflags : string list;
+  cxxflags : string list;
+  ldflags : string list;
+}
+
 type t = {
   name : string;
   version : string;
@@ -9,6 +17,7 @@ type t = {
   entry : string;
   test_dir : string;
   scripts : (string * string) list;
+  native : native_config;
 }
 
 val default :

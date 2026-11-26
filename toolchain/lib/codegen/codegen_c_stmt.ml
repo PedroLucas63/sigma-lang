@@ -179,3 +179,11 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
            indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params) env_var)
     end
   | Typed_ast.TStmtExpr e -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n" indent (hooks.emit_expr e))
+  | Typed_ast.TStmtExtern exts ->
+    List.iter
+      (fun (ext : Typed_ast.extern_decl) ->
+        let wrap_name = "sgm_ext_" ^ mangle_ident ext.te_name in
+        Buffer.add_string buf
+          (Printf.sprintf "%ssgm_fn_t *%s = sgm_fn_make(%s, INT64_C(%d), NULL);\n"
+             indent (mangle_ident ext.te_name) wrap_name (List.length ext.te_params)))
+      exts

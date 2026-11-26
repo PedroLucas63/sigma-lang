@@ -97,6 +97,14 @@ let rec emit_toplevel_stmt (buf : Buffer.t) (indent : string) (s : Typed_ast.stm
     List.iter
       (fun fd -> emit_toplevel_stmt buf indent { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
       tud.tud_methods
+  | Typed_ast.TStmtExtern exts ->
+    List.iter
+      (fun (ext : Typed_ast.extern_decl) ->
+        let wrap_name = "sgm_ext_" ^ mangle_ident ext.te_name in
+        Buffer.add_string buf
+          (Printf.sprintf "%s%s = sgm_fn_make(%s, INT64_C(%d), NULL);\n"
+             indent (mangle_ident ext.te_name) wrap_name (List.length ext.te_params)))
+      exts
   | _ -> hooks.emit_stmt buf indent s
 
 let emit_c ?(test_mode = false) ?entry_name (prog : Typed_ast.program) : string =
@@ -112,6 +120,8 @@ let emit_c ?(test_mode = false) ?entry_name (prog : Typed_ast.program) : string 
   Buffer.add_string buf "__attribute__((unused)) static int sgm_test_failed = 0;\n";
   Buffer.add_string buf (Printf.sprintf "__attribute__((unused)) static bool sgm_test_mode = %s;\n\n" (if test_mode then "true" else "false"));
   let all_funs = List.concat_map collect_all_funs prog in
+  let all_exts = Codegen_c_ffi.collect_externs prog in
+  Codegen_c_ffi.emit_extern_decls buf all_exts;
   Hashtbl.clear fun_c_names;
   let fn_counter = ref 0 in
   List.iter
@@ -119,7 +129,7 @@ let emit_c ?(test_mode = false) ?entry_name (prog : Typed_ast.program) : string 
       incr fn_counter;
       Hashtbl.replace fun_c_names fd.tf_name_span (Printf.sprintf "sgm_fn_%s_%d" fd.tf_name !fn_counter))
     all_funs;
-  if all_funs <> [] then begin
+  if all_funs <> [] || all_exts <> [] then begin
     List.iter
       (fun (fd : Typed_ast.fun_decl) ->
         let c_name = Hashtbl.find fun_c_names fd.tf_name_span in
@@ -136,7 +146,7 @@ let emit_c ?(test_mode = false) ?entry_name (prog : Typed_ast.program) : string 
   Hashtbl.clear current_cells;
   Hashtbl.clear current_boxed;
   List.iter (fun name -> Hashtbl.replace current_boxed name ()) (List.concat_map collect_inner_captures prog);
-  List.iter (if all_funs <> [] then emit_toplevel_stmt buf "  " else hooks.emit_stmt buf "  ") prog;
+  List.iter (if all_funs <> [] || all_exts <> [] then emit_toplevel_stmt buf "  " else hooks.emit_stmt buf "  ") prog;
   (match Typecheck.detect_entry_point ?entry_name prog with
    | Ok None | Error _ -> Buffer.add_string buf "  return (sgm_test_failed > 0) ? 1 : 0;\n}\n"
    | Ok (Some (fn_name, ep)) ->
@@ -177,17 +187,25 @@ let write_c_file ?(test_mode = false) ?entry_name ~output_path (prog : Typed_ast
 
 let compile_executable ?(test_mode = false) ?entry_name ~output_path (prog : Typed_ast.program) : (unit, string) result =
   let c_source = emit_c ~test_mode ?entry_name prog in
-  let tmp_c = Filename.temp_file "sigma_build_" ".c" in
-  let cleanup () = if Sys.file_exists tmp_c then try Sys.remove tmp_c with _ -> () in
-  try
-    let oc = open_out_bin tmp_c in
-    output_string oc c_source;
-    close_out oc;
-    let cmd =
-      Printf.sprintf "gcc -std=c99 -O3 -Wall -Wextra -Wno-unused-variable %s -o %s -lm 2>&1"
-        (Filename.quote tmp_c) (Filename.quote output_path)
+  let exts = Codegen_c_ffi.collect_externs prog in
+  match Codegen_c_ffi.prepare_link_inputs exts with
+  | Error msg -> Error msg
+  | Ok (link_items, temp_objs, _) ->
+    let tmp_c = Filename.temp_file "sigma_build_" ".c" in
+    let cleanup () =
+      if Sys.file_exists tmp_c then (try Sys.remove tmp_c with _ -> ());
+      List.iter (fun o -> if Sys.file_exists o then try Sys.remove o with _ -> ()) temp_objs
     in
-    let code = Sys.command cmd in
-    cleanup ();
-    if code = 0 then Ok () else Error (Printf.sprintf "C backend compilation failed (exit code %d)" code)
-  with Sys_error msg -> cleanup (); Error msg
+    try
+      let oc = open_out_bin tmp_c in
+      output_string oc c_source;
+      close_out oc;
+      let extra_link = if link_items = [] then "" else " " ^ String.concat " " link_items in
+      let cmd =
+        Printf.sprintf "gcc -std=c99 -O3 -Wall -Wextra -Wno-unused-variable %s%s -o %s -lm 2>&1"
+          (Filename.quote tmp_c) extra_link (Filename.quote output_path)
+      in
+      let code = Sys.command cmd in
+      cleanup ();
+      if code = 0 then Ok () else Error (Printf.sprintf "C backend compilation failed (exit code %d)" code)
+    with Sys_error msg -> cleanup (); Error msg

@@ -1,3 +1,11 @@
+type native_config = {
+  sources : string list;
+  libs : string list;
+  cflags : string list;
+  cxxflags : string list;
+  ldflags : string list;
+}
+
 type t = {
   name : string;
   version : string;
@@ -7,7 +15,10 @@ type t = {
   entry : string;
   test_dir : string;
   scripts : (string * string) list;
+  native : native_config;
 }
+
+let default_native = { sources = []; libs = []; cflags = []; cxxflags = []; ldflags = [] }
 
 let default_scripts =
   [
@@ -29,7 +40,7 @@ let default
     ~name
     ()
   =
-  { name; version; description; authors; src_dir; entry; test_dir; scripts }
+  { name; version; description; authors; src_dir; entry; test_dir; scripts; native = default_native }
 
 let toml_quote (s : string) : string =
   let buf = Buffer.create (String.length s + 4) in
@@ -135,6 +146,8 @@ let parse_toml (content : string) : (t, string) result =
   let entry = ref "src/main.sgm" in
   let test_dir = ref "tests" in
   let scripts_rev = ref [] in
+  let nat_sources = ref [] and nat_libs = ref [] in
+  let nat_cflags = ref [] and nat_cxxflags = ref [] and nat_ldflags = ref [] in
   let err = ref None in
   List.iteri
     (fun idx raw_line ->
@@ -160,6 +173,11 @@ let parse_toml (content : string) : (t, string) result =
                | ("package" | "build"), "entry" -> entry := unquote raw_val
                | ("package" | "build"), "test_dir" -> test_dir := unquote raw_val
                | "scripts", k -> scripts_rev := (k, unquote raw_val) :: !scripts_rev
+               | "native", "sources" -> nat_sources := parse_string_array raw_val
+               | "native", "libs" -> nat_libs := parse_string_array raw_val
+               | "native", "cflags" -> nat_cflags := parse_string_array raw_val
+               | "native", "cxxflags" -> nat_cxxflags := parse_string_array raw_val
+               | "native", "ldflags" -> nat_ldflags := parse_string_array raw_val
                | _ -> ())
         end
       end)
@@ -177,6 +195,14 @@ let parse_toml (content : string) : (t, string) result =
         entry = !entry;
         test_dir = !test_dir;
         scripts = List.rev !scripts_rev;
+        native =
+          {
+            sources = !nat_sources;
+            libs = !nat_libs;
+            cflags = !nat_cflags;
+            cxxflags = !nat_cxxflags;
+            ldflags = !nat_ldflags;
+          };
       }
 
 let load ?(path = "sigma.toml") () : (t, string) result =

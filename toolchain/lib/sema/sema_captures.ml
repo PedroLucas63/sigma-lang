@@ -127,7 +127,7 @@ let rec collect_used_stmt
         | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
           collect_used_expr used o)
       tma_targets
-  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
+  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ | Typed_ast.TStmtExtern _ -> ()
 
 let compute_captures
     (env : env)

@@ -1,0 +1,7 @@
+# Modulo wrapper que reexporta funcoes nativas em C
+
+public extern "C" from "native_c_lib.c" {
+    fun c_add(a: int, b: int): int;
+    fun c_sub(a: int, b: int): int as "c_sub_impl";
+    fun c_unused_native(): int as "c_acc_get";
+}

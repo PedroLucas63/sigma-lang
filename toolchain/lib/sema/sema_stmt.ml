@@ -198,6 +198,8 @@ let check_stmt_inner hooks (env : env) (scope_vars : string list ref)
   | Ast.StmtDestruct d -> Sema_stmt_decl.check_destruct_decl hooks env scope_vars s.span d
   | Ast.StmtVarDecl v -> Sema_stmt_decl.check_var_decl hooks env scope_vars s.span v
   | Ast.StmtImport spec -> Sema_modules.check_import_stmt hooks env scope_vars spec
+  | Ast.StmtExtern { ext_lang; ext_lang_span; ext_from; ext_items; _ } ->
+    Sema_foreign_abi.check_extern_stmt env scope_vars s.span ~ext_lang ~ext_lang_span ~ext_from ~ext_items
   | Ast.StmtVis (vis, inner) ->
     let is_top_level =
       match !root_scope_ref with Some r -> r == scope_vars | None -> false

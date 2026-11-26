@@ -215,6 +215,7 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     Option.iter (mark_expr_usage tbl) eo
   | Typed_ast.TStmtExpr e ->
     mark_expr_usage tbl e
+  | Typed_ast.TStmtExtern _ -> ()
 
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in

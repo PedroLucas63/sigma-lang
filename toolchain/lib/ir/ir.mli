@@ -168,6 +168,13 @@ type opcode =
       captures : string list;
     }
   | OP_CALL of int list
+  | OP_CALL_EXTERN of {
+      ext_lang : string;
+      ext_from : string option;
+      ext_symbol : string;
+      ext_params : Sigma_sema.Ty.t list;
+      ext_ret : Sigma_sema.Ty.t;
+    }
   | OP_RETURN
   | OP_RETURN_VOID
   | OP_PRINT_I64

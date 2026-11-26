@@ -1,98 +1,7 @@
 (** Abstract Syntax Tree (AST) da linguagem Sigma [.sgm]. *)
 
 open Sigma_common
-
-type unop = UnPos | UnNeg | UnNot
-
-type binop =
-  | BinAdd
-  | BinSub
-  | BinMul
-  | BinDiv
-  | BinIntDiv
-  | BinPow
-  | BinMod
-  | BinShl
-  | BinShr
-  | BinEq
-  | BinNe
-  | BinLt
-  | BinGt
-  | BinLe
-  | BinGe
-  | BinAnd
-  | BinXor
-  | BinOr
-
-type assign_op =
-  | AssignEq
-  | AssignAdd
-  | AssignSub
-  | AssignMul
-  | AssignDiv
-  | AssignIntDiv
-  | AssignMod
-  | AssignPow
-  | AssignAnd
-  | AssignOr
-  | AssignXor
-  | AssignShl
-  | AssignShr
-
-type incdec_op =
-  | PreInc
-  | PreDec
-  | PostInc
-  | PostDec
-
-type align = AlignLeft | AlignRight | AlignCenter
-
-type format_spec = {
-  fill : string;
-  align : align option;
-  sign_plus : bool;
-  zero_pad : bool;
-  width : int option;
-  precision : int option;
-  span : Span.t;
-}
-
-type mask_part =
-  | MaskLit of string
-  | MaskType of string * Span.t
-
-type input_mode =
-  | InputLine
-  | InputTypes of (string * Span.t) list
-  | InputMask of mask_part list
-
-type param_mode =
-  | ParamVal
-  | ParamRef
-  | ParamOut
-
-type type_expr =
-  | TypeNamed of string * Span.t
-  | TypeTuple of type_expr list * Span.t
-  | TypeArray of type_expr * int option * Span.t
-  | TypeFun of type_expr * (param_mode * type_expr) list * Span.t
-
-type arg_mode =
-  | ArgVal
-  | ArgRef
-  | ArgOut
-  | ArgOutVar of {
-      var_name : string;
-      var_span : Span.t;
-      var_type : type_expr option;
-    }
-
-type fun_param = {
-  param_name : string;
-  param_span : Span.t;
-  param_mode : param_mode;
-  param_type : type_expr;
-}
+include module type of Ast_base
 
 type collection_item =
   | ItemExpr of expr
@@ -192,6 +101,15 @@ and import_item = { imp_name : string; imp_name_span : Span.t; imp_alias : (stri
 and import_spec =
   | ImportModule of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_alias : (string * Span.t) option }
   | ImportFrom of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_items : import_item list }
+and extern_item = {
+  ext_is_act : bool;
+  ext_name : string;
+  ext_name_span : Span.t;
+  ext_params : fun_param list;
+  ext_ret : type_expr option;
+  ext_symbol : string option;
+  ext_span : Span.t;
+}
 and stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -246,6 +164,13 @@ and stmt_desc =
   | StmtReturn of expr option
   | StmtExpr of expr
   | StmtImport of import_spec
+  | StmtExtern of {
+      ext_lang : string;
+      ext_lang_span : Span.t;
+      ext_from : string option;
+      ext_from_span : Span.t option;
+      ext_items : extern_item list;
+    }
   | StmtVis of visibility * stmt
 
 and stmt = {
