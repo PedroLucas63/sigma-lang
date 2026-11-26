@@ -17,7 +17,7 @@
 8. [x] **Bibliotecas em C/C++ (FFI & Extensibilidade):** suporte à criação e ligação de bibliotecas nativas em C ou C++ (`extern "C"` / `extern "C++"`, `[native]` no `sigma.toml`, compilação sob demanda na VM e linkagem C99, `E0131`..`E0133`, `tests/19_native_ffi_test.sgm`).
 9. [x] **Importação a partir de URL:** suporte a imports remotos (`http://`/`https://`, normalização GitHub `blob`→`raw`, cache local em `~/.cache/sigma/url_modules/`, resolução relativa encadeada, `E0134`/`E0129`, `tests/20_url_import_test.sgm`).
 10. [x] **Projetos de Biblioteca (`lib`) & Empacotamento Binário:** `sigma pkg init --lib [--native]`, `sigma build --lib` (`.so`/`.dylib`/`.dll` + `.h` + `.sgm`), `sigma pkg pack` (`.sgmpkg`), e `import` direto de diretórios `lib`/`.sgmpkg` (`E0135`..`E0136`, `Test_lib_pkg`).
-11. [ ] **Gerenciador de Pacotes & Controle de Versões:** cache global na pasta do usuário com referências no projeto (estilo `node_modules`) e controle de versões (SemVer/*lockfile*).
+11. [x] **Gerenciador de Pacotes & Controle de Versões:** cache/store global (`~/.sigma/store/`), referências locais em `.sigma_modules/`, `sigma.lock`, motor SemVer (`Pkg_semver`) e comandos `sigma pkg add|remove|install|update|list` (`E0137`..`E0138`, `Test_pkg_manager`).
 12. [ ] **Mirrors & Repositórios Diretos:** suporte a *mirrors*/registros agrupadores (estilo npm/pip/Maven) e instalação direta via link de repositório/projeto.
 
 ---

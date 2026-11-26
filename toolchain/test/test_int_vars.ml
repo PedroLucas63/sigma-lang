@@ -19,4 +19,5 @@ let () =
   Test_errors.test_syntax_and_semantic_errors ();
   Test_url_import.test_url_import_parity ();
   Test_lib_pkg.test_lib_project_and_pack_parity ();
+  Test_pkg_manager.test_semver_and_pkg_manager ();
   print_endline "All Sigma variable & arithmetic tests passed!"

@@ -12,6 +12,14 @@ type native_config = {
   ldflags : string list;
 }
 
+type dep_spec =
+  | DepSemver of string
+  | DepPath of string
+  | DepUrl of {
+      url : string;
+      version : string option;
+    }
+
 type t = {
   name : string;
   version : string;
@@ -23,6 +31,7 @@ type t = {
   test_dir : string;
   scripts : (string * string) list;
   native : native_config;
+  dependencies : (string * dep_spec) list;
 }
 
 val default :
@@ -35,6 +44,7 @@ val default :
   ?test_dir:string ->
   ?scripts:(string * string) list ->
   ?native:native_config ->
+  ?dependencies:(string * dep_spec) list ->
   name:string ->
   unit ->
   t

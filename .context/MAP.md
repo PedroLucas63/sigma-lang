@@ -68,4 +68,6 @@
 - `E0134`: Esquema de URL inválido ou não suportado em `import` remoto (apenas `http://` e `https://`).
 - `E0135`: Erro estrutural ou de compilação de biblioteca (`--lib` com instruções soltas no topo ou falha no linker).
 - `E0136`: Erro ao localizar, extrair ou carregar pacote `.sgmpkg`.
+- `E0137`: Expressão SemVer inválida ou `sigma.lock` ausente/desatualizado no modo `--frozen`.
+- `E0138`: Dependência não encontrada no store/origem ou conflito de versão SemVer.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

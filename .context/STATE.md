@@ -39,13 +39,13 @@
 - [x] Construtores primários (estilo C#, inclusive vazios `Ponto() {}`), construtores gerais sobrecarregados (`: this(...)`) e inicialização combinada `new T(...) { campo = val }` (`tests/17_constructors_test.sgm`).
 - [x] Sistema de módulos (`import`/`from ... import ...`/`as`), exportação por visibilidade (`public`/`internal`/`private` em top-level) e carregamento preguiçoso (*lazy* / *tree-shaking* em VM e C99, `E0129`..`E0130`, `tests/18_modules_test.sgm`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
-- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build` (`--lib`), `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init` (`--lib`/`--native`), `pkg pack` (`.sgmpkg`), `pkg run`.
+- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build` (`--lib`), `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init|pack|add|remove|install|update|list|run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
 ## Próximos Passos Planejados (Resumo — ver [`.context/ROADMAP.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/ROADMAP.md))
-- **1–10. Concluídos** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL, `lib` & `.sgmpkg`).
-- **11–12 (Fase A — Dependências & Distribuição):** gerenciador de pacotes/SemVer e *mirrors*/repositórios diretos.
+- **1–11. Concluídos** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL, `lib` & `.sgmpkg`, gerenciador SemVer/`sigma.lock`/`.sigma_modules/`).
+- **12 (Fase A — Dependências & Distribuição):** *mirrors* e repositórios diretos.
 - **13–15 (Fase B — Generics & `io`):** templates/generics (`<T>`, `<?>`, `where`, `<Ts...>`), intrínsecos nativos (`__PRINT_*`, `__READ_*`) e separação da stdlib `io`.
 - **16–20 (Fase C — OOP Avançado):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
 - **21–24 (Fase D — Coleções, `math` & Runtime):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.

@@ -10,6 +10,14 @@ type native_config = {
   ldflags : string list;
 }
 
+type dep_spec =
+  | DepSemver of string
+  | DepPath of string
+  | DepUrl of {
+      url : string;
+      version : string option;
+    }
+
 type t = {
   name : string;
   version : string;
@@ -21,6 +29,7 @@ type t = {
   test_dir : string;
   scripts : (string * string) list;
   native : native_config;
+  dependencies : (string * dep_spec) list;
 }
 
 let default_native = { sources = []; libs = []; cflags = []; cxxflags = []; ldflags = [] }
@@ -53,6 +62,7 @@ let default
     ?(test_dir = "tests")
     ?scripts
     ?(native = default_native)
+    ?(dependencies = [])
     ~name
     ()
   =
@@ -66,22 +76,9 @@ let default
     | Some s -> s
     | None -> if kind = KindLib then default_scripts_lib else default_scripts_app
   in
-  { name; version; kind; description; authors; src_dir; entry; test_dir; scripts; native }
+  { name; version; kind; description; authors; src_dir; entry; test_dir; scripts; native; dependencies }
 
-let toml_quote (s : string) : string =
-  let buf = Buffer.create (String.length s + 4) in
-  Buffer.add_char buf '"';
-  String.iter
-    (function
-      | '"' -> Buffer.add_string buf "\\\""
-      | '\\' -> Buffer.add_string buf "\\\\"
-      | '\n' -> Buffer.add_string buf "\\n"
-      | '\r' -> Buffer.add_string buf "\\r"
-      | '\t' -> Buffer.add_string buf "\\t"
-      | c -> Buffer.add_char buf c)
-    s;
-  Buffer.add_char buf '"';
-  Buffer.contents buf
+open Pkg_toml
 
 let to_toml (m : t) : string =
   let authors_str =
@@ -101,8 +98,24 @@ let to_toml (m : t) : string =
       Printf.sprintf "\n[native]\nsources = %s\nlibs = %s\n"
         (arr m.native.sources) (arr m.native.libs)
   in
+  let deps_sec =
+    if m.dependencies = [] then ""
+    else
+      let lines =
+        List.map
+          (fun (k, spec) ->
+            match spec with
+            | DepSemver s -> Printf.sprintf "%s = %s" k (toml_quote s)
+            | DepPath p -> Printf.sprintf "%s = { path = %s }" k (toml_quote p)
+            | DepUrl { url; version = None } -> Printf.sprintf "%s = { url = %s }" k (toml_quote url)
+            | DepUrl { url; version = Some v } ->
+              Printf.sprintf "%s = { url = %s, version = %s }" k (toml_quote url) (toml_quote v))
+          m.dependencies
+      in
+      "\n[dependencies]\n" ^ String.concat "\n" lines ^ "\n"
+  in
   Printf.sprintf
-    "[package]\nname = %s\nversion = %s\nkind = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n%s"
+    "[package]\nname = %s\nversion = %s\nkind = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n%s%s"
     (toml_quote m.name)
     (toml_quote m.version)
     (toml_quote kind_str)
@@ -113,64 +126,7 @@ let to_toml (m : t) : string =
     (toml_quote m.test_dir)
     scripts_lines
     native_sec
-
-let unquote (s : string) : string =
-  let s = String.trim s in
-  let len = String.length s in
-  if len >= 2 && s.[0] = '"' && s.[len - 1] = '"' then
-    let inner = String.sub s 1 (len - 2) in
-    let buf = Buffer.create (String.length inner) in
-    let i = ref 0 in
-    let ilen = String.length inner in
-    while !i < ilen do
-      if inner.[!i] = '\\' && !i + 1 < ilen then begin
-        (match inner.[!i + 1] with
-         | '"' -> Buffer.add_char buf '"'
-         | '\\' -> Buffer.add_char buf '\\'
-         | 'n' -> Buffer.add_char buf '\n'
-         | 'r' -> Buffer.add_char buf '\r'
-         | 't' -> Buffer.add_char buf '\t'
-         | c ->
-           Buffer.add_char buf '\\';
-           Buffer.add_char buf c);
-        i := !i + 2
-      end else begin
-        Buffer.add_char buf inner.[!i];
-        incr i
-      end
-    done;
-    Buffer.contents buf
-  else
-    s
-
-let parse_string_array (s : string) : string list =
-  let s = String.trim s in
-  let len = String.length s in
-  if len >= 2 && s.[0] = '[' && s.[len - 1] = ']' then
-    let inner = String.trim (String.sub s 1 (len - 2)) in
-    if inner = "" then []
-    else
-      String.split_on_char ',' inner
-      |> List.map unquote
-      |> List.filter (fun x -> x <> "")
-  else
-    []
-
-let strip_comment (line : string) : string =
-  let in_quotes = ref false in
-  let len = String.length line in
-  let idx = ref len in
-  let i = ref 0 in
-  while !i < len do
-    let c = line.[!i] in
-    if c = '"' then in_quotes := not !in_quotes
-    else if c = '#' && not !in_quotes then begin
-      idx := !i;
-      i := len
-    end;
-    incr i
-  done;
-  String.trim (String.sub line 0 !idx)
+    deps_sec
 
 let parse_toml (content : string) : (t, string) result =
   let lines = String.split_on_char '\n' content in
@@ -186,6 +142,7 @@ let parse_toml (content : string) : (t, string) result =
   let scripts_rev = ref [] in
   let nat_sources = ref [] and nat_libs = ref [] in
   let nat_cflags = ref [] and nat_cxxflags = ref [] and nat_ldflags = ref [] in
+  let deps_rev = ref [] in
   let err = ref None in
   List.iteri
     (fun idx raw_line ->
@@ -221,6 +178,27 @@ let parse_toml (content : string) : (t, string) result =
                | "native", "cflags" -> nat_cflags := parse_string_array raw_val
                | "native", "cxxflags" -> nat_cxxflags := parse_string_array raw_val
                | "native", "ldflags" -> nat_ldflags := parse_string_array raw_val
+               | "dependencies", k ->
+                 let trimmed = String.trim raw_val in
+                 if String.length trimmed >= 2 && trimmed.[0] = '{' && trimmed.[String.length trimmed - 1] = '}' then
+                   let inner = String.sub trimmed 1 (String.length trimmed - 2) in
+                   let kvs =
+                     String.split_on_char ',' inner
+                     |> List.filter_map (fun part ->
+                            match String.index_opt part '=' with
+                            | Some i ->
+                              Some (String.trim (String.sub part 0 i),
+                                    unquote (String.sub part (i + 1) (String.length part - i - 1)))
+                            | None -> None)
+                   in
+                   (match List.assoc_opt "path" kvs, List.assoc_opt "url" kvs with
+                    | Some p, _ -> deps_rev := (k, DepPath p) :: !deps_rev
+                    | None, Some u ->
+                      deps_rev := (k, DepUrl { url = u; version = List.assoc_opt "version" kvs }) :: !deps_rev
+                    | None, None ->
+                      err := Some (Printf.sprintf "sigma.toml line %d: invalid dependency table for '%s'" (idx + 1) k))
+                 else
+                   deps_rev := (k, DepSemver (unquote raw_val)) :: !deps_rev
                | _ -> ())
         end
       end)
@@ -247,6 +225,7 @@ let parse_toml (content : string) : (t, string) result =
             cxxflags = !nat_cxxflags;
             ldflags = !nat_ldflags;
           };
+        dependencies = List.rev !deps_rev;
       }
 
 let load ?(path = "sigma.toml") () : (t, string) result =

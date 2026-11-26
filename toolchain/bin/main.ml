@@ -129,6 +129,20 @@ let () =
     run_pkg_init ~name_opt:!name_opt ~yes:!yes ~is_lib:!is_lib ~is_native:!is_native
   | [ "pkg"; "pack" ] -> run_pkg_pack ~output_opt:None
   | [ "pkg"; "pack"; "-o"; out ] -> run_pkg_pack ~output_opt:(Some out)
+  | [ "pkg"; "add"; spec ] ->
+    (match String.rindex_opt spec '@' with
+     | Some i when i > 0 && not (String.contains spec ':') ->
+       let target = String.sub spec 0 i in
+       let ver = String.sub spec (i + 1) (String.length spec - i - 1) in
+       run_pkg_add ~target ~version_opt:(Some ver)
+     | _ -> run_pkg_add ~target:spec ~version_opt:None)
+  | [ "pkg"; "add"; target; ver ] -> run_pkg_add ~target ~version_opt:(Some ver)
+  | [ "pkg"; "remove"; name ] -> run_pkg_remove name
+  | [ "pkg"; "install" ] -> run_pkg_install ~frozen:false
+  | [ "pkg"; "install"; "--frozen" ] -> run_pkg_install ~frozen:true
+  | [ "pkg"; "update" ] -> run_pkg_update None
+  | [ "pkg"; "update"; name ] -> run_pkg_update (Some name)
+  | [ "pkg"; "list" ] -> run_pkg_list ()
   | "pkg" :: "run" :: script_name :: extra ->
     let extra_args = match extra with "--" :: tl -> tl | _ -> extra in
     let m, _ = resolve_entry_or_exit () in

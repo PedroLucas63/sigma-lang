@@ -26,6 +26,11 @@ let usage () =
   prerr_endline "  sigma debug [file.sgm]                    Run step-by-step VM debugger trace";
   prerr_endline "  sigma pkg init [name] [--lib] [--native] [-y] Initialize project (sigma.toml, src/, tests/)";
   prerr_endline "  sigma pkg pack [-o <out.sgmpkg>]          Build and pack library into .sgmpkg archive";
+  prerr_endline "  sigma pkg add <pkg> [@<semver>]           Add dependency, install to store and link";
+  prerr_endline "  sigma pkg remove <name>                   Remove dependency from project";
+  prerr_endline "  sigma pkg install [--frozen]              Install dependencies from sigma.toml/sigma.lock";
+  prerr_endline "  sigma pkg update [name]                   Update dependencies within SemVer ranges";
+  prerr_endline "  sigma pkg list                            List locked dependencies";
   prerr_endline "  sigma pkg run <script>                    Execute a script from [scripts] in sigma.toml";
   exit 1
 
@@ -152,6 +157,39 @@ let run_pkg_pack ~output_opt =
     Printf.eprintf "error: %s\n" err;
     exit 1
   | Ok p -> Printf.printf "Packed Sigma library package: %s\n" p
+
+let run_pkg_add ~target ~version_opt =
+  match Pkg_deps.add_dependency ~target ~version_opt () with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok (name, ver) -> Printf.printf "Added %s@%s to sigma.toml, store, and .sigma_modules/\n" name ver
+
+let run_pkg_remove name =
+  match Pkg_deps.remove_dependency name with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok () -> Printf.printf "Removed %s from sigma.toml and .sigma_modules/\n" name
+
+let run_pkg_install ~frozen =
+  let m, _ = resolve_entry_or_exit () in
+  match Pkg_deps.install_all ~frozen m with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok lock ->
+    Printf.printf "Installed %d package(s) into .sigma_modules/\n" (List.length lock)
+
+let run_pkg_update pkg_name =
+  match Pkg_deps.update_dependencies ?pkg_name () with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok lock ->
+    Printf.printf "Updated %d package(s) in sigma.lock\n" (List.length lock)
+
+let run_pkg_list () =
+  match Pkg_deps.list_dependencies () with
+  | Error msg -> Printf.eprintf "error: %s\n" msg; exit 1
+  | Ok [] -> print_endline "No locked dependencies."
+  | Ok lock ->
+    List.iter
+      (fun (e : Pkg_lock.lock_entry) ->
+        Printf.printf "%s@%s (%s)\n" e.name e.version e.source)
+      lock
 
 let run_test_command rest_args =
   let mode = ref Driver.ModeVm in

@@ -33,7 +33,16 @@ let resolve_module_path ~(from_file : string) ~(is_path : bool) (target : string
   let proj_root = find_project_root from_dir in
   let cand_name = if is_path then target else target ^ ".sgm" in
   let candidates =
-    [ Filename.concat from_dir cand_name; Filename.concat proj_root cand_name; cand_name ]
+    if is_path then
+      [ Filename.concat from_dir cand_name; Filename.concat proj_root cand_name; cand_name ]
+    else
+      [
+        Filename.concat from_dir cand_name;
+        Filename.concat proj_root cand_name;
+        cand_name;
+        Filename.concat (Filename.concat proj_root ".sigma_modules") target;
+        Filename.concat (Filename.concat from_dir ".sigma_modules") target;
+      ]
   in
   match List.find_opt Sys.file_exists candidates with
   | Some p -> Some (normalize_path p)
@@ -90,7 +99,10 @@ let load_source_for_target ~span ~(is_path : bool) (target : string)
         if Sys.is_directory canon_path then
           let toml = Filename.concat canon_path "sigma.toml" in
           match Sigma_pkg.Manifest.load ~path:toml () with
-          | Ok m -> normalize_path (Filename.concat canon_path m.entry)
+          | Ok m ->
+            let stub = Filename.concat canon_path ("lib" ^ m.name ^ ".sgm") in
+            if Sys.file_exists stub then normalize_path stub
+            else normalize_path (Filename.concat canon_path m.entry)
           | Error _ -> canon_path
         else canon_path
       in
