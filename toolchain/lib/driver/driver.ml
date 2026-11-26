@@ -78,6 +78,16 @@ let build_source ?entry_name ~output_path (src : Source.t) : (unit, Diagnostic.t
      | Error msg ->
        Error [ Diagnostic.error ~code:"E0901" ~span:Span.dummy msg ])
 
+let build_lib_source ~output_path (src : Source.t) : (string * string * string, Diagnostic.t list) result =
+  match compile_frontend src with
+  | Error errs -> Error errs
+  | Ok (typed_ast, _ir) ->
+    (match Codegen_c.compile_library ~output_path typed_ast with
+     | Ok res -> Ok res
+     | Error msg ->
+       let code = if String.starts_with ~prefix:"E0135:" msg then "E0135" else "E0901" in
+       Error [ Diagnostic.error ~code ~span:Span.dummy msg ])
+
 let emit_c_source ?output_path ?entry_name (src : Source.t) : (string, Diagnostic.t list) result =
   match compile_frontend ?entry_name src with
   | Error errs -> Error errs

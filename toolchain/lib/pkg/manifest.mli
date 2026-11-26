@@ -1,5 +1,9 @@
 (** Gerenciador de pacotes, projetos e manifesto [sigma.toml]. *)
 
+type project_kind =
+  | KindApp
+  | KindLib
+
 type native_config = {
   sources : string list;
   libs : string list;
@@ -11,6 +15,7 @@ type native_config = {
 type t = {
   name : string;
   version : string;
+  kind : project_kind;
   description : string;
   authors : string list;
   src_dir : string;
@@ -22,12 +27,14 @@ type t = {
 
 val default :
   ?version:string ->
+  ?kind:project_kind ->
   ?description:string ->
   ?authors:string list ->
   ?src_dir:string ->
   ?entry:string ->
   ?test_dir:string ->
   ?scripts:(string * string) list ->
+  ?native:native_config ->
   name:string ->
   unit ->
   t

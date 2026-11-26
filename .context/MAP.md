@@ -66,4 +66,6 @@
 - `E0132`: Tipo ou modo de parâmetro (`ref`/`out`) incompatível com a fronteira FFI `extern`.
 - `E0133`: Fonte/biblioteca nativa não encontrada, erro de compilação C/C++ ou símbolo ausente no binário.
 - `E0134`: Esquema de URL inválido ou não suportado em `import` remoto (apenas `http://` e `https://`).
+- `E0135`: Erro estrutural ou de compilação de biblioteca (`--lib` com instruções soltas no topo ou falha no linker).
+- `E0136`: Erro ao localizar, extrair ou carregar pacote `.sgmpkg`.
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

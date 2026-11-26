@@ -63,16 +63,42 @@ let load_source_for_target ~span ~(is_path : bool) (target : string)
     match Sema_remote_import.fetch_url ~span eff_url with
     | Ok (canon_url, src) -> Ok (canon_url, src)
     | Error d -> Error [ d ]
+  else if Filename.check_suffix target ".sgmpkg" then
+    (match resolve_module_path ~from_file:span.Span.file ~is_path:true target with
+     | None ->
+       Error [ Diagnostic.error ~code:"E0136" ~span (Printf.sprintf "package '%s' not found" target) ]
+     | Some pkg_path ->
+       (match Sigma_pkg.Pkg_pack.unpack_to_cache pkg_path with
+        | Error msg -> Error [ Diagnostic.error ~code:"E0136" ~span msg ]
+        | Ok (cache_dir, m) ->
+          let stub_cand = Filename.concat cache_dir ("lib" ^ m.name ^ ".sgm") in
+          let entry_cand = Filename.concat cache_dir m.entry in
+          let entry_path = if Sys.file_exists stub_cand then stub_cand else entry_cand in
+          if not (Sys.file_exists entry_path) then
+            Error [ Diagnostic.error ~code:"E0136" ~span
+                      (Printf.sprintf "package '%s' has no entry stub '%s'" target m.entry) ]
+          else
+            (match Source.load entry_path with
+             | Error msg -> Error [ Diagnostic.error ~code:"E0136" ~span msg ]
+             | Ok src -> Ok (normalize_path entry_path, src))))
   else
     match resolve_module_path ~from_file:span.Span.file ~is_path target with
     | None ->
       Error [ Diagnostic.error ~code:"E0129" ~span (Printf.sprintf "module '%s' not found" target) ]
     | Some canon_path ->
-      (match Source.load canon_path with
+      let eff_path =
+        if Sys.is_directory canon_path then
+          let toml = Filename.concat canon_path "sigma.toml" in
+          match Sigma_pkg.Manifest.load ~path:toml () with
+          | Ok m -> normalize_path (Filename.concat canon_path m.entry)
+          | Error _ -> canon_path
+        else canon_path
+      in
+      (match Source.load eff_path with
        | Error msg ->
          Error [ Diagnostic.error ~code:"E0129" ~span
                    (Printf.sprintf "failed to load module '%s': %s" target msg) ]
-       | Ok src -> Ok (canon_path, src))
+       | Ok src -> Ok (eff_path, src))
 
 let load_module hooks ~span ~(is_path : bool) (target : string)
     : (loaded_module, Diagnostic.t list) result =

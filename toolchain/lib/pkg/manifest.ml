@@ -1,3 +1,7 @@
+type project_kind =
+  | KindApp
+  | KindLib
+
 type native_config = {
   sources : string list;
   libs : string list;
@@ -9,6 +13,7 @@ type native_config = {
 type t = {
   name : string;
   version : string;
+  kind : project_kind;
   description : string;
   authors : string list;
   src_dir : string;
@@ -20,7 +25,7 @@ type t = {
 
 let default_native = { sources = []; libs = []; cflags = []; cxxflags = []; ldflags = [] }
 
-let default_scripts =
+let default_scripts_app =
   [
     ("start", "sigma run");
     ("build", "sigma build");
@@ -29,18 +34,39 @@ let default_scripts =
     ("lint", "sigma lint");
   ]
 
+let default_scripts_lib =
+  [
+    ("build", "sigma build --lib");
+    ("pack", "sigma pkg pack");
+    ("test", "sigma test");
+    ("test-parity", "sigma test --parity");
+    ("lint", "sigma lint");
+  ]
+
 let default
     ?(version = "0.1.0")
+    ?(kind = KindApp)
     ?(description = "")
     ?(authors = [])
     ?(src_dir = "src")
-    ?(entry = "src/main.sgm")
+    ?entry
     ?(test_dir = "tests")
-    ?(scripts = default_scripts)
+    ?scripts
+    ?(native = default_native)
     ~name
     ()
   =
-  { name; version; description; authors; src_dir; entry; test_dir; scripts; native = default_native }
+  let entry =
+    match entry with
+    | Some e -> e
+    | None -> if kind = KindLib then "src/lib.sgm" else "src/main.sgm"
+  in
+  let scripts =
+    match scripts with
+    | Some s -> s
+    | None -> if kind = KindLib then default_scripts_lib else default_scripts_app
+  in
+  { name; version; kind; description; authors; src_dir; entry; test_dir; scripts; native }
 
 let toml_quote (s : string) : string =
   let buf = Buffer.create (String.length s + 4) in
@@ -66,16 +92,27 @@ let to_toml (m : t) : string =
     |> List.map (fun (k, v) -> Printf.sprintf "%s = %s" k (toml_quote v))
     |> String.concat "\n"
   in
+  let kind_str = match m.kind with KindApp -> "app" | KindLib -> "lib" in
+  let native_sec =
+    if m.native.sources = [] && m.native.libs = [] && m.native.cflags = [] && m.native.cxxflags = [] && m.native.ldflags = []
+    then ""
+    else
+      let arr xs = "[" ^ (xs |> List.map toml_quote |> String.concat ", ") ^ "]" in
+      Printf.sprintf "\n[native]\nsources = %s\nlibs = %s\n"
+        (arr m.native.sources) (arr m.native.libs)
+  in
   Printf.sprintf
-    "[package]\nname = %s\nversion = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n"
+    "[package]\nname = %s\nversion = %s\nkind = %s\ndescription = %s\nauthors = [%s]\n\n[build]\nsrc_dir = %s\nentry = %s\ntest_dir = %s\n\n[scripts]\n%s\n%s"
     (toml_quote m.name)
     (toml_quote m.version)
+    (toml_quote kind_str)
     (toml_quote m.description)
     authors_str
     (toml_quote m.src_dir)
     (toml_quote m.entry)
     (toml_quote m.test_dir)
     scripts_lines
+    native_sec
 
 let unquote (s : string) : string =
   let s = String.trim s in
@@ -140,6 +177,7 @@ let parse_toml (content : string) : (t, string) result =
   let section = ref "package" in
   let name = ref "sigma_app" in
   let version = ref "0.1.0" in
+  let kind = ref KindApp in
   let description = ref "" in
   let authors = ref [] in
   let src_dir = ref "src" in
@@ -167,6 +205,11 @@ let parse_toml (content : string) : (t, string) result =
               (match !section, key with
                | "package", "name" -> name := unquote raw_val
                | "package", "version" -> version := unquote raw_val
+               | "package", "kind" ->
+                 (match unquote raw_val with
+                  | "app" -> kind := KindApp
+                  | "lib" -> kind := KindLib
+                  | other -> err := Some (Printf.sprintf "sigma.toml line %d: invalid package kind '%s' (expected 'app' or 'lib')" (idx + 1) other))
                | "package", "description" -> description := unquote raw_val
                | "package", "authors" -> authors := parse_string_array raw_val
                | ("package" | "build"), "src_dir" -> src_dir := unquote raw_val
@@ -189,6 +232,7 @@ let parse_toml (content : string) : (t, string) result =
       {
         name = !name;
         version = !version;
+        kind = !kind;
         description = !description;
         authors = !authors;
         src_dir = !src_dir;
@@ -249,48 +293,7 @@ let resolve_script (script_name : string) (m : t) : script_target option =
     else
       Some (ScriptCmd raw)
 
-let rec mkdir_p (dir : string) : unit =
-  if dir <> "" && dir <> "." && dir <> "/" && not (Sys.file_exists dir) then begin
-    mkdir_p (Filename.dirname dir);
-    try Sys.mkdir dir 0o755 with Sys_error _ -> ()
-  end
-
-let write_file_if_missing (path : string) (content : string) : bool =
-  mkdir_p (Filename.dirname path);
-  if Sys.file_exists path then false
-  else begin
-    let oc = open_out path in
-    output_string oc content;
-    close_out oc;
-    true
-  end
-
 let scaffold_project ?(root_dir = ".") (m : t) : (string list, string) result =
-  try
-    mkdir_p root_dir;
-    let join p = if root_dir = "." then p else Filename.concat root_dir p in
-    let toml_path = join "sigma.toml" in
-    let oc = open_out toml_path in
-    output_string oc (to_toml m);
-    close_out oc;
-    let created = ref [ toml_path ] in
-    mkdir_p (join m.src_dir);
-    mkdir_p (join m.test_dir);
-    let entry_path = join m.entry in
-    let default_main =
-      Printf.sprintf
-        "# Projeto %s (%s)\nconst PROJETO := %S;\nprintln(\"Bem-vindo ao\", PROJETO);\n"
-        m.name m.version m.name
-    in
-    if write_file_if_missing entry_path default_main then
-      created := entry_path :: !created;
-    let test_path = join (Filename.concat m.test_dir "main_test.sgm") in
-    let default_test =
-      Printf.sprintf
-        "# Suíte de testes inicial — %s\nassert(10 + 3, 13, \"Soma de inteiros\");\nassert(0.1m + 0.2m, 0.3m, \"Precisão exata decimal 128-bit\");\nassert_error(\"E0106\", \"const X : int;\", \"Constante sem inicializador deve falhar\");\n"
-        m.name
-    in
-    if write_file_if_missing test_path default_test then
-      created := test_path :: !created;
-    Ok (List.rev !created)
-  with exn -> Error (Printexc.to_string exn)
+  Pkg_scaffold.scaffold ~root_dir ~name:m.name ~version:m.version
+    ~kind_is_lib:(m.kind = KindLib) ~src_dir:m.src_dir ~entry:m.entry
+    ~test_dir:m.test_dir ~native_sources:m.native.sources ~toml_str:(to_toml m)
