@@ -22,39 +22,48 @@
 
 ---
 
-## Fase B — Generics, Intrínsecos e Separação da Biblioteca `io`
+## Fase B — Generics, Intrínsecos e Separação da Biblioteca `io` (`v0.3.0`)
 13. [ ] **Templates / Generics (Métodos e Estruturas):** parâmetros de tipo em funções/métodos e `class`/`struct`/`record` semelhantes ao Java/C# (`<T>`, `<?>`, `<T where T is Type>`, variádicos `<Ts...>`).
-14. [ ] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (ex: `__PRINT_STRING(value: string)`, `__PRINT_INT(value: int)`, `__READ_LINE(): string`, `__READ_BLOCK(): string`).
-15. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>(Ts values...)`, `println<Ts...>`, `input`, `prompt`, etc. em módulo padrão dedicado sobre os intrínsecos nativos.
+14. [ ] **Acessores `get`/`set` Customizados em Propriedades:** permitir reescrever o comportamento de `get` e `set` com corpo em bloco ou expressão (`get { ... }`, `get => ...`, `set { ... }`, `set => ...`, parâmetro implícito `value` e *backing field*).
+15. [ ] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (ex: `__PRINT_STRING(value: string)`, `__PRINT_INT(value: int)`, `__READ_LINE(): string`, `__READ_BLOCK(): string`).
+16. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>(Ts values...)`, `println<Ts...>`, `input`, `prompt`, etc. em módulo padrão dedicado sobre os intrínsecos nativos.
 
 ---
 
-## Fase C — Sistema de Tipos Avançado (OOP, Metadados e Enums)
-16. [ ] **Estruturas Aninhadas (*Nested Types*):** declaração de `class`/`struct`/`record` dentro de outras estruturas (ex: `public class A { public static class Builder {} }`).
-17. [ ] **Interfaces (`interface`):** contratos polimórficos implementáveis por `class`, `struct` e `record`.
-18. [ ] **Herança & Modificadores (`abstract`, `sealed`/`final`):** herança para estruturas, classes abstratas, classes/métodos selados/finais e sobrescrita.
-19. [ ] **Enumerações (`enum`):** design híbrido entre Java (campos, métodos, construtores) e C# (valores subjacentes, ergonomia).
-20. [ ] **Anotações (`@Annotation`):** metadados no estilo Java aplicáveis a tipos, métodos, campos e parâmetros.
+## Fase C — Sistema de Tipos Avançado (OOP, Metadados e Enums) (`v0.4.0`)
+17. [ ] **Estruturas Aninhadas (*Nested Types*):** declaração de `class`/`struct`/`record` dentro de outras estruturas (ex: `public class A { public static class Builder {} }`).
+18. [ ] **Interfaces (`interface`):** contratos polimórficos implementáveis por `class`, `struct` e `record`.
+19. [ ] **Herança & Modificadores (`abstract`, `sealed`/`final`):** herança para estruturas, classes abstratas, classes/métodos selados/finais e sobrescrita.
+20. [ ] **Enumerações (`enum`):** design híbrido entre Java (campos, métodos, construtores) e C# (valores subjacentes, ergonomia).
+21. [ ] **Anotações (`@Annotation`):** metadados no estilo Java aplicáveis a tipos, métodos, campos e parâmetros.
 
 ---
 
-## Fase D — Coleções Dinâmicas, Matemática e Runtime
-21. [ ] **Base de Coleções (`Collection` / `Enumeration`):** interfaces/abstrações fundamentais (iteradores, enumeração e contratos comuns) para estruturar as coleções dinâmicas.
-22. [ ] **Estruturas de Dados Dinâmicas (em etapas independentes, C/C++ + Sigma):**
-    - [ ] `22a.` `list`
-    - [ ] `22b.` `stack` & `queue`
-    - [ ] `22c.` `set`
-    - [ ] `22d.` `dict`
-23. [ ] **Biblioteca Matemática Simples (`math`, em C/C++):** `sum`, `max`, `min`, `sin`, `cos`, etc. e constantes matemáticas (`PI`, `E`, `TAU`, etc.).
-24. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coleta automática no heap (`class`, closures, arrays/tuplas, strings), análise de escape e gerência de arenas/stack.
+## Fase D — Coleções Dinâmicas, Matemática e Runtime (`v0.5.0`)
+22. [ ] **Base de Coleções (`Collection` / `Enumeration`):** interfaces/abstrações fundamentais (iteradores, enumeração e contratos comuns) para estruturar as coleções dinâmicas.
+23. [ ] **Estruturas de Dados Dinâmicas (em etapas independentes, C/C++ + Sigma):**
+    - [ ] `23a.` `list`
+    - [ ] `23b.` `stack` & `queue`
+    - [ ] `23c.` `set`
+    - [ ] `23d.` `dict`
+24. [ ] **Biblioteca Matemática Simples (`math`, em C/C++):** `sum`, `max`, `min`, `sin`, `cos`, etc. e constantes matemáticas (`PI`, `E`, `TAU`, etc.).
+25. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coleta automática no heap (`class`, closures, arrays/tuplas, strings), análise de escape e gerência de arenas/stack.
 
 ---
 
-## Fase E — Computação Científica (com Sub-Roadmaps Dedicados) & `v1.0`
-25. [ ] **Biblioteca de Ciência de Dados & CSV (C/C++):**
-    - [ ] `25a.` **Sub-Roadmap & Design Arquitetural:** definição detalhada de API, DataFrames, computação adiantada de métricas e leitura de CSV.
-    - [ ] `25b.` **Implementação:** engine C/C++ e suporte a `import "data.csv" as df` e `import "https://.../data.csv" as df`.
-26. [ ] **Computação Vetorial, Matricial & Álgebra Linear com GPU Nativa (C/C++):**
-    - [ ] `26a.` **Sub-Roadmap & Design Arquitetural:** especificação multi-etapas estilo NumPy e abstração de backend GPU.
-    - [ ] `26b.` **Implementação Multi-etapas:** tensores, operações vetorizadas, álgebra linear avançada e aceleração GPU nativa.
-27. [ ] **Análise Aprofundada da Linguagem & Checklist `v1.0`:** auditoria completa da linguagem (ergonomia, cobertura de stdlib, diagnósticos, performance, tooling e documentação) para definir o que falta antes do lançamento da versão `1.0`.
+## Fase E — Computação Científica (com Sub-Roadmaps Dedicados) & `v1.0.0`
+26. [ ] **Biblioteca de Ciência de Dados & CSV (C/C++):**
+    - [ ] `26a.` **Sub-Roadmap & Design Arquitetural:** definição detalhada de API, DataFrames, computação adiantada de métricas e leitura de CSV.
+    - [ ] `26b.` **Implementação:** engine C/C++ e suporte a `import "data.csv" as df` e `import "https://.../data.csv" as df`.
+27. [ ] **Computação Vetorial, Matricial & Álgebra Linear com GPU Nativa (C/C++):**
+    - [ ] `27a.` **Sub-Roadmap & Design Arquitetural:** especificação multi-etapas estilo NumPy e abstração de backend GPU.
+    - [ ] `27b.` **Implementação Multi-etapas:** tensores, operações vetorizadas, álgebra linear avançada e aceleração GPU nativa.
+28. [ ] **Análise Aprofundada da Linguagem & Checklist `v1.0`:** auditoria completa da linguagem (ergonomia, cobertura de stdlib, diagnósticos, performance, tooling e documentação) para definir o que falta antes do lançamento da versão `1.0`.
+
+---
+
+## Fase F — Ecossistema Avançado (`v2.0.0` / `v2.*`)
+29. [ ] **Programação WEB (`udp`, `tcp`, `http`):** sockets UDP/TCP, cliente e servidor HTTP nativos na stdlib.
+30. [ ] **Programação Assíncrona (`async` / `await`):** modelo baseado em `Task` semelhante ao C#, com suporte a concorrência assíncrona na VM e no backend compilado.
+31. [ ] **API de Testes Avançada (escrita em Sigma):** framework de testes escrito na própria linguagem com métodos anotados, hooks de ciclo de vida (`beforeEach`, `beforeAll`, `afterEach`, `afterAll`), matchers (`equalsTo`, `equivalentTo`, etc.) e testes parametrizados.
+32. [ ] **Reescrita do Gerenciador de Pacotes/Projetos em Sigma:** migrar o gerenciador de pacotes/projetos (`sigma pkg`) para ser implementado na própria linguagem Sigma (*self-hosting*).

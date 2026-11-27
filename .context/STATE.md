@@ -45,10 +45,11 @@
 
 ## Próximos Passos Planejados (Resumo — ver [`.context/ROADMAP.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/ROADMAP.md))
 - **1–12. Fase A Concluída** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL, `lib` & `.sgmpkg`, gerenciador SemVer/`sigma.lock`/`.sigma_modules/`, *mirrors* & repositórios Git).
-- **13–15 (Fase B — Generics & `io`):** templates/generics (`<T>`, `<?>`, `where`, `<Ts...>`), intrínsecos nativos (`__PRINT_*`, `__READ_*`) e separação da stdlib `io`.
-- **16–20 (Fase C — OOP Avançado):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
-- **21–24 (Fase D — Coleções, `math` & Runtime):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.
-- **25–27 (Fase E — Científico & `v1.0`):** sub-roadmaps + implementação de Ciência de Dados/CSV e Vetores/Matrizes/GPU, e análise aprofundada para a `v1.0`.
+- **13–16 (Fase B — `v0.3.0`):** templates/generics (`<T>`, `<?>`, `where`, `<Ts...>`), `get`/`set` customizados, intrínsecos nativos (`__PRINT_*`, `__READ_*`) e separação da stdlib `io`.
+- **17–21 (Fase C — `v0.4.0`):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
+- **22–25 (Fase D — `v0.5.0`):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.
+- **26–28 (Fase E — `v1.0.0`):** sub-roadmaps + implementação de Ciência de Dados/CSV e Vetores/Matrizes/GPU, e análise aprofundada para a `v1.0`.
+- **29–32 (Fase F — `v2.0.0`):** programação WEB (`udp`/`tcp`/`http`), `async`/`await` (`Task`), API de testes avançada em Sigma e reescrita de `sigma pkg` em Sigma.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
