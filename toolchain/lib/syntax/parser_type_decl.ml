@@ -26,7 +26,7 @@ let parse_field_spec hooks st ~vis_opt ~stop_kind ~require_semi ~ctx_name : (Ast
       | Ok field_type ->
         let acc_res =
           if require_semi && (cur st).kind = Token.LBRACE then
-            match Parser_accessors.parse_accessor_blk st with
+            match Parser_accessors.parse_accessor_blk hooks st with
             | Error e -> Error e
             | Ok (accs, end_sp) -> Ok (Some accs, Some end_sp)
           else Ok (None, None)

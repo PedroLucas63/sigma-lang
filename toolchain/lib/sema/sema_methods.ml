@@ -89,6 +89,13 @@ let check_method_bodies hooks (env : env) (next_loop_id : int ref) ~(type_name :
                 is_ref_param = tp.tp_mode <> Ty.ParamVal; const_int = None })
           m.md_fun.fd_params params;
         let body_scope = ref (List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_name) all_params) in
+        let saved_prop = !in_prop_accessor in
+        (match Sema_prop_accessors.prop_name_of_method_name m.md_fun.fd_name, Hashtbl.find_opt user_types type_name with
+         | Some pname, Some info ->
+           (match List.find_opt (fun f -> f.uf_name = pname) info.ut_fields with
+            | Some f -> in_prop_accessor := Some (type_name, pname, f.uf_idx, f.uf_ty)
+            | None -> ())
+         | _ -> ());
         let body_errs = ref [] in
         let tstmts = ref [] in
         List.iter
@@ -97,6 +104,7 @@ let check_method_bodies hooks (env : env) (next_loop_id : int ref) ~(type_name :
             | Ok ts -> tstmts := ts :: !tstmts
             | Error es -> body_errs := List.rev_append es !body_errs)
           m.md_fun.fd_body;
+        in_prop_accessor := saved_prop;
         current_fun := saved_fun;
         fn_outer := saved_outer;
         current_type_ctx := saved_type;

@@ -50,8 +50,9 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
       let errs = ref [] in
       let tfields = ref [] in
       let ufields = ref [] in
-      List.iteri
-        (fun idx (f : Ast.field_decl) ->
+      let slot_idx = ref 0 in
+      List.iter
+        (fun (f : Ast.field_decl) ->
           if Hashtbl.mem seen f.field_name then
             errs := Diagnostic.error ~code:"E0103" ~span:f.field_span
                       (Printf.sprintf "duplicate field '%s' in '%s'" f.field_name td.td_name) :: !errs;
@@ -67,32 +68,25 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
             (match Sema_types.resolve_type_expr f.field_type None with
              | Error err -> errs := err :: !errs
              | Ok fty ->
-               if (kind = Ty.KindStruct || kind = Ty.KindRecord)
-                  && Sema_accessors.value_type_reaches (Hashtbl.create 8) td.td_name fty
-               then
-                 errs := Diagnostic.error
-                           ~hint:"use 'class' instead of 'struct'/'record' for recursive self-referential types"
-                           ~code:"E0120" ~span:f.field_span
-                           (Printf.sprintf "recursive value type '%s' cannot contain itself by value" td.td_name) :: !errs;
+               if (kind = Ty.KindStruct || kind = Ty.KindRecord) && Sema_accessors.value_type_reaches (Hashtbl.create 8) td.td_name fty then
+                 errs := Diagnostic.error ~hint:"use 'class' instead of 'struct'/'record' for recursive self-referential types"
+                           ~code:"E0120" ~span:f.field_span (Printf.sprintf "recursive value type '%s' cannot contain itself by value" td.td_name) :: !errs;
+               let uf_has_slot = Sema_prop_accessors.prop_has_slot f.field_accessors in
+               if not uf_has_slot && Option.is_some f.field_default then
+                 errs := Diagnostic.error ~code:"E0144" ~span:f.field_span (Printf.sprintf "computed property '%s' without a backing field cannot have an initializer" f.field_name) :: !errs;
                let def_opt =
-                 match f.field_default with
-                 | None -> Some None
-                 | Some de ->
+                 match f.field_default with None -> Some None | Some de ->
                    (match hooks.check_expr field_init_env de with
                     | Error err -> errs := err :: !errs; None
                     | Ok tde ->
-                      if not (Ty.equal tde.ty fty) then begin
-                        errs := Diagnostic.error ~code:"E0104" ~span:tde.span
-                                  (Printf.sprintf "type mismatch in default value for field '%s': expected '%s', found '%s'"
-                                     f.field_name (Ty.to_string fty) (Ty.to_string tde.ty)) :: !errs;
-                        None
-                      end else Some (Some tde))
+                      if not (Ty.equal tde.ty fty) then (errs := Diagnostic.error ~code:"E0104" ~span:tde.span (Printf.sprintf "type mismatch in default value for field '%s': expected '%s', found '%s'" f.field_name (Ty.to_string fty) (Ty.to_string tde.ty)) :: !errs; None)
+                      else Some (Some tde))
                in
                (match def_opt with
                 | Some tdef ->
-                  tfields := { Typed_ast.tuf_name = f.field_name; tuf_ty = fty; tuf_default = tdef } :: !tfields;
-                  ufields := { uf_name = f.field_name; uf_idx = idx; uf_ty = fty;
-                               uf_vis = member_vis; uf_get; uf_set; uf_init; uf_default = tdef } :: !ufields
+                  let idx = if uf_has_slot then (let i = !slot_idx in incr slot_idx; i) else -1 in
+                  if uf_has_slot then tfields := { Typed_ast.tuf_name = f.field_name; tuf_ty = fty; tuf_default = tdef } :: !tfields;
+                  ufields := Sema_prop_accessors.make_user_field ~type_name:td.td_name f ~member_vis ~fty ~uf_get ~uf_set ~uf_init ~uf_has_slot ~idx ~tdef :: !ufields
                 | None -> ())))
         td.td_fields;
       match List.rev !errs with
@@ -101,9 +95,9 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
         let rev_ufields = List.rev !ufields in
         let rev_tfields = List.rev !tfields in
         let start_idx = if Option.is_some primary_ctor_opt then 1 else 0 in
-        let concrete_methods = Sema_generics_inst.register_generic_methods td.td_name td.td_methods in
+        let all_methods = Sema_prop_accessors.build_prop_methods td @ Sema_generics_inst.register_generic_methods td.td_name td.td_methods in
         (match Sema_ctors.check_general_ctor_sigs hooks env ~type_name:td.td_name ~start_idx td.td_ctors,
-               Sema_methods.check_method_sigs ~type_name:td.td_name ~seen_members:seen concrete_methods with
+               Sema_methods.check_method_sigs ~type_name:td.td_name ~seen_members:seen all_methods with
          | Error ces, _ -> Hashtbl.remove user_types td.td_name; Error ces
          | _, Error mes -> Hashtbl.remove user_types td.td_name; Error mes
          | Ok gen_ctors, Ok umethods ->
@@ -123,7 +117,7 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
            in
            (match Sema_ctors.check_general_ctor_bodies hooks env loop_ref ~info:info_mid td.td_ctors gen_ctors,
                   Sema_methods.check_method_bodies hooks env loop_ref ~type_name:td.td_name ~kind
-                    concrete_methods umethods with
+                    all_methods umethods with
             | Error cbes, _ -> Hashtbl.remove user_types td.td_name; Error cbes
             | _, Error bes -> Hashtbl.remove user_types td.td_name; Error bes
             | Ok gen_ctor_funs, Ok (final_ums, typed_methods) ->
@@ -137,9 +131,10 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
 
 let resolve_init_args hooks (env : env) ~span (info : user_type_info) (args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result =
-  let n_fields = List.length info.ut_fields in
+  let slot_fields = List.filter (fun f -> f.uf_has_slot) info.ut_fields in
+  let n_fields = List.length slot_fields in
   let slots : Typed_ast.expr option array = Array.make n_fields None in
-  let fields_arr = Array.of_list info.ut_fields in
+  let fields_arr = Array.of_list slot_fields in
   let seen_named = ref false in
   let pos_idx = ref 0 in
   let rec process = function
@@ -175,7 +170,10 @@ let resolve_init_args hooks (env : env) ~span (info : user_type_info) (args : As
                  (Diagnostic.error ~code:"E0119" ~span:fspan
                     (Printf.sprintf "type '%s' has no field named '%s'" info.ut_name fname))
              | Some f ->
-               if Option.is_some slots.(f.uf_idx) then
+               if not f.uf_has_slot then
+                 Error (Diagnostic.error ~code:"E0144" ~span:fspan
+                          (Printf.sprintf "cannot initialize computed property '%s' without a backing field in 'new'" fname))
+               else if Option.is_some slots.(f.uf_idx) then
                  Error
                    (Diagnostic.error ~code:"E0103" ~span:fspan
                       (Printf.sprintf "field '%s' specified more than once" fname))

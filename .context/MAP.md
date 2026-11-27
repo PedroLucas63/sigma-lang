@@ -75,4 +75,5 @@
 - `E0141`: Aridade incorreta de argumentos de tipo genérico ou falha ao inferir parâmetro de tipo.
 - `E0142`: Tipo concreto não satisfaz a restrição `where` declarada no parâmetro de tipo.
 - `E0143`: Parâmetro de tipo genérico duplicado ou uso inválido de wildcard `<?>` em instanciação.
+- `E0144`: Inicializador ou inicialização em `new` em propriedade puramente computada (sem *backing field*).
 - `W0001`: Variável declarada e não utilizada (ignorada se prefixada com `_` ou curinga `_`).

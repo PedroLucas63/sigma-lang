@@ -54,7 +54,12 @@ let check_field_access hooks (env : env) ~span (base : Ast.expr) (field : string
                      (Diagnostic.error ~code:"E0124" ~span
                         (Printf.sprintf "cannot access %s property '%s' of '%s'" (vis_to_string v) field tname))
                  | Some _ ->
-                   Ok { Typed_ast.desc = Typed_ast.TExprField (tbase, field, f.uf_idx); ty = f.uf_ty; span })
+                   (match f.uf_custom_get with
+                    | Some fn_mangled ->
+                      let fn_ty = Ty.Fun ([ { Ty.pty = tbase.ty; pmode = Ty.ParamVal } ], f.uf_ty) in
+                      Ok (Sema_prop_accessors.make_prop_call span fn_mangled fn_ty f.uf_ty tbase [])
+                    | None ->
+                      Ok { Typed_ast.desc = Typed_ast.TExprField (tbase, field, f.uf_idx); ty = f.uf_ty; span }))
               | None ->
                 (match List.find_opt (fun m -> m.um_name = field) info.ut_methods with
                  | Some m ->

@@ -142,7 +142,8 @@ ctor_decl     ::= visibility? IDENT "(" params? ")" ( ":" "this" "(" call_args? 
 method_decl   ::= visibility? "static"? ( "fun" IDENT "(" params? ")" ":" type_expr block_stmt
                                         | "act" IDENT "(" params? ")" block_stmt ) ;
 accessor_blk  ::= "{" accessor+ "}" ;
-accessor      ::= visibility? ( "get" | "set" | "init" ) ";" ;
+accessor_body ::= ";" | "=>" expr ";" | block ;
+accessor      ::= visibility? ( "get" | "set" | "init" ) accessor_body ;
 record_params ::= record_param ( "," record_param )* ","? ;
 record_param  ::= visibility? IDENT ":" type_expr ( "=" expr )? ;
 

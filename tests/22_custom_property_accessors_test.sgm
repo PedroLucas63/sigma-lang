@@ -1,0 +1,118 @@
+# Suite 22: Acessores get/set customizados em propriedades (Issue #2)
+
+# 1. Propriedade com get/set em bloco e expressão curta (=>) usando campo privado
+public class Conta {
+    private _saldo: decimal = 0.0m;
+
+    public saldo: decimal {
+        get {
+            return this._saldo;
+        }
+        set {
+            if (value >= 0.0m) {
+                this._saldo = value;
+            }
+        }
+    }
+
+    public dobro: decimal {
+        get => this._saldo * 2.0m;
+    }
+}
+
+var c := new Conta {};
+assert(c.saldo, 0.0m, "getter customizado inicial");
+c.saldo = 100.0m;
+assert(c.saldo, 100.0m, "setter customizado valido");
+c.saldo = -50.0m;
+assert(c.saldo, 100.0m, "setter customizado ignora valor negativo");
+assert(c.dobro, 200.0m, "getter com expressao =>");
+
+# 2. Operadores compostos (+=, -=, ++, --) em propriedade customizada
+c.saldo += 25.0m;
+assert(c.saldo, 125.0m, "operador += em propriedade customizada");
+c.saldo -= 25.0m;
+assert(c.saldo, 100.0m, "operador -= em propriedade customizada");
+
+public class Contador {
+    private _n: int = 10;
+    public valor: int {
+        get => this._n;
+        set { this._n = value; }
+    }
+}
+
+var cnt := new Contador {};
+assert(++cnt.valor, 11, "pre-incremento em propriedade customizada");
+assert(cnt.valor++, 11, "pos-incremento retorna valor antigo");
+assert(cnt.valor, 12, "pos-incremento atualizou valor");
+assert(--cnt.valor, 11, "pre-decremento em propriedade customizada");
+assert(cnt.valor--, 11, "pos-decremento retorna valor antigo");
+assert(cnt.valor, 10, "pos-decremento atualizou valor");
+
+# 3. Backing field contextual 'field' + auto-acessor misto + inicializador
+public class Pessoa {
+    public idade: int {
+        get;
+        set {
+            if (value >= 0) {
+                field = value;
+            }
+        }
+    } = 18;
+
+    public nome: string {
+        get => field;
+        set => field = value;
+    } = "Anon";
+}
+
+var pes := new Pessoa {};
+assert((pes.idade, pes.nome), (18, "Anon"), "acessor misto com field e inicializador");
+pes.idade = 30;
+pes.idade = -5;
+pes.nome = "Maria";
+assert((pes.idade, pes.nome), (30, "Maria"), "backing field 'field' com validacao no set");
+
+# 4. Struct com propriedade customizada e record com propriedade computada
+public struct CaixaInt {
+    private _v: int = 0;
+    public v: int {
+        get => this._v;
+        set { this._v = value * 2; }
+    }
+}
+
+var cx := new CaixaInt {};
+cx.v = 7;
+assert(cx.v, 14, "struct com setter customizado mutando _v");
+
+public record Temp(celsius: double) {
+    public fahrenheit: double {
+        get => this.celsius * 1.8d + 32.0d;
+    }
+}
+
+var t := new Temp(0.0d);
+assert(t.fahrenheit, 32.0d, "record com getter computado");
+
+# 5. Propriedade customizada em classe generica
+public class Wrapper<T> {
+    private _inner: T;
+    public Wrapper(v: T) { this._inner = v; }
+    public item: T {
+        get => this._inner;
+        set { this._inner = value; }
+    }
+}
+
+var w := new Wrapper<int>(5);
+assert(w.item, 5, "class generica com getter customizado");
+w.item = 99;
+assert(w.item, 99, "class generica com setter customizado");
+
+# 6. Diagnósticos (E0144, E0125, E0110)
+assert_error("E0144", "class A { public x: int { get => 1; } = 10; }", "propriedade computada sem backing field nao aceita inicializador");
+assert_error("E0144", "class A { public x: int { get => 1; } } var a := new A { x = 2 };", "propriedade computada nao pode ser inicializada em new");
+assert_error("E0125", "record R(a: int) { public b: int { get => this.a; set { } } }", "record nao permite set customizado");
+assert_error("E0110", "class A { public x: int { get { var a := 1; } } }", "getter sem return em todos os caminhos");

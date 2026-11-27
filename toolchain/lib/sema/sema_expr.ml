@@ -53,6 +53,11 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
        in
        Ok { Typed_ast.desc = Typed_ast.TExprIdent actual_name; ty = info.ty; span = e.span }
      | None ->
+       (match name, !in_prop_accessor, !current_type_ctx with
+        | "field", Some (tname, pname, idx, fty), Some (_, kind, false) when idx >= 0 ->
+          let this_e = { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = e.span } in
+          Ok { Typed_ast.desc = Typed_ast.TExprField (this_e, pname, idx); ty = fty; span = e.span }
+        | _ ->
        let not_found () =
          Error
            (Diagnostic.error
@@ -83,7 +88,7 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                           (Printf.sprintf "cannot access instance method '%s' from a 'static' method" name))
                | Some _ ->
                  Sema_user_fields.check_field_access hooks env ~span:e.span
-                   { Ast.desc = Ast.ExprThis; span = e.span } name)))
+                   { Ast.desc = Ast.ExprThis; span = e.span } name))))
   | Ast.ExprThis ->
     (match !current_type_ctx with
      | None ->

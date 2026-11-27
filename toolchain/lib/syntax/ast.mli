@@ -183,7 +183,8 @@ and stmt = {
 and user_type_kind = KindClass | KindStruct | KindRecord
 and visibility = VisPublic | VisProtected | VisPrivate | VisInternal
 and accessor_kind = AccGet | AccSet | AccInit
-and accessor_spec = { acc_kind : accessor_kind; acc_vis : visibility option; acc_span : Span.t }
+and accessor_body = AccAuto | AccExpr of expr | AccBlock of stmt list
+and accessor_spec = { acc_kind : accessor_kind; acc_vis : visibility option; acc_body : accessor_body; acc_span : Span.t }
 and field_decl = {
   field_vis : visibility option;
   field_is_positional : bool;
