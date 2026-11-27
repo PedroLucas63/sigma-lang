@@ -96,5 +96,6 @@ As próximas evoluções da linguagem devem seguir esta ordem e diretrizes de pr
   - Nunca faça commits na `main` ou `develop` diretamente. Mudanças estruturais ou features devem sempre passar por Pull Request com CI verde.
 - **Gerenciamento de Tarefas via GitHub Issues & Milestones (`gh`):**
   - As tarefas do roadmap são rastreadas como **Issues** no GitHub vinculadas a **Milestones** de lançamento (ex: `v0.3.0`, `v0.4.0`, `v1.0.0`, `v2.0.0`).
-  - **Ao iniciar uma tarefa:** consulte as issues abertas (`gh issue list`) e priorize a issue mais recente/prioritária da milestone ativa (ou a indicada pelo usuário).
+  - **Ao iniciar uma tarefa:** consulte as issues abertas sem a label `in-review` (`gh issue list --search "-label:in-review"`) e priorize a próxima/mais prioritária da milestone ativa (ou a indicada pelo usuário).
+  - **Ciclo `develop` → `main`:** ao fazer Squash Merge de uma feature na `develop` com `Closes #<ID>`, a issue **não** é fechada manualmente; ela recebe automaticamente a label `in-review` (via workflow) e será fechada automaticamente pelo GitHub quando a `release/*` for mergeada na `main`.
   - **Registro obrigatório de adiamentos:** se durante o planejamento ou implementação ficar estabelecido que algum comportamento/requisito ficará para uma issue futura, **adicione imediatamente um comentário ou atualize a descrição da issue futura** correspondente no GitHub (ou crie a issue se ainda não existir) deixando devidamente anotado que ela deve resolver aquele ponto.
