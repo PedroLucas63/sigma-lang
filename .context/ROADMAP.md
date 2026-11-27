@@ -23,19 +23,25 @@
 ---
 
 ## Fase B — Generics, Intrínsecos e Separação da Biblioteca `io` (`v0.3.0`)
-13. [ ] **Templates / Generics (Métodos e Estruturas):** parâmetros de tipo em funções/métodos e `class`/`struct`/`record` semelhantes ao Java/C# (`<T>`, `<?>`, `<T where T is Type>`, variádicos `<Ts...>`).
-14. [ ] **Acessores `get`/`set` Customizados em Propriedades:** permitir reescrever o comportamento de `get` e `set` com corpo em bloco ou expressão (`get { ... }`, `get => ...`, `set { ... }`, `set => ...`, parâmetro implícito `value` e *backing field*).
+13. [x] **Templates / Generics (Métodos e Estruturas):** parâmetros de tipo em funções/métodos e `class`/`struct`/`record` semelhantes ao Java/C# (`<T>`, `<?>`, `<T where T is Type>`, variádicos `<Ts...>`).
+14. [x] **Acessores `get`/`set` Customizados em Propriedades:** permitir reescrever o comportamento de `get` e `set` com corpo em bloco ou expressão (`get { ... }`, `get => ...`, `set { ... }`, `set => ...`, parâmetro implícito `value` e *backing field* `field`).
 15. [ ] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (ex: `__PRINT_STRING(value: string)`, `__PRINT_INT(value: int)`, `__READ_LINE(): string`, `__READ_BLOCK(): string`).
 16. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>(Ts values...)`, `println<Ts...>`, `input`, `prompt`, etc. em módulo padrão dedicado sobre os intrínsecos nativos.
 
 ---
 
-## Fase C — Sistema de Tipos Avançado (OOP, Metadados e Enums) (`v0.4.0`)
+## Fase C — Sistema de Tipos Avançado (OOP, Metadados, Null Safety e Exceções) (`v0.4.0`)
 17. [ ] **Estruturas Aninhadas (*Nested Types*):** declaração de `class`/`struct`/`record` dentro de outras estruturas (ex: `public class A { public static class Builder {} }`).
 18. [ ] **Interfaces (`interface`):** contratos polimórficos implementáveis por `class`, `struct` e `record`.
-19. [ ] **Herança & Modificadores (`abstract`, `sealed`/`final`):** herança para estruturas, classes abstratas, classes/métodos selados/finais e sobrescrita.
+19. [ ] **Herança, Modificadores (`abstract`, `sealed`/`final`), `override` & Conversões:** herança, sobrescrita (`override`), upcast implícito, `is` / `is Tipo var` (smart cast), downcast `(Tipo)` e safe cast `as`.
 20. [ ] **Enumerações (`enum`):** design híbrido entre Java (campos, métodos, construtores) e C# (valores subjacentes, ergonomia).
 21. [ ] **Anotações (`@Annotation`):** metadados no estilo Java aplicáveis a tipos, métodos, campos e parâmetros.
+22. [ ] **Sobrecarga de Métodos (*Method Overloading*):** múltiplas assinaturas com mesmo nome diferenciadas pelos parâmetros.
+23. [ ] **Tipo Raiz Universal `object` & Métodos Padrão (`toString`, `equals`, `hash`):** raiz universal com boxing/unboxing de primitivos e `toString()`/`equals()`/`hash()` padrão sobrescrevíveis.
+24. [ ] **Sobrecarga de Operadores (*Operator Overloading*):** redefinição de operadores em `class`, `struct` e `record`.
+25. [ ] **Null Safety (`T?` e `null` seguro):** tipos não-anuláveis por padrão, `T?` para estruturas e primitivos, `?.`, `??`, `??=` e *null narrowing*.
+26. [ ] **`switch` com Pattern Matching:** `case Tipo:`, `case Tipo v:`, guards `when`, sem *fallthrough*, statement e expressão.
+27. [ ] **Exceções (`try` / `catch` / `finally` / `throw`):** classe base `Exception` e tratamento estruturado em VM e C99.
 
 ---
 
