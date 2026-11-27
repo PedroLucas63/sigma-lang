@@ -94,7 +94,12 @@ let check_lvalue hooks (env : env) ~for_op (lval : Ast.lvalue)
   | Ast.LValIdent (name, name_span) ->
     (match Hashtbl.find_opt env name with
      | None ->
-       let undeclared () =
+       (match name, !in_prop_accessor, !current_type_ctx with
+        | "field", Some (tname, pname, idx, fty), Some (_, kind, false) when idx >= 0 ->
+          let this_e = { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = name_span } in
+          Ok (Typed_ast.TLValField (this_e, pname, idx), fty, "backing field")
+        | _ ->
+          let undeclared () =
          Error
            (Diagnostic.error
               ~hint:(Printf.sprintf "declare '%s' first using 'var %s := ...;' or 'const %s := ...;'" name name name)
@@ -112,7 +117,7 @@ let check_lvalue hooks (env : env) ~for_op (lval : Ast.lvalue)
              else
                Sema_user_fields.check_field_lvalue hooks env ~span:name_span ~for_op
                  { Ast.desc = Ast.ExprThis; span = name_span } name
-           | _ -> undeclared ()))
+           | _ -> undeclared ())))
      | Some info ->
        if info.const_kind = ShallowConst then
          let msg =

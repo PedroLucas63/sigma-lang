@@ -11,7 +11,7 @@ let parse_opt_visibility st : (Ast.visibility * Span.t) option =
   | Token.KW_INTERNAL -> bump st; Some (Ast.VisInternal, tok.span)
   | _ -> None
 
-let parse_accessor_blk st : (Ast.accessor_spec list * Span.t, Diagnostic.t) result =
+let parse_accessor_blk hooks st : (Ast.accessor_spec list * Span.t, Diagnostic.t) result =
   let open_tok = cur st in
   bump st;
   let rec loop acc =
@@ -41,11 +41,34 @@ let parse_accessor_blk st : (Ast.accessor_spec list * Span.t, Diagnostic.t) resu
       | Ok acc_kind ->
         bump st;
         let sp0 = match vis_opt with Some (_, sp) -> sp | None -> acc_tok.span in
-        (match expect_semi st sp0 with
+        let body_res =
+          match (cur st).kind with
+          | Token.SEMI ->
+            Result.map (fun sp -> (Ast.AccAuto, sp)) (expect_semi st sp0)
+          | Token.FAT_ARROW ->
+            bump st;
+            (match hooks.parse_expr st with
+             | Error e -> Error e
+             | Ok expr ->
+               Result.map (fun sp -> (Ast.AccExpr expr, sp)) (expect_semi st sp0))
+          | Token.LBRACE ->
+            let ob = cur st in
+            bump st;
+            (match hooks.parse_block_stmt st ob with
+             | Error e -> Error e
+             | Ok { Ast.desc = Ast.StmtBlock body; span } ->
+               Ok (Ast.AccBlock body, Span.merge sp0 span)
+             | Ok _ -> err_at ob "internal error: accessor body must be a block")
+          | _ ->
+            err_at (cur st) ~hint:"use ';', '=> expr;', or '{ ... }' after accessor"
+              (Printf.sprintf "expected ';', '=>', or '{' after accessor, found %s"
+                 (Token.kind_to_string (cur st).kind))
+        in
+        (match body_res with
          | Error e -> Error e
-         | Ok acc_span ->
+         | Ok (acc_body, acc_span) ->
            let spec : Ast.accessor_spec =
-             { acc_kind; acc_vis = Option.map fst vis_opt; acc_span }
+             { acc_kind; acc_vis = Option.map fst vis_opt; acc_body; acc_span }
            in
            loop (spec :: acc))
   in

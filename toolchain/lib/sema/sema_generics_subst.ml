@@ -197,8 +197,20 @@ and subst_type_decl (ctx : subst_ctx) (td : Ast.type_decl) : Ast.type_decl =
   let subst_cp (cp : Ast.ctor_param) : Ast.ctor_param =
     { cp with cp_type = subst_type_expr ctx cp.cp_type; cp_default = Option.map (subst_expr ctx) cp.cp_default }
   in
+  let subst_acc (a : Ast.accessor_spec) : Ast.accessor_spec =
+    let acc_body =
+      match a.acc_body with
+      | Ast.AccAuto -> Ast.AccAuto
+      | Ast.AccExpr e -> Ast.AccExpr (subst_expr ctx e)
+      | Ast.AccBlock ss -> Ast.AccBlock (subst_stmts ctx ss)
+    in
+    { a with acc_body }
+  in
   let subst_field (f : Ast.field_decl) : Ast.field_decl =
-    { f with field_type = subst_type_expr ctx f.field_type; field_default = Option.map (subst_expr ctx) f.field_default }
+    { f with
+      field_type = subst_type_expr ctx f.field_type;
+      field_accessors = Option.map (List.map subst_acc) f.field_accessors;
+      field_default = Option.map (subst_expr ctx) f.field_default }
   in
   let subst_ctor (c : Ast.ctor_decl) : Ast.ctor_decl =
     { c with

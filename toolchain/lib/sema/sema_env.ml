@@ -26,6 +26,10 @@ type user_field = {
   uf_get : Ast.visibility option;
   uf_set : Ast.visibility option;
   uf_init : Ast.visibility option;
+  uf_custom_get : string option;
+  uf_custom_set : string option;
+  uf_custom_init : string option;
+  uf_has_slot : bool;
   uf_default : Typed_ast.expr option;
 }
 
@@ -65,6 +69,7 @@ type user_type_info = {
 
 let current_type_ctx : (string * Ty.user_type_kind * bool) option ref = ref None
 let in_ctor : bool ref = ref false
+let in_prop_accessor : (string * string * int * Ty.t) option ref = ref None
 
 type export_kind =
   | ExpVal of {

@@ -258,8 +258,8 @@ and pp_stmt fmt (s : stmt) =
     in
     let pp_acc fmt (a : accessor_spec) =
       let k = match a.acc_kind with AccGet -> "get" | AccSet -> "set" | AccInit -> "init" in
-      Format.fprintf fmt "%a%s;" pp_vis a.acc_vis k
-    in
+      let suffix = match a.acc_body with AccAuto -> ";" | AccExpr _ -> " => ...;" | AccBlock _ -> " { ... }" in
+      Format.fprintf fmt "%a%s%s" pp_vis a.acc_vis k suffix in
     let pp_accs fmt = function
       | None -> ()
       | Some accs -> Format.fprintf fmt " { %a }" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") pp_acc) accs
