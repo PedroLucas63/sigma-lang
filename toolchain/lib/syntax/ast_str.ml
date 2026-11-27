@@ -1,7 +1,8 @@
 open Ast_types
 
 let type_expr_span = function
-  | TypeNamed (_, sp) | TypeTuple (_, sp) | TypeArray (_, _, sp) | TypeFun (_, _, sp) -> sp
+  | TypeNamed (_, sp) | TypeGeneric (_, _, sp) | TypeWildcard sp
+  | TypeTuple (_, sp) | TypeArray (_, _, sp) | TypeFun (_, _, sp) -> sp
 
 let param_mode_prefix = function
   | ParamVal -> ""
@@ -10,6 +11,9 @@ let param_mode_prefix = function
 
 let rec type_expr_to_string = function
   | TypeNamed (name, _) -> name
+  | TypeWildcard _ -> "?"
+  | TypeGeneric (name, args, _) ->
+    name ^ "<" ^ String.concat ", " (List.map type_expr_to_string args) ^ ">"
   | TypeTuple (tys, _) ->
     "(" ^ String.concat ", " (List.map type_expr_to_string tys) ^ ")"
   | TypeFun (ret, params, _) ->

@@ -39,7 +39,8 @@ and expr_desc =
   | ExprIndex of expr * expr
   | ExprField of expr * string
   | ExprStructInit of string * call_arg list
-  | ExprNew of { new_name : string; new_is_ctor : bool; new_args : call_arg list; new_inits : call_arg list option }
+  | ExprNew of { new_name : string; new_type_args : type_expr list; new_is_ctor : bool; new_args : call_arg list; new_inits : call_arg list option }
+  | ExprTypeApp of expr * type_expr list * Span.t
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -56,6 +57,7 @@ and call_arg = {
   arg_name : (string * Span.t) option;
   arg_mode : arg_mode;
   arg_value : expr;
+  arg_spread : bool;
 }
 
 and interp_part =
@@ -199,6 +201,7 @@ and ctor_decl = {
 and method_decl = { md_vis : visibility option; md_is_static : bool; md_fun : fun_decl; md_span : Span.t }
 and type_decl = {
   td_vis : visibility option; td_kind : user_type_kind; td_name : string; td_name_span : Span.t;
+  td_type_params : type_param list; td_where : where_clause list;
   td_ctor_params : ctor_param list option; td_fields : field_decl list;
   td_ctors : ctor_decl list; td_methods : method_decl list;
 }
@@ -206,8 +209,10 @@ and type_decl = {
 and fun_decl = {
   fd_name : string;
   fd_name_span : Span.t;
+  fd_type_params : type_param list;
   fd_params : fun_param list;
   fd_ret : type_expr option;
+  fd_where : where_clause list;
   fd_body : stmt list;
 }
 

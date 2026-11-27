@@ -63,7 +63,7 @@ let check_destruct_decl hooks (env : env) (scope_vars : string list ref) (s_span
   | _ :: _ as errors -> Error errors
   | [] ->
     (match resolved_annot, resolved_init with
-     | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+     | Some annot_ty, Some init_te when not (Ty.is_compatible ~expected:annot_ty ~actual:init_te.ty) ->
        Error
          [
            Diagnostic.error ~code:"E0104" ~span:init_te.span
@@ -164,7 +164,7 @@ let check_var_decl hooks (env : env) (scope_vars : string list ref) (s_span : Sp
   | _ :: _ as errors -> Error errors
   | [] ->
     (match resolved_annot, resolved_init with
-     | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+     | Some annot_ty, Some init_te when not (Ty.is_compatible ~expected:annot_ty ~actual:init_te.ty) ->
        let entity = if v.is_const then "constant" else "variable" in
        Error
          [

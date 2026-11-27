@@ -203,7 +203,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                  | Error err -> Error err
                  | Ok targ ->
                    let arg_type_ok =
-                     Ty.equal targ.ty expected_param.pty
+                     Ty.is_compatible ~expected:expected_param.pty ~actual:targ.ty
                      || (match expected_param.pty, targ.ty with
                          | Ty.DynArray e_exp, Ty.Array (e_act, _) -> Ty.equal e_exp e_act
                          | _ -> false)

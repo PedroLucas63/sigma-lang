@@ -120,7 +120,7 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
         | Ty.Decimal -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_dec(%s), stdout);\n" indent c_e)
         | Ty.Bool -> Buffer.add_string buf (Printf.sprintf "%sfputs((%s) ? \"true\" : \"false\", stdout);\n" indent c_e)
         | Ty.Char | Ty.String -> Buffer.add_string buf (Printf.sprintf "%sfputs(%s, stdout);\n" indent c_e)
-        | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
+        | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.WildcardUser _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
         | Ty.Fun _ -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n%sfputs(\"<function>\", stdout);\n" indent c_e indent)
         | Ty.Void -> ())
       args;

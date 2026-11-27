@@ -33,6 +33,27 @@ let rec resolve_type_expr ?(allow_unsized = false) (te : Ast.type_expr) (init_ty
                ~hint:"supported types: 'int', 'float', 'double', 'decimal', 'bool', 'char', 'string', user types, tuples '(T1, T2)', or arrays 'T[N]'"
                ~code:"E0101" ~span:ty_span
                (Printf.sprintf "unknown or unsupported type '%s'" ty_name))))
+  | Ast.TypeWildcard sp ->
+    Error (Diagnostic.error ~code:"E0143" ~span:sp "wildcard '?' can only be used inside generic type arguments, e.g. 'Caixa<?>'")
+  | Ast.TypeGeneric (ty_name, arg_tes, ty_span) ->
+    (match Hashtbl.find_opt Sema_generics.generic_types ty_name with
+     | None ->
+       Error (Diagnostic.error ~code:"E0101" ~span:ty_span (Printf.sprintf "unknown generic type '%s'" ty_name))
+     | Some td ->
+       if List.exists (function Ast.TypeWildcard _ -> true | _ -> false) arg_tes then
+         let kind = match td.td_kind with Ast.KindClass -> Ty.KindClass | Ast.KindStruct -> Ty.KindStruct | Ast.KindRecord -> Ty.KindRecord in
+         Ok (Ty.WildcardUser (kind, ty_name))
+       else
+         let rec res_args acc = function
+           | [] -> Ok (List.rev acc)
+           | a :: rest ->
+             (match resolve_type_expr a None with
+              | Error e -> Error e
+              | Ok ty -> res_args (ty :: acc) rest)
+         in
+         (match res_args [] arg_tes with
+          | Error e -> Error e
+          | Ok arg_tys -> !Sema_generics.instantiate_type_hook ty_span ty_name arg_tys))
   | Ast.TypeFun (ret_te, param_tes, _) ->
     let ret_res =
       match ret_te with
@@ -142,7 +163,7 @@ let rec default_expr_for_type ?(visited = []) (ty : Ty.t) (span : Span.t) : Type
             info.ut_fields
       in
       { Typed_ast.desc = Typed_ast.TExprStructInit { tsi_name = name; tsi_kind = kind; tsi_args = args }; ty; span }
-  | Ty.Fun _ | Ty.Void ->
+  | Ty.Fun _ | Ty.Void | Ty.WildcardUser _ ->
     { Typed_ast.desc = Typed_ast.TExprInt 0L; ty = Ty.Int; span }
 
 let rec stmt_always_returns (s : Typed_ast.stmt) : bool =

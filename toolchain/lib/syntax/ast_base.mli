@@ -71,9 +71,31 @@ type param_mode =
 
 type type_expr =
   | TypeNamed of string * Span.t
+  | TypeGeneric of string * type_expr list * Span.t
+  | TypeWildcard of Span.t
   | TypeTuple of type_expr list * Span.t
   | TypeArray of type_expr * int option * Span.t
   | TypeFun of type_expr * (param_mode * type_expr) list * Span.t
+
+type type_param = {
+  tp_name : string;
+  tp_span : Span.t;
+  tp_variadic : bool;
+}
+
+type type_constraint =
+  | ConstraintTypes of type_expr list
+  | ConstraintNumeric
+  | ConstraintClass
+  | ConstraintStruct
+  | ConstraintRecord
+
+type where_clause = {
+  wc_param : string;
+  wc_param_span : Span.t;
+  wc_constraint : type_constraint;
+  wc_span : Span.t;
+}
 
 type arg_mode =
   | ArgVal
@@ -90,4 +112,5 @@ type fun_param = {
   param_span : Span.t;
   param_mode : param_mode;
   param_type : type_expr;
+  param_variadic : bool;
 }

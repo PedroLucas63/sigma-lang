@@ -66,6 +66,13 @@ let check_return_stmt hooks (env : env) (s_span : Span.t) (eo : Ast.expr option)
 
 let check_fun_decl hooks (env : env) (scope_vars : string list ref) (next_loop_id : int ref)
     (s_span : Span.t) (fd : Ast.fun_decl) : (Typed_ast.stmt, Diagnostic.t list) result =
+  if fd.fd_type_params <> [] then begin
+    match Sema_generics.check_duplicate_type_params fd.fd_type_params with
+    | Error e -> Error [ e ]
+    | Ok () ->
+      Hashtbl.replace Sema_generics.generic_funs fd.fd_name fd;
+      Ok { Typed_ast.desc = Typed_ast.TStmtBlock []; span = s_span }
+  end else
   let conflict_errs =
     match find_conflict env fd.fd_name with
     | None -> []

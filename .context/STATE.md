@@ -45,7 +45,8 @@
 
 ## Próximos Passos Planejados (Resumo — ver [`.context/ROADMAP.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/ROADMAP.md))
 - **1–12. Fase A Concluída** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL, `lib` & `.sgmpkg`, gerenciador SemVer/`sigma.lock`/`.sigma_modules/`, *mirrors* & repositórios Git).
-- **13–16 (Fase B — `v0.3.0`):** templates/generics (`<T>`, `<?>`, `where`, `<Ts...>`), `get`/`set` customizados, intrínsecos nativos (`__PRINT_*`, `__READ_*`) e separação da stdlib `io`.
+- **13 (Concluído — Issue #1):** Templates / Generics (funções/métodos/estruturas `<T>`, `<?>`, `where`, variádicos `<Ts...>`, `E0141`..`E0143`, `tests/21_generics_templates_test.sgm`).
+- **14–16 (Fase B — `v0.3.0`):** `get`/`set` customizados (`#2`), intrínsecos nativos (`__PRINT_*`, `__READ_*`) (`#3`) e separação da stdlib `io` (`#4`).
 - **17–21 (Fase C — `v0.4.0`):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
 - **22–25 (Fase D — `v0.5.0`):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.
 - **26–28 (Fase E — `v1.0.0`):** sub-roadmaps + implementação de Ciência de Dados/CSV e Vetores/Matrizes/GPU, e análise aprofundada para a `v1.0`.

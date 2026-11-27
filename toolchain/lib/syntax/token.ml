@@ -90,6 +90,9 @@ type kind =
   | RBRACKET
   | DOT
   | DOT_DOT
+  | ELLIPSIS
+  | QUESTION
+  | PIPE
   | COMMA
   | SEMI
   | EOF
@@ -193,6 +196,9 @@ let kind_to_string = function
   | RBRACKET -> "']'"
   | DOT -> "'.'"
   | DOT_DOT -> "'..'"
+  | ELLIPSIS -> "'...'"
+  | QUESTION -> "'?'"
+  | PIPE -> "'|'"
   | COMMA -> "','"
   | SEMI -> "';'"
   | EOF -> "end of file"

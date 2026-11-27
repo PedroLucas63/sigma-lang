@@ -5,26 +5,17 @@ open Parser_state
 let parse_fn_call_args hooks st : (Ast.call_arg list * Span.t, Diagnostic.t) result =
   let rec loop acc =
     let tok = cur st in
-    if tok.kind = Token.RPAREN then begin
-      bump st;
-      Ok (List.rev acc, tok.span)
-    end else begin
+    if tok.kind = Token.RPAREN then (bump st; Ok (List.rev acc, tok.span))
+    else begin
       let named =
         match tok.kind with
-        | Token.IDENT n when (peek_next st).kind = Token.EQUAL ->
-          bump st;
-          bump st;
-          Some (n, tok.span)
+        | Token.IDENT n when (peek_next st).kind = Token.EQUAL -> bump st; bump st; Some (n, tok.span)
         | _ -> None
       in
       let t = cur st in
       let arg_mode_res : (Ast.arg_mode * Ast.expr, Diagnostic.t) result =
-        if t.kind = Token.KW_REF then begin
-          bump st;
-          match hooks.parse_expr st with
-          | Error e -> Error e
-          | Ok e -> Ok (Ast.ArgRef, e)
-        end else if t.kind = Token.KW_OUT then begin
+        if t.kind = Token.KW_REF then (bump st; Result.map (fun e -> (Ast.ArgRef, e)) (hooks.parse_expr st))
+        else if t.kind = Token.KW_OUT then begin
           bump st;
           if (cur st).kind = Token.KW_VAR then begin
             bump st;
@@ -33,46 +24,25 @@ let parse_fn_call_args hooks st : (Ast.call_arg list * Span.t, Diagnostic.t) res
             | Token.IDENT vname ->
               bump st;
               let ty_res =
-                if (cur st).kind = Token.COLON then begin
-                  bump st;
-                  match Parser_types.parse_type_expr st with
-                  | Ok te -> Ok (Some te)
-                  | Error e -> Error e
-                end else Ok None
+                if (cur st).kind = Token.COLON then (bump st; Result.map Option.some (Parser_types.parse_type_expr st))
+                else Ok None
               in
-              (match ty_res with
-               | Error e -> Error e
-               | Ok ty_opt ->
-                 let dummy : Ast.expr = { desc = Ast.ExprIdent vname; span = id_tok.span } in
-                 Ok (Ast.ArgOutVar { var_name = vname; var_span = id_tok.span; var_type = ty_opt }, dummy))
-            | _ ->
-              err_at id_tok
-                (Printf.sprintf "expected identifier after 'out var', found %s"
-                   (Token.kind_to_string id_tok.kind))
-          end else
-            match hooks.parse_expr st with
-            | Error e -> Error e
-            | Ok e -> Ok (Ast.ArgOut, e)
-        end else
-          match hooks.parse_expr st with
-          | Error e -> Error e
-          | Ok e -> Ok (Ast.ArgVal, e)
+              Result.map (fun ty_opt ->
+                (Ast.ArgOutVar { var_name = vname; var_span = id_tok.span; var_type = ty_opt },
+                 ({ Ast.desc = Ast.ExprIdent vname; span = id_tok.span } : Ast.expr))) ty_res
+            | _ -> err_at id_tok (Printf.sprintf "expected identifier after 'out var', found %s" (Token.kind_to_string id_tok.kind))
+          end else Result.map (fun e -> (Ast.ArgOut, e)) (hooks.parse_expr st)
+        end else Result.map (fun e -> (Ast.ArgVal, e)) (hooks.parse_expr st)
       in
       match arg_mode_res with
       | Error e -> Error e
       | Ok (mode, v) ->
-        let acc = { Ast.arg_name = named; arg_mode = mode; arg_value = v } :: acc in
+        let arg_spread = if mode = Ast.ArgVal && (cur st).kind = Token.ELLIPSIS then (bump st; true) else false in
+        let acc = { Ast.arg_name = named; arg_mode = mode; arg_value = v; arg_spread } :: acc in
         let nt = cur st in
-        if nt.kind = Token.COMMA then begin
-          bump st;
-          loop acc
-        end else if nt.kind = Token.RPAREN then begin
-          bump st;
-          Ok (List.rev acc, nt.span)
-        end else
-          err_at nt
-            (Printf.sprintf "expected ')' or ',' in call arguments, found %s"
-               (Token.kind_to_string nt.kind))
+        if nt.kind = Token.COMMA then (bump st; loop acc)
+        else if nt.kind = Token.RPAREN then (bump st; Ok (List.rev acc, nt.span))
+        else err_at nt (Printf.sprintf "expected ')' or ',' in call arguments, found %s" (Token.kind_to_string nt.kind))
     end
   in
   loop []
@@ -264,6 +234,12 @@ and parse_postfix hooks st : (Ast.expr, Diagnostic.t) result =
              err_at close_tok ~hint:"close index access with ']', e.g. 'arr[0]'"
                (Printf.sprintf "expected ']' after index expression, found %s"
                   (Token.kind_to_string close_tok.kind)))
+      | Token.LT ->
+        (match Parser_generics.try_parse_expr_type_args ~parse_type_expr:Parser_types.parse_type_expr st with
+         | Some (Ok (targs, end_sp)) ->
+           loop { Ast.desc = Ast.ExprTypeApp (acc, targs, Span.merge acc.span end_sp); span = Span.merge acc.span end_sp }
+         | Some (Error e) -> Error e
+         | None -> Ok acc)
       | Token.LPAREN ->
         bump st;
         (match parse_fn_call_args hooks st with

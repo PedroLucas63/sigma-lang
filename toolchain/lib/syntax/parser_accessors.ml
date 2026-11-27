@@ -113,7 +113,7 @@ let parse_call_arg_list hooks st ~close_kind ~close_str ~ctx_label =
       match hooks.parse_expr st with
       | Error e -> Error e
       | Ok v ->
-        let arg : Ast.call_arg = { arg_name = named; arg_mode = Ast.ArgVal; arg_value = v } in
+        let arg : Ast.call_arg = { arg_name = named; arg_mode = Ast.ArgVal; arg_value = v; arg_spread = false } in
         let acc = arg :: acc in
         let nt = cur st in
         if nt.kind = Token.COMMA then (bump st; loop acc)
