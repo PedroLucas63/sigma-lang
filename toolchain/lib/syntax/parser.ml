@@ -29,7 +29,7 @@ let rec hooks : hooks =
 
 let parse (token_list : Token.t list) : (Ast.program, Diagnostic.t list) result =
   let tokens = Array.of_list token_list in
-  let st = { tokens; idx = 0 } in
+  let st = { tokens; idx = 0; pending_gt = 0 } in
   let stmts = ref [] in
   let errors = ref [] in
   while not (is_eof st) do

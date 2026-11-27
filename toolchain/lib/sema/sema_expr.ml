@@ -92,9 +92,30 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
        Error (Diagnostic.error ~code:"E0128" ~span:e.span "'this' cannot be used inside a 'static' method")
      | Some (tname, kind, false) ->
        Ok { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = e.span })
+  | Ast.ExprTypeApp (callee, _, sp) ->
+    Error (Diagnostic.error ~code:"E0002" ~span:sp
+             (Printf.sprintf "explicit type arguments on '%s' must be followed by '(...)'"
+                (match callee.desc with Ast.ExprIdent n -> n | _ -> "expression")))
   | Ast.ExprCall (callee, args) ->
     (match callee.desc with
+     | Ast.ExprTypeApp (inner, targs, _) ->
+       (match inner.desc with
+        | Ast.ExprIdent name when Hashtbl.mem Sema_generics.generic_funs name ->
+          Sema_generics_calls.check_generic_fun_call hooks env e name (Some targs) args
+        | Ast.ExprIdent name when Hashtbl.mem Sema_generics.generic_types name ->
+          Sema_generics_calls.check_generic_new hooks env ~span:e.span ~is_ctor:true name targs args None
+        | Ast.ExprField (base, mname) ->
+          (match Sema_generics_calls.check_generic_method_call hooks env e base mname (Some targs) args with
+           | Some res -> res
+           | None ->
+             Error (Diagnostic.error ~code:"E0130" ~span:inner.span
+                      (Printf.sprintf "generic method '%s' not found" mname)))
+        | _ ->
+          Error (Diagnostic.error ~code:"E0141" ~span:inner.span "target is not a generic function or method"))
      | Ast.ExprField (base, mname) ->
+       (match Sema_generics_calls.check_generic_method_call hooks env e base mname None args with
+        | Some res -> res
+        | None ->
        (match Sema_methods.try_check_method_call hooks env ~span:e.span ~call_expr:e ~callee base mname args with
         | Some res -> res
         | None ->
@@ -108,7 +129,9 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                   (Diagnostic.error
                      ~hint:"only values of function type ('fun'/'act') can be called"
                      ~code:"E0112" ~span:callee.span
-                     (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
+                     (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))))
+     | Ast.ExprIdent name when Hashtbl.mem Sema_generics.generic_funs name ->
+       Sema_generics_calls.check_generic_fun_call hooks env e name None args
      | Ast.ExprIdent name ->
        (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
         | Some res -> res
@@ -153,11 +176,11 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                   (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other))))))
   | Ast.ExprStructInit (name, args) ->
     Sema_user_types.check_struct_init hooks env ~span:e.span name args
-  | Ast.ExprNew { new_name; new_is_ctor; new_args; new_inits } ->
+  | Ast.ExprNew { new_name; new_type_args; new_is_ctor; new_args; new_inits } ->
     (match Hashtbl.find_opt lazy_imports new_name with
      | Some (m, orig_sym, ExpType _) -> Sema_modules.mark_used m orig_sym
      | _ -> ());
-    Sema_user_types.check_new_expr hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_args new_inits
+    Sema_generics_calls.check_generic_new hooks env ~span:e.span ~is_ctor:new_is_ctor new_name new_type_args new_args new_inits
   | Ast.ExprField (base, field) ->
     Sema_user_fields.check_field_access hooks env ~span:e.span base field
   | Ast.ExprLambda lam -> Sema_expr_special.check_lambda_expr hooks env e.span lam

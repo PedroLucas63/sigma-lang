@@ -35,6 +35,9 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   let saved_vis_map = Hashtbl.copy top_vis_map in
   let saved_mod_aliases = Hashtbl.copy module_aliases in
   let saved_lazy = Hashtbl.copy lazy_imports in
+  let saved_gen = Sema_generics.snapshot () in
+  let gen_env = env in
+  Sema_generics.instantiate_type_hook := (fun sp name targs -> Sema_generics_inst.instantiate_type hooks gen_env sp name targs);
   Hashtbl.clear user_types;
   Hashtbl.clear module_cache;
   module_load_order := [];
@@ -42,6 +45,7 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   Hashtbl.clear top_vis_map;
   Hashtbl.clear module_aliases;
   Hashtbl.clear lazy_imports;
+  Sema_generics.clear_all ();
   root_scope_ref := Some root_scope;
   current_fun := RetNone;
   fn_outer := None;
@@ -52,6 +56,7 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
       | Error errs -> all_errors := List.rev_append errs !all_errors)
     prog;
   let used_mod_stmts = Sema_modules.collect_used_module_stmts () in
+  let mono_stmts = List.rev !Sema_generics.pending_stmts in
   root_scope_ref := saved_root;
   current_fun := saved_fun;
   fn_outer := saved_outer;
@@ -63,8 +68,9 @@ and check_program (prog : Ast.program) : (Typed_ast.program, Diagnostic.t list) 
   Hashtbl.clear top_vis_map; Hashtbl.iter (Hashtbl.replace top_vis_map) saved_vis_map;
   Hashtbl.clear module_aliases; Hashtbl.iter (Hashtbl.replace module_aliases) saved_mod_aliases;
   Hashtbl.clear lazy_imports; Hashtbl.iter (Hashtbl.replace lazy_imports) saved_lazy;
+  Sema_generics.restore saved_gen;
   match List.rev !all_errors with
-  | [] -> Ok (used_mod_stmts @ List.rev !tstmts)
+  | [] -> Ok (used_mod_stmts @ mono_stmts @ List.rev !tstmts)
   | errs -> Error errs
 
 type entry_point =

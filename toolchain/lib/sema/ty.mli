@@ -29,10 +29,12 @@ and t =
   | Array of t * int
   | DynArray of t
   | User of user_type_kind * string
+  | WildcardUser of user_type_kind * string
   | Fun of fun_param list * t  (** Função/procedimento: parâmetros restantes e retorno ([Void] para [act]). *)
   | Void  (** Retorno de [act]; só aparece como retorno de [Fun] ou como tipo de chamada de [act]. *)
 
 val equal : t -> t -> bool
+val is_compatible : expected:t -> actual:t -> bool
 val to_string : t -> string
 val of_string : string -> t option
 val default_int_value : int64

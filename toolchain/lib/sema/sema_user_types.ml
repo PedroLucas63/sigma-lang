@@ -10,6 +10,10 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
   if not is_top_level then
     Error [ Diagnostic.error ~hint:"move 'class', 'struct', or 'record' declarations to the top level of the file"
               ~code:"E0002" ~span:td.td_name_span (Printf.sprintf "type '%s' can only be declared at top level" td.td_name) ]
+  else if td.td_type_params <> [] then
+    (match Sema_generics.check_duplicate_type_params td.td_type_params with
+     | Error e -> Error [ e ]
+     | Ok () -> Hashtbl.replace Sema_generics.generic_types td.td_name td; Ok { Typed_ast.desc = Typed_ast.TStmtBlock []; span })
   else if Hashtbl.mem user_types td.td_name || Hashtbl.mem env td.td_name then
     Error [ Diagnostic.error ~code:"E0103" ~span:td.td_name_span
               (Printf.sprintf "name '%s' is already defined in this scope" td.td_name) ]
@@ -97,8 +101,9 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
         let rev_ufields = List.rev !ufields in
         let rev_tfields = List.rev !tfields in
         let start_idx = if Option.is_some primary_ctor_opt then 1 else 0 in
+        let concrete_methods = Sema_generics_inst.register_generic_methods td.td_name td.td_methods in
         (match Sema_ctors.check_general_ctor_sigs hooks env ~type_name:td.td_name ~start_idx td.td_ctors,
-               Sema_methods.check_method_sigs ~type_name:td.td_name ~seen_members:seen td.td_methods with
+               Sema_methods.check_method_sigs ~type_name:td.td_name ~seen_members:seen concrete_methods with
          | Error ces, _ -> Hashtbl.remove user_types td.td_name; Error ces
          | _, Error mes -> Hashtbl.remove user_types td.td_name; Error mes
          | Ok gen_ctors, Ok umethods ->
@@ -118,7 +123,7 @@ let check_type_decl hooks (env : env) ~(is_top_level : bool) (span : Span.t) (td
            in
            (match Sema_ctors.check_general_ctor_bodies hooks env loop_ref ~info:info_mid td.td_ctors gen_ctors,
                   Sema_methods.check_method_bodies hooks env loop_ref ~type_name:td.td_name ~kind
-                    td.td_methods umethods with
+                    concrete_methods umethods with
             | Error cbes, _ -> Hashtbl.remove user_types td.td_name; Error cbes
             | _, Error bes -> Hashtbl.remove user_types td.td_name; Error bes
             | Ok gen_ctor_funs, Ok (final_ums, typed_methods) ->

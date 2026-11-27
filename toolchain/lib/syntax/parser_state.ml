@@ -4,6 +4,7 @@ open Sigma_diagnostics
 type state = {
   tokens : Token.t array;
   mutable idx : int;
+  mutable pending_gt : int;
 }
 
 type hooks = {

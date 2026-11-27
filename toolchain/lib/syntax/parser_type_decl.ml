@@ -121,7 +121,7 @@ let parse_member hooks st ~ctx_name
        | Error e -> Error e
        | Ok f -> Ok (`Field f))
 
-let parse_class_or_struct hooks st ~td_vis ~start_span ~kind name name_tok : (Ast.stmt, Diagnostic.t) result =
+let parse_class_or_struct hooks st ~td_vis ~start_span ~kind ~td_type_params name name_tok : (Ast.stmt, Diagnostic.t) result =
   let kw = kind_kw kind in
   let ctor_params_res =
     if (cur st).kind = Token.LPAREN then
@@ -133,42 +133,37 @@ let parse_class_or_struct hooks st ~td_vis ~start_span ~kind name name_tok : (As
   match ctor_params_res with
   | Error e -> Error e
   | Ok td_ctor_params ->
-    let open_tok = cur st in
-    if open_tok.kind <> Token.LBRACE then
-      err_at open_tok ~hint:(Printf.sprintf "declare members inside '{ ... }', e.g. '%s %s { public x: int; }'" kw name)
-        (Printf.sprintf "expected '{' after '%s %s', found %s" kw name (Token.kind_to_string open_tok.kind))
-    else begin
-      bump st;
-      let rec loop fields ctors methods =
-        let tok = cur st in
-        if tok.kind = Token.RBRACE then begin
-          bump st;
-          let td : Ast.type_decl =
-            {
-              td_vis;
-              td_kind = kind;
-              td_name = name;
-              td_name_span = name_tok.Token.span;
-              td_ctor_params;
-              td_fields = List.rev fields;
-              td_ctors = List.rev ctors;
-              td_methods = List.rev methods;
-            }
-          in
-          Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span tok.span }
-        end else if is_eof st then
-          err_at open_tok (Printf.sprintf "unclosed '{' in %s '%s'" kw name)
-        else
-          match parse_member hooks st ~ctx_name:kw with
-          | Error e -> Error e
-          | Ok (`Field f) -> loop (f :: fields) ctors methods
-          | Ok (`Ctor c) -> loop fields (c :: ctors) methods
-          | Ok (`Method m) -> loop fields ctors (m :: methods)
-      in
-      loop [] [] []
-    end
+    (match Parser_generics.parse_opt_where_clauses ~parse_type_expr:Parser_types.parse_type_expr st with
+     | Error e -> Error e
+     | Ok td_where ->
+       let open_tok = cur st in
+       if open_tok.kind <> Token.LBRACE then
+         err_at open_tok ~hint:(Printf.sprintf "declare members inside '{ ... }', e.g. '%s %s { public x: int; }'" kw name)
+           (Printf.sprintf "expected '{' after '%s %s', found %s" kw name (Token.kind_to_string open_tok.kind))
+       else begin
+         bump st;
+         let rec loop fields ctors methods =
+           let tok = cur st in
+           if tok.kind = Token.RBRACE then begin
+             bump st;
+             let td : Ast.type_decl =
+               { td_vis; td_kind = kind; td_name = name; td_name_span = name_tok.Token.span;
+                 td_type_params; td_where; td_ctor_params;
+                 td_fields = List.rev fields; td_ctors = List.rev ctors; td_methods = List.rev methods }
+             in
+             Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span tok.span }
+           end else if is_eof st then err_at open_tok (Printf.sprintf "unclosed '{' in %s '%s'" kw name)
+           else
+             match parse_member hooks st ~ctx_name:kw with
+             | Error e -> Error e
+             | Ok (`Field f) -> loop (f :: fields) ctors methods
+             | Ok (`Ctor c) -> loop fields (c :: ctors) methods
+             | Ok (`Method m) -> loop fields ctors (m :: methods)
+         in
+         loop [] [] []
+       end)
 
-let parse_record hooks st ~td_vis ~start_span name name_tok : (Ast.stmt, Diagnostic.t) result =
+let parse_record hooks st ~td_vis ~start_span ~td_type_params name name_tok : (Ast.stmt, Diagnostic.t) result =
   let open_tok = cur st in
   if open_tok.kind <> Token.LPAREN then
     err_at open_tok ~hint:(Printf.sprintf "declare record members in parentheses, e.g. 'record %s(x: int) {}'" name)
@@ -195,49 +190,40 @@ let parse_record hooks st ~td_vis ~start_span name name_tok : (Ast.stmt, Diagnos
     match loop [] with
     | Error e -> Error e
     | Ok (param_fields, _rparen_sp) ->
-      let next_tok = cur st in
-      let finish_res =
-        match next_tok.kind with
-        | Token.SEMI ->
-          bump st;
-          Ok ([], [], next_tok.span)
-        | Token.LBRACE ->
-          bump st;
-          let rec body_loop fields methods =
-            let tok = cur st in
-            if tok.kind = Token.RBRACE then (bump st; Ok (List.rev fields, List.rev methods, tok.span))
-            else if is_eof st then err_at next_tok (Printf.sprintf "unclosed '{' in record '%s'" name)
-            else
-              match parse_member hooks st ~ctx_name:"record" with
-              | Error e -> Error e
-              | Ok (`Field f) -> body_loop (f :: fields) methods
-              | Ok (`Ctor c) ->
-                Error (Diagnostic.error ~code:"E0002" ~span:c.cd_name_span
-                         "records do not support custom constructors in body")
-              | Ok (`Method m) -> body_loop fields (m :: methods)
-          in
-          body_loop [] []
-        | _ ->
-          err_at next_tok ~hint:(Printf.sprintf "end record with '{}' or ';', e.g. 'record %s(...) {}'" name)
-            (Printf.sprintf "expected '{}' or ';' after record '%s(...)', found %s"
-               name (Token.kind_to_string next_tok.kind))
-      in
-      (match finish_res with
+      (match Parser_generics.parse_opt_where_clauses ~parse_type_expr:Parser_types.parse_type_expr st with
        | Error e -> Error e
-       | Ok (body_fields, body_methods, end_sp) ->
-         let td : Ast.type_decl =
-           {
-             td_vis;
-             td_kind = Ast.KindRecord;
-             td_name = name;
-             td_name_span = name_tok.Token.span;
-             td_ctor_params = None;
-             td_fields = param_fields @ body_fields;
-             td_ctors = [];
-             td_methods = body_methods;
-           }
+       | Ok td_where ->
+         let next_tok = cur st in
+         let finish_res =
+           match next_tok.kind with
+           | Token.SEMI -> bump st; Ok ([], [], next_tok.span)
+           | Token.LBRACE ->
+             bump st;
+             let rec body_loop fields methods =
+               let tok = cur st in
+               if tok.kind = Token.RBRACE then (bump st; Ok (List.rev fields, List.rev methods, tok.span))
+               else if is_eof st then err_at next_tok (Printf.sprintf "unclosed '{' in record '%s'" name)
+               else
+                 match parse_member hooks st ~ctx_name:"record" with
+                 | Error e -> Error e
+                 | Ok (`Field f) -> body_loop (f :: fields) methods
+                 | Ok (`Ctor c) -> Error (Diagnostic.error ~code:"E0002" ~span:c.cd_name_span "records do not support custom constructors in body")
+                 | Ok (`Method m) -> body_loop fields (m :: methods)
+             in
+             body_loop [] []
+           | _ ->
+             err_at next_tok ~hint:(Printf.sprintf "end record with '{}' or ';', e.g. 'record %s(...) {}'" name)
+               (Printf.sprintf "expected '{}' or ';' after record '%s(...)', found %s" name (Token.kind_to_string next_tok.kind))
          in
-         Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span end_sp })
+         (match finish_res with
+          | Error e -> Error e
+          | Ok (body_fields, body_methods, end_sp) ->
+            let td : Ast.type_decl =
+              { td_vis; td_kind = Ast.KindRecord; td_name = name; td_name_span = name_tok.Token.span;
+                td_type_params; td_where; td_ctor_params = None; td_fields = param_fields @ body_fields;
+                td_ctors = []; td_methods = body_methods }
+            in
+            Ok { Ast.desc = Ast.StmtTypeDecl td; span = Span.merge start_span end_sp }))
   end
 
 let parse_type_decl hooks st ?(td_vis = None) ?start_span kw_tok ~(kind : Ast.user_type_kind)
@@ -248,10 +234,13 @@ let parse_type_decl hooks st ?(td_vis = None) ?start_span kw_tok ~(kind : Ast.us
   match name_tok.kind with
   | Token.IDENT name ->
     bump st;
-    (match kind with
-     | Ast.KindRecord -> parse_record hooks st ~td_vis ~start_span name name_tok
-     | Ast.KindClass | Ast.KindStruct ->
-       parse_class_or_struct hooks st ~td_vis ~start_span ~kind name name_tok)
+    (match Parser_generics.parse_opt_type_params st with
+     | Error e -> Error e
+     | Ok td_type_params ->
+       (match kind with
+        | Ast.KindRecord -> parse_record hooks st ~td_vis ~start_span ~td_type_params name name_tok
+        | Ast.KindClass | Ast.KindStruct ->
+          parse_class_or_struct hooks st ~td_vis ~start_span ~kind ~td_type_params name name_tok))
   | _ ->
     err_at name_tok
       (Printf.sprintf "expected type name after '%s', found %s" kw (Token.kind_to_string name_tok.kind))
@@ -267,30 +256,40 @@ let parse_new_expr hooks st kw_tok : (Ast.expr, Diagnostic.t) result =
   match name_tok.kind with
   | Token.IDENT new_name ->
     bump st;
-    let next_tok = cur st in
-    (match next_tok.kind with
-     | Token.LBRACE ->
-       (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RBRACE ~close_str:"}" ~ctx_label:("new " ^ new_name ^ " { ... }") with
+    let targs_res =
+      if (cur st).kind = Token.LT then
+        match Parser_generics.parse_type_args ~parse_type_expr:Parser_types.parse_type_expr st with
         | Error e -> Error e
-        | Ok (new_args, end_sp) ->
-          Ok ({ Ast.desc = Ast.ExprNew { new_name; new_is_ctor = false; new_args; new_inits = None };
-                span = Span.merge kw_tok.Token.span end_sp } : Ast.expr))
-     | Token.LPAREN ->
-       (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RPAREN ~close_str:")" ~ctx_label:("new " ^ new_name ^ "(...)") with
-        | Error e -> Error e
-        | Ok (new_args, rparen_sp) ->
-          if (cur st).kind = Token.LBRACE then
-            (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RBRACE ~close_str:"}" ~ctx_label:("new " ^ new_name ^ "(...) { ... }") with
-             | Error e -> Error e
-             | Ok (inits, end_sp) ->
-               Ok ({ Ast.desc = Ast.ExprNew { new_name; new_is_ctor = true; new_args; new_inits = Some inits };
-                     span = Span.merge kw_tok.Token.span end_sp } : Ast.expr))
-          else
-            Ok ({ Ast.desc = Ast.ExprNew { new_name; new_is_ctor = true; new_args; new_inits = None };
-                  span = Span.merge kw_tok.Token.span rparen_sp } : Ast.expr))
-     | _ ->
-       err_at next_tok ~hint:(Printf.sprintf "use 'new %s { ... }' or 'new %s(...)'" new_name new_name)
-         (Printf.sprintf "expected '{' or '(' after 'new %s', found %s" new_name (Token.kind_to_string next_tok.kind)))
+        | Ok (targs, _) -> Ok targs
+      else Ok []
+    in
+    (match targs_res with
+     | Error e -> Error e
+     | Ok new_type_args ->
+       let next_tok = cur st in
+       (match next_tok.kind with
+        | Token.LBRACE ->
+          (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RBRACE ~close_str:"}" ~ctx_label:("new " ^ new_name ^ " { ... }") with
+           | Error e -> Error e
+           | Ok (new_args, end_sp) ->
+             Ok ({ Ast.desc = Ast.ExprNew { new_name; new_type_args; new_is_ctor = false; new_args; new_inits = None };
+                   span = Span.merge kw_tok.Token.span end_sp } : Ast.expr))
+        | Token.LPAREN ->
+          (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RPAREN ~close_str:")" ~ctx_label:("new " ^ new_name ^ "(...)") with
+           | Error e -> Error e
+           | Ok (new_args, rparen_sp) ->
+             if (cur st).kind = Token.LBRACE then
+               (match Parser_accessors.parse_call_arg_list hooks st ~close_kind:Token.RBRACE ~close_str:"}" ~ctx_label:("new " ^ new_name ^ "(...) { ... }") with
+                | Error e -> Error e
+                | Ok (inits, end_sp) ->
+                  Ok ({ Ast.desc = Ast.ExprNew { new_name; new_type_args; new_is_ctor = true; new_args; new_inits = Some inits };
+                        span = Span.merge kw_tok.Token.span end_sp } : Ast.expr))
+             else
+               Ok ({ Ast.desc = Ast.ExprNew { new_name; new_type_args; new_is_ctor = true; new_args; new_inits = None };
+                     span = Span.merge kw_tok.Token.span rparen_sp } : Ast.expr))
+        | _ ->
+          err_at next_tok ~hint:(Printf.sprintf "use 'new %s { ... }' or 'new %s(...)'" new_name new_name)
+            (Printf.sprintf "expected '{' or '(' after 'new %s', found %s" new_name (Token.kind_to_string next_tok.kind))))
   | _ ->
     err_at name_tok ~hint:"use 'new TypeName { ... }' or 'new TypeName(...)'"
       (Printf.sprintf "expected type name after 'new', found %s" (Token.kind_to_string name_tok.kind))

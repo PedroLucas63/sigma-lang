@@ -123,8 +123,12 @@ let read_symbol st tokens errors start_pos c =
   | '[' -> advance st; emit Token.LBRACKET
   | ']' -> advance st; emit Token.RBRACKET
   | '.' when peek_next st = '.' ->
-    advance st; advance st; emit Token.DOT_DOT
+    advance st; advance st;
+    if peek st = '.' then (advance st; emit Token.ELLIPSIS)
+    else emit Token.DOT_DOT
   | '.' -> advance st; emit Token.DOT
+  | '?' -> advance st; emit Token.QUESTION
+  | '|' -> advance st; emit Token.PIPE
   | ',' -> advance st; emit Token.COMMA
   | ';' -> advance st; emit Token.SEMI
   | _ ->

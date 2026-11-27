@@ -192,7 +192,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
-          | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
+          | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.WildcardUser _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;

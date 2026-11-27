@@ -92,6 +92,9 @@ type kind =
   | RBRACKET
   | DOT
   | DOT_DOT
+  | ELLIPSIS
+  | QUESTION
+  | PIPE
   | COMMA
   | SEMI
   | EOF

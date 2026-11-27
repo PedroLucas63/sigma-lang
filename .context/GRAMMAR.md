@@ -95,6 +95,9 @@
 | Delimitador | `RBRACKET` | `]` |
 | Operador | `DOT` | `.` |
 | Operador | `DOT_DOT` | `..` |
+| Operador | `ELLIPSIS` | `...` |
+| Delimitador | `QUESTION` | `?` |
+| Operador | `PIPE` | `\|` |
 | Delimitador | `COMMA` | `,` |
 | Delimitador | `SEMI` | `;` |
 | Controle | `EOF` | Fim de arquivo |
@@ -118,6 +121,12 @@ import_item   ::= IDENT ( "as" IDENT )? ;
 import_stmt   ::= "import" import_target ( "as" IDENT )?
                 | "from" import_target "import" import_item ( "," import_item )* ","? ;
 extern_item   ::= ( "fun" | "act" ) IDENT "(" [ param_list ] ")" [ ":" type_expr ] [ "as" STRING ] ";" ;
+type_params   ::= "<" type_param ( "," type_param )* ">" ;
+type_param    ::= IDENT "..."? ;
+where_clause  ::= "where" IDENT "is" type_constr ( "," IDENT "is" type_constr )* ;
+type_constr   ::= "numeric" | "class" | "struct" | "record" | type_expr | "(" type_expr ( "|" type_expr )* ")" ;
+type_args     ::= "<" type_arg ( "," type_arg )* ">" ;
+type_arg      ::= "?" | type_expr ;
 extern_decl   ::= [ visibility ] "extern" STRING [ "from" STRING ] ( "{" { extern_item } "}" | extern_item ) ;
 
 visibility    ::= "public" | "protected" | "private" | "internal" ;

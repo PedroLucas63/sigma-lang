@@ -12,7 +12,7 @@ let rec parse_type_expr st : (Ast.type_expr, Diagnostic.t) result =
 
 and parse_fn_suffixes st (base : Ast.type_expr) : (Ast.type_expr, Diagnostic.t) result =
   match base with
-  | (Ast.TypeNamed _ | Ast.TypeFun _) when (cur st).kind = Token.LPAREN ->
+  | (Ast.TypeNamed _ | Ast.TypeGeneric _ | Ast.TypeFun _) when (cur st).kind = Token.LPAREN ->
     bump st;
     let rec params acc =
       let t = cur st in
@@ -105,7 +105,16 @@ and parse_base_type st : (Ast.type_expr, Diagnostic.t) result =
   match tok.kind with
   | Token.IDENT ty_name ->
     bump st;
-    Ok (Ast.TypeNamed (ty_name, tok.span))
+    if (cur st).kind = Token.LT then
+      (match Parser_generics.parse_type_args ~parse_type_expr st with
+       | Error e -> Error e
+       | Ok (args, close_sp) ->
+         Ok (Ast.TypeGeneric (ty_name, args, Span.merge tok.span close_sp)))
+    else
+      Ok (Ast.TypeNamed (ty_name, tok.span))
+  | Token.QUESTION ->
+    bump st;
+    Ok (Ast.TypeWildcard tok.span)
   | Token.LPAREN ->
     bump st;
     let rec parse_tuple_types acc =

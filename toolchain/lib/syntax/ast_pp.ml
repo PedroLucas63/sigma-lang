@@ -90,7 +90,7 @@ and pp_expr fmt (e : expr) =
     Format.fprintf fmt "%s { %a }" tname
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
       args
-  | ExprNew { new_name; new_is_ctor; new_args; new_inits = _ } ->
+  | ExprNew { new_name; new_type_args = _; new_is_ctor; new_args; new_inits = _ } ->
     let pp_arg fmt (a : call_arg) =
       match a.arg_name with
       | None -> pp_expr fmt a.arg_value
@@ -100,6 +100,7 @@ and pp_expr fmt (e : expr) =
     Format.fprintf fmt "new %s%s%a%s" new_name open_c
       (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ") pp_arg)
       new_args close_c
+  | ExprTypeApp (e, _, _) -> pp_expr fmt e
   | ExprCall (callee, args) ->
     let pp_arg fmt (a : call_arg) =
       let prefix =
@@ -291,8 +292,7 @@ and pp_stmt fmt (s : stmt) =
       ma_targets pp_expr ma_rhs
   | StmtReturn None -> Format.fprintf fmt "return;" | StmtReturn (Some e) -> Format.fprintf fmt "return %a;" pp_expr e
   | StmtExpr e -> Format.fprintf fmt "%a;" pp_expr e | StmtImport _ -> Format.fprintf fmt "import ...;"
-  | StmtExtern { ext_lang; _ } -> Format.fprintf fmt "extern %S ...;" ext_lang
-  | StmtVis (_, s) -> pp_stmt fmt s
+  | StmtExtern { ext_lang; _ } -> Format.fprintf fmt "extern %S ...;" ext_lang | StmtVis (_, s) -> pp_stmt fmt s
 
 let pp_program fmt prog =
   Format.pp_print_list
