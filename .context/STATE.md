@@ -48,8 +48,8 @@
 - **13 (Concluído — Issue #1):** Templates / Generics (funções/métodos/estruturas `<T>`, `<?>`, `where`, variádicos `<Ts...>`, `E0141`..`E0143`, `tests/21_generics_templates_test.sgm`).
 - **14 (Concluído — Issue #2):** Acessores `get`/`set`/`init` customizados em propriedades (`get { ... }`, `get => ...`, `set { ... }`, `value`, *backing field* `field`, `E0144`, `tests/22_custom_property_accessors_test.sgm`).
 - **15 (Concluído — Issue #3):** Intrínsecos nativos de I/O (`__PRINT_STRING`, `__PRINT_INT`, `__PRINT_FLOAT`, `__PRINT_DOUBLE`, `__PRINT_DECIMAL`, `__PRINT_BOOL`, `__PRINT_CHAR`, `__PRINT_NEWLINE`, `__READ_LINE`, `__READ_BLOCK`, `tests/23_native_intrinsics_test.sgm`).
-- **16 (Fase B — `v0.3.0`):** separação da stdlib `io` (`#4`).
-- **17–21 (Fase C — `v0.4.0`):** estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum` (Java/C#) e anotações `@`.
+- **16 (Concluído — Issue #35):** Variádicos com `ref`/`out` (`ref Ts...`, `out Ts...` com inferência `out var` e alias em `foreach`) e intrínsecos de conversão (`__PARSE_*`, `__TRY_PARSE_*`, `tests/24_variadic_ref_out_parse_test.sgm`).
+- **17–28 (Fase C — `v0.4.0`):** stdlib `io` (`#4`), biblioteca de primitivos (`#36`), estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum`, anotações `@`, sobrecarga, `object`, `null` safety (`T?`), `switch` pattern matching e exceções.
 - **22–25 (Fase D — `v0.5.0`):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.
 - **26–28 (Fase E — `v1.0.0`):** sub-roadmaps + implementação de Ciência de Dados/CSV e Vetores/Matrizes/GPU, e análise aprofundada para a `v1.0`.
 - **29–32 (Fase F — `v2.0.0`):** programação WEB (`udp`/`tcp`/`http`), `async`/`await` (`Task`), API de testes avançada em Sigma e reescrita de `sigma pkg` em Sigma.

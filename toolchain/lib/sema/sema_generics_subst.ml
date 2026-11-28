@@ -2,7 +2,8 @@ open Sigma_syntax
 
 type subst_ctx = {
   tmap : (string * Ast.type_expr) list;
-  variadic_param : (string * Ast.type_expr list) option;
+  variadic_param : (string * Ast.param_mode * Ast.type_expr list) option;
+  var_aliases : (string * string) list;
 }
 
 let rec subst_type_expr (ctx : subst_ctx) (te : Ast.type_expr) : Ast.type_expr =
@@ -29,7 +30,7 @@ let subst_fun_params (ctx : subst_ctx) (ps : Ast.fun_param list) : Ast.fun_param
     (fun (p : Ast.fun_param) ->
       if p.param_variadic then
         match ctx.variadic_param with
-        | Some (vname, vtys) when vname = p.param_name ->
+        | Some (vname, _, vtys) when vname = p.param_name ->
           List.mapi
             (fun i vty ->
               { Ast.param_name = Printf.sprintf "__v_%s_%d" vname i;
@@ -52,7 +53,11 @@ let rec subst_expr (ctx : subst_ctx) (e : Ast.expr) : Ast.expr =
   let desc =
     match e.desc with
     | Ast.ExprInt _ | Ast.ExprFloat _ | Ast.ExprDouble _ | Ast.ExprDecimal _
-    | Ast.ExprBool _ | Ast.ExprChar _ | Ast.ExprString _ | Ast.ExprIdent _ | Ast.ExprThis -> e.desc
+    | Ast.ExprBool _ | Ast.ExprChar _ | Ast.ExprString _ | Ast.ExprThis -> e.desc
+    | Ast.ExprIdent id ->
+      (match List.assoc_opt id ctx.var_aliases with
+       | Some alias -> Ast.ExprIdent alias
+       | None -> e.desc)
     | Ast.ExprInterp parts ->
       Ast.ExprInterp
         (List.map (function Ast.InterpLit s -> Ast.InterpLit s | Ast.InterpExpr (ex, fmt) -> Ast.InterpExpr (subst_expr ctx ex, fmt)) parts)
@@ -94,7 +99,10 @@ and subst_item ctx = function
   | Ast.ItemSpread (e, sp) -> Ast.ItemSpread (subst_expr ctx e, sp)
 
 and subst_lvalue ctx = function
-  | Ast.LValIdent _ as lv -> lv
+  | Ast.LValIdent (id, sp) ->
+    (match List.assoc_opt id ctx.var_aliases with
+     | Some alias -> Ast.LValIdent (alias, sp)
+     | None -> Ast.LValIdent (id, sp))
   | Ast.LValIndex (a, b, sp) -> Ast.LValIndex (subst_expr ctx a, subst_expr ctx b, sp)
   | Ast.LValField (a, f, sp) -> Ast.LValField (subst_expr ctx a, f, sp)
 
@@ -103,11 +111,17 @@ and subst_call_args ctx (args : Ast.call_arg list) : Ast.call_arg list =
     (fun (a : Ast.call_arg) ->
       if a.arg_spread then
         match a.arg_value.desc, ctx.variadic_param with
-        | Ast.ExprIdent id, Some (vname, vtys) when id = vname ->
+        | Ast.ExprIdent id, Some (vname, vmode, vtys) when id = vname ->
+          let eff_mode =
+            match a.arg_mode, vmode with
+            | Ast.ArgVal, Ast.ParamRef -> Ast.ArgRef
+            | Ast.ArgVal, Ast.ParamOut -> Ast.ArgOut
+            | m, _ -> m
+          in
           List.mapi
             (fun i _ ->
               { Ast.arg_name = None;
-                arg_mode = a.arg_mode;
+                arg_mode = eff_mode;
                 arg_value = { Ast.desc = Ast.ExprIdent (Printf.sprintf "__v_%s_%d" vname i); span = a.arg_value.span };
                 arg_spread = false })
             vtys
@@ -142,19 +156,24 @@ and subst_stmt (ctx : subst_ctx) (s : Ast.stmt) : Ast.stmt =
       Ast.StmtFor { label; init = init'; cond = subst_expr ctx cond; step = subst_expr ctx step; body = subst_stmt ctx body }
     | Ast.StmtForeach { label; head; collection; body } ->
       (match collection.desc, ctx.variadic_param, head.binding with
-       | Ast.ExprIdent id, Some (vname, vtys), Ast.ForeachVar (loop_var, loop_sp) when id = vname ->
+       | Ast.ExprIdent id, Some (vname, vmode, vtys), Ast.ForeachVar (loop_var, loop_sp) when id = vname ->
          let blocks =
            List.mapi
              (fun i _ ->
-               let bind_stmt : Ast.stmt =
-                 { Ast.desc =
-                     Ast.StmtVarDecl
-                       { name = loop_var; name_span = loop_sp; is_const = head.is_const;
-                         ty_annot = Option.map (subst_type_expr ctx) head.ty_annot;
-                         init = Some { Ast.desc = Ast.ExprIdent (Printf.sprintf "__v_%s_%d" vname i); span = collection.span } };
-                   span = s.span }
-               in
-               { Ast.desc = Ast.StmtBlock [ bind_stmt; subst_stmt ctx body ]; span = s.span })
+               let param_i = Printf.sprintf "__v_%s_%d" vname i in
+               if (vmode = Ast.ParamRef || vmode = Ast.ParamOut) && not head.is_const && head.ty_annot = None then
+                 let ctx_i = { ctx with var_aliases = (loop_var, param_i) :: ctx.var_aliases } in
+                 { Ast.desc = Ast.StmtBlock [ subst_stmt ctx_i body ]; span = s.span }
+               else
+                 let bind_stmt : Ast.stmt =
+                   { Ast.desc =
+                       Ast.StmtVarDecl
+                         { name = loop_var; name_span = loop_sp; is_const = head.is_const;
+                           ty_annot = Option.map (subst_type_expr ctx) head.ty_annot;
+                           init = Some { Ast.desc = Ast.ExprIdent param_i; span = collection.span } };
+                     span = s.span }
+                 in
+                 { Ast.desc = Ast.StmtBlock [ bind_stmt; subst_stmt ctx body ]; span = s.span })
              vtys
          in
          Ast.StmtBlock blocks

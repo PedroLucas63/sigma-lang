@@ -116,6 +116,7 @@ let emit_c_internal ?(test_mode = false) ?(as_lib = false) ?entry_name (prog : T
   Buffer.add_string buf C_rt_obj.c_runtime_obj;
   Buffer.add_string buf C_rt_fmt.c_runtime_fmt;
   Buffer.add_string buf C_rt_io.c_runtime_io;
+  Buffer.add_string buf C_rt_parse.c_runtime_parse;
   Buffer.add_string buf "\n__attribute__((unused)) static int sgm_test_passed = 0;\n";
   Buffer.add_string buf "__attribute__((unused)) static int sgm_test_failed = 0;\n";
   Buffer.add_string buf (Printf.sprintf "__attribute__((unused)) static bool sgm_test_mode = %s;\n\n" (if test_mode then "true" else "false"));

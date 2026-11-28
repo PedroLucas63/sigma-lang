@@ -26,11 +26,13 @@
 13. [x] **Templates / Generics (Métodos e Estruturas):** parâmetros de tipo em funções/métodos e `class`/`struct`/`record` semelhantes ao Java/C# (`<T>`, `<?>`, `<T where T is Type>`, variádicos `<Ts...>`).
 14. [x] **Acessores `get`/`set` Customizados em Propriedades:** permitir reescrever o comportamento de `get` e `set` com corpo em bloco ou expressão (`get { ... }`, `get => ...`, `set { ... }`, `set => ...`, parâmetro implícito `value` e *backing field* `field`).
 15. [x] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (`__PRINT_STRING`, `__PRINT_INT`, `__PRINT_FLOAT`, `__PRINT_DOUBLE`, `__PRINT_DECIMAL`, `__PRINT_BOOL`, `__PRINT_CHAR`, `__PRINT_NEWLINE`, `__READ_LINE`, `__READ_BLOCK`, `tests/23_native_intrinsics_test.sgm`).
-16. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>(Ts values...)`, `println<Ts...>`, `input`, `prompt`, etc. em módulo padrão dedicado sobre os intrínsecos nativos.
+16. [ ] **Variádicos com `ref`/`out` (`ref Ts...`, `out Ts...`) e Intrínsecos de Conversão (`__PARSE_*`, `__TRY_PARSE_*`):** suporte a parâmetros variádicos por referência/saída e primitivas de parsing para todos os tipos primitivos (Issue #35).
 
 ---
 
 ## Fase C — Sistema de Tipos Avançado (OOP, Metadados, Null Safety e Exceções) (`v0.4.0`)
+17. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>`, `println<Ts...>`, `input`, `prompt`, `read_line`, `read_block` em módulo padrão dedicado com auto-import `from io import *` (*lazy*), sobrecarga para `input(mask, out ...)` e `print` para tipos em geral (Issue #4).
+18. [ ] **Biblioteca de Tipos Primitivos (`Int.parse`, `Int.tryParse`, etc.):** métodos estáticos de parsing e utilitários para primitivos usando `T?` e os intrínsecos `__PARSE_*`/`__TRY_PARSE_*` (Issue #36).
 17. [ ] **Estruturas Aninhadas (*Nested Types*):** declaração de `class`/`struct`/`record` dentro de outras estruturas (ex: `public class A { public static class Builder {} }`).
 18. [ ] **Interfaces (`interface`):** contratos polimórficos implementáveis por `class`, `struct` e `record`.
 19. [ ] **Herança, Modificadores (`abstract`, `sealed`/`final`), `override` & Conversões:** herança, sobrescrita (`override`), upcast implícito, `is` / `is Tipo var` (smart cast), downcast `(Tipo)` e safe cast `as`.

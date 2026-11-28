@@ -144,7 +144,7 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
      | Ast.ExprIdent name when Hashtbl.mem Sema_generics.generic_funs name ->
        Sema_generics_calls.check_generic_fun_call hooks env e name None args
      | Ast.ExprIdent name when Sema_intrinsics.is_intrinsic name ->
-       Sema_intrinsics.check_call (hooks.check_expr env) e name args
+       Sema_intrinsics.check_call hooks env e name args
      | Ast.ExprIdent name ->
        (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
         | Some res -> res

@@ -76,7 +76,14 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
      | None -> read_c
      | Some p -> Printf.sprintf "__extension__ ({ printf(\"%%s\", %s); fflush(stdout); %s; })" (hooks.emit_expr p) read_c)
   | Typed_ast.TExprIntrinsic (kind, args) ->
-    let emit_a () = match args with [ a ] -> hooks.emit_expr a | _ -> "0" in
+    let emit_a () = match args with a :: _ -> hooks.emit_expr a.Typed_ast.tca_expr | _ -> "0" in
+    let emit_try fn =
+      match args with
+      | [ a0; a1 ] ->
+        let vname = match a1.Typed_ast.tca_expr.desc with Typed_ast.TExprIdent nm -> nm | _ -> "tmp" in
+        Printf.sprintf "%s(%s, &(%s))" fn (hooks.emit_expr a0.Typed_ast.tca_expr) (ident_c_expr vname)
+      | _ -> "false"
+    in
     (match kind with
      | Typed_ast.IntrPrintString | Typed_ast.IntrPrintChar -> Printf.sprintf "sgm_print_str(%s)" (emit_a ())
      | Typed_ast.IntrPrintInt -> Printf.sprintf "sgm_print_i64(%s)" (emit_a ())
@@ -86,7 +93,19 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
      | Typed_ast.IntrPrintBool -> Printf.sprintf "sgm_print_bool(%s)" (emit_a ())
      | Typed_ast.IntrPrintNewline -> "sgm_print_newline()"
      | Typed_ast.IntrReadLine -> "sgm_read_line()"
-     | Typed_ast.IntrReadBlock -> "sgm_read_block()")
+     | Typed_ast.IntrReadBlock -> "sgm_read_block()"
+     | Typed_ast.IntrParseInt -> Printf.sprintf "sgm_parse_prim(SGM_TAG_I64, %s).u.i64" (emit_a ())
+     | Typed_ast.IntrParseFloat -> Printf.sprintf "sgm_parse_prim(SGM_TAG_F32, %s).u.f32" (emit_a ())
+     | Typed_ast.IntrParseDouble -> Printf.sprintf "sgm_parse_prim(SGM_TAG_F64, %s).u.f64" (emit_a ())
+     | Typed_ast.IntrParseDecimal -> Printf.sprintf "sgm_parse_prim(SGM_TAG_DEC, %s).u.dec" (emit_a ())
+     | Typed_ast.IntrParseBool -> Printf.sprintf "sgm_parse_prim(SGM_TAG_BOOL, %s).u.b" (emit_a ())
+     | Typed_ast.IntrParseChar -> Printf.sprintf "sgm_parse_prim(SGM_TAG_CHAR, %s).u.str" (emit_a ())
+     | Typed_ast.IntrTryParseInt -> emit_try "sgm_try_parse_i64"
+     | Typed_ast.IntrTryParseFloat -> emit_try "sgm_try_parse_f32"
+     | Typed_ast.IntrTryParseDouble -> emit_try "sgm_try_parse_f64"
+     | Typed_ast.IntrTryParseDecimal -> emit_try "sgm_try_parse_dec"
+     | Typed_ast.IntrTryParseBool -> emit_try "sgm_try_parse_bool"
+     | Typed_ast.IntrTryParseChar -> emit_try "sgm_try_parse_char")
   | Typed_ast.TExprIdent name -> ident_c_expr name
   | Typed_ast.TExprTuple items -> emit_collection_literal hooks ~is_tuple:true e.ty items
   | Typed_ast.TExprArray items -> emit_collection_literal hooks ~is_tuple:false e.ty items

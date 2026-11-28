@@ -29,7 +29,7 @@ let instantiate_type hooks (env : env) (sp : Span.t) (name : string) (targs : Ty
          | Some ty -> Ok ty
          | None ->
            let tmap = List.map (fun (k, ty) -> (k, ty_to_ast_type_expr sp ty)) bindings in
-           let ctx = { tmap; variadic_param = None } in
+           let ctx = { tmap; variadic_param = None; var_aliases = [] } in
            let td' = subst_type_decl ctx td in
            let usp = unique_inst_span sp in
            let td_concrete =
@@ -91,10 +91,10 @@ let instantiate_fun hooks (env : env) (sp : Span.t) (name : string) (targs : Ty.
            let tmap = List.map (fun (k, ty) -> (k, ty_to_ast_type_expr sp ty)) bindings in
            let variadic_param =
              match List.find_opt (fun (p : Ast.fun_param) -> p.param_variadic) fd.fd_params with
-             | Some vp -> Some (vp.param_name, List.map (ty_to_ast_type_expr sp) var_tys)
+             | Some vp -> Some (vp.param_name, vp.param_mode, List.map (ty_to_ast_type_expr sp) var_tys)
              | None -> None
            in
-           let ctx = { tmap; variadic_param } in
+           let ctx = { tmap; variadic_param; var_aliases = [] } in
            let fd' = subst_fun_decl ctx fd in
            let fd_concrete = { fd' with fd_name = mangled; fd_name_span = unique_inst_span sp; fd_type_params = []; fd_where = [] } in
            let scope_vars = ref [] in
@@ -199,10 +199,10 @@ let instantiate_method hooks (env : env) (sp : Span.t) (owner : string) (mname :
            let tmap = List.map (fun (k, ty) -> (k, ty_to_ast_type_expr sp ty)) bindings in
            let variadic_param =
              match List.find_opt (fun (p : Ast.fun_param) -> p.param_variadic) md.md_fun.fd_params with
-             | Some vp -> Some (vp.param_name, List.map (ty_to_ast_type_expr sp) var_tys)
+             | Some vp -> Some (vp.param_name, vp.param_mode, List.map (ty_to_ast_type_expr sp) var_tys)
              | None -> None
            in
-           let fd' = subst_fun_decl { tmap; variadic_param } md.md_fun in
+           let fd' = subst_fun_decl { tmap; variadic_param; var_aliases = [] } md.md_fun in
            let md' = { md with md_fun = { fd' with fd_name = mangled_m; fd_name_span = unique_inst_span sp; fd_type_params = []; fd_where = [] } } in
            (match Sema_methods.check_method_sigs ~type_name:owner ~seen_members:(Hashtbl.create 1) [ md' ] with
             | Error (e :: _) -> Error e

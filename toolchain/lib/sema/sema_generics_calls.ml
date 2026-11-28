@@ -14,6 +14,27 @@ let split_variadic_targs (tps : Ast.type_param list) (tys : Ty.t list) : Ty.t li
     (fixed, var_tys)
   else (tys, [])
 
+let infer_arg_types hooks env (args : Ast.call_arg list) : (Ty.t list, Diagnostic.t) result =
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | (a : Ast.call_arg) :: rest ->
+      (match a.arg_mode with
+       | Ast.ArgOutVar { var_type = Some te; _ } ->
+         (match Sema_types.resolve_type_expr te None with
+          | Error e -> Error e
+          | Ok ty -> loop (ty :: acc) rest)
+       | Ast.ArgOutVar { var_name; var_span; var_type = None } ->
+         Error
+           (Diagnostic.error ~code:"E0141" ~span:var_span
+              (Printf.sprintf "cannot infer type for 'out var %s'; specify 'out var %s: <type>' or explicit type arguments '<...>'"
+                 var_name var_name))
+       | Ast.ArgVal | Ast.ArgRef | Ast.ArgOut ->
+         (match hooks.check_expr env a.arg_value with
+          | Error e -> Error e
+          | Ok te -> loop (te.ty :: acc) rest))
+  in
+  loop [] args
+
 let check_generic_fun_call hooks (env : env) (call_expr : Ast.expr) (name : string)
     (explicit_targs : Ast.type_expr list option) (args : Ast.call_arg list)
     : (Typed_ast.expr, Diagnostic.t) result =
@@ -26,14 +47,7 @@ let check_generic_fun_call hooks (env : env) (call_expr : Ast.expr) (name : stri
       | Some tes ->
         Result.map (split_variadic_targs fd.fd_type_params) (resolve_type_args_no_wildcard tes)
       | None ->
-        let rec eval_args acc = function
-          | [] -> Ok (List.rev acc)
-          | (a : Ast.call_arg) :: rest ->
-            (match hooks.check_expr env a.arg_value with
-             | Error e -> Error e
-             | Ok te -> eval_args (te.ty :: acc) rest)
-        in
-        (match eval_args [] args with
+        (match infer_arg_types hooks env args with
          | Error e -> Error e
          | Ok arg_tys -> infer_call_type_args call_expr.span fd.fd_type_params fd.fd_params arg_tys)
     in
@@ -71,14 +85,7 @@ let check_generic_method_call hooks (env : env) (call_expr : Ast.expr) (base : A
          | Some tes ->
            Result.map (split_variadic_targs md.md_fun.fd_type_params) (resolve_type_args_no_wildcard tes)
          | None ->
-           let rec eval_args acc = function
-             | [] -> Ok (List.rev acc)
-             | (a : Ast.call_arg) :: rest ->
-               (match hooks.check_expr env a.arg_value with
-                | Error e -> Error e
-                | Ok te -> eval_args (te.ty :: acc) rest)
-           in
-           (match eval_args [] args with
+           (match infer_arg_types hooks env args with
             | Error e -> Error e
             | Ok arg_tys -> infer_call_type_args call_expr.span md.md_fun.fd_type_params md.md_fun.fd_params arg_tys)
        in

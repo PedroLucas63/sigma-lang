@@ -45,7 +45,22 @@ let lower_expr hooks b (e : Typed_ast.expr) =
     in
     ignore (emit b (Ir.OP_INPUT ir_spec) e.span)
   | Typed_ast.TExprIntrinsic (kind, args) ->
-    List.iter (hooks.lower_expr b) args;
+    List.iter
+      (fun (a : Typed_ast.typed_call_arg) ->
+        if a.tca_is_out_var then begin
+          match a.tca_expr.desc with
+          | Typed_ast.TExprIdent vname ->
+            emit_default_value b a.tca_expr.span a.tca_expr.ty;
+            ignore (emit b (def_global_opcode a.tca_expr.ty vname) a.tca_expr.span)
+          | _ -> ()
+        end;
+        match a.tca_mode with
+        | Ty.ParamRef | Ty.ParamOut ->
+          (match a.tca_expr.desc with
+           | Typed_ast.TExprIdent vname -> ignore (emit b (Ir.OP_GET_REF vname) a.tca_expr.span)
+           | _ -> hooks.lower_expr b a.tca_expr)
+        | Ty.ParamVal -> hooks.lower_expr b a.tca_expr)
+      args;
     (match kind with
      | Typed_ast.IntrPrintString ->
        ignore (emit b Ir.OP_PRINT_STR e.span);
@@ -71,10 +86,20 @@ let lower_expr hooks b (e : Typed_ast.expr) =
      | Typed_ast.IntrPrintNewline ->
        ignore (emit b Ir.OP_PRINT_NEWLINE e.span);
        ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
-     | Typed_ast.IntrReadLine ->
-       ignore (emit b Ir.OP_READ_LINE e.span)
-     | Typed_ast.IntrReadBlock ->
-       ignore (emit b Ir.OP_READ_BLOCK e.span))
+     | Typed_ast.IntrReadLine -> ignore (emit b Ir.OP_READ_LINE e.span)
+     | Typed_ast.IntrReadBlock -> ignore (emit b Ir.OP_READ_BLOCK e.span)
+     | Typed_ast.IntrParseInt -> ignore (emit b Ir.OP_PARSE_I64 e.span)
+     | Typed_ast.IntrParseFloat -> ignore (emit b Ir.OP_PARSE_F32 e.span)
+     | Typed_ast.IntrParseDouble -> ignore (emit b Ir.OP_PARSE_F64 e.span)
+     | Typed_ast.IntrParseDecimal -> ignore (emit b Ir.OP_PARSE_DEC e.span)
+     | Typed_ast.IntrParseBool -> ignore (emit b Ir.OP_PARSE_BOOL e.span)
+     | Typed_ast.IntrParseChar -> ignore (emit b Ir.OP_PARSE_CHAR e.span)
+     | Typed_ast.IntrTryParseInt -> ignore (emit b Ir.OP_TRY_PARSE_I64 e.span)
+     | Typed_ast.IntrTryParseFloat -> ignore (emit b Ir.OP_TRY_PARSE_F32 e.span)
+     | Typed_ast.IntrTryParseDouble -> ignore (emit b Ir.OP_TRY_PARSE_F64 e.span)
+     | Typed_ast.IntrTryParseDecimal -> ignore (emit b Ir.OP_TRY_PARSE_DEC e.span)
+     | Typed_ast.IntrTryParseBool -> ignore (emit b Ir.OP_TRY_PARSE_BOOL e.span)
+     | Typed_ast.IntrTryParseChar -> ignore (emit b Ir.OP_TRY_PARSE_CHAR e.span))
   | Typed_ast.TExprIdent name -> ignore (emit b (get_global_opcode e.ty name) e.span)
   | Typed_ast.TExprTuple items ->
     List.iter

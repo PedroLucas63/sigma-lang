@@ -48,6 +48,18 @@ and intrinsic_kind =
   | IntrPrintNewline
   | IntrReadLine
   | IntrReadBlock
+  | IntrParseInt
+  | IntrParseFloat
+  | IntrParseDouble
+  | IntrParseDecimal
+  | IntrParseBool
+  | IntrParseChar
+  | IntrTryParseInt
+  | IntrTryParseFloat
+  | IntrTryParseDouble
+  | IntrTryParseDecimal
+  | IntrTryParseBool
+  | IntrTryParseChar
 
 and expr_desc =
   | TExprInt of int64
@@ -88,7 +100,7 @@ and expr_desc =
       prompt : expr option;
       mode : input_mode;
     }
-  | TExprIntrinsic of intrinsic_kind * expr list
+  | TExprIntrinsic of intrinsic_kind * typed_call_arg list
 
 and interp_part =
   | TInterpLit of string
