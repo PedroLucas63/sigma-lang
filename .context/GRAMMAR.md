@@ -584,6 +584,8 @@ type opcode =
   | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_READ_LINE
+  | OP_READ_BLOCK
   | OP_ASSERT_EQ
   | OP_ASSERT_ERR of {
       expected_code : string;

@@ -34,6 +34,7 @@ let rec rename_expr prefix top_vals top_types locals deps (e : Typed_ast.expr) :
       Typed_ast.TExprInterp
         (List.map (function Typed_ast.TInterpLit _ as p -> p | Typed_ast.TInterpExpr (x, sp) -> Typed_ast.TInterpExpr (re x, sp)) parts)
     | Typed_ast.TExprInput { prompt; mode } -> Typed_ast.TExprInput { prompt = Option.map re prompt; mode }
+    | Typed_ast.TExprIntrinsic (kind, args) -> Typed_ast.TExprIntrinsic (kind, List.map re args)
     | Typed_ast.TExprTuple items ->
       Typed_ast.TExprTuple (List.map (function Typed_ast.TItemExpr x -> Typed_ast.TItemExpr (re x) | Typed_ast.TItemSpread x -> Typed_ast.TItemSpread (re x)) items)
     | Typed_ast.TExprArray items ->

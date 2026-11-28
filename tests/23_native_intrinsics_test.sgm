@@ -1,0 +1,46 @@
+# Suite 23: Intrínsecos Nativos de I/O (__PRINT_*, __READ_*)
+# @stdin: primeira linha
+# @stdin: linha A
+# @stdin: linha B
+
+# 1. Leituras com __READ_LINE e __READ_BLOCK
+const l1 := __READ_LINE();
+assert(l1, "primeira linha", "__READ_LINE deve ler a primeira linha sem quebra");
+
+const bloco := __READ_BLOCK();
+assert(bloco == "linha A\nlinha B" or bloco == "linha A\nlinha B\n", true, "__READ_BLOCK deve ler o restante da entrada");
+
+# 2. Chamadas de saída com todos os tipos primitivos (__PRINT_*)
+__PRINT_STRING("Intrínsecos: ");
+__PRINT_INT(42);
+__PRINT_CHAR(' ');
+__PRINT_FLOAT(2.5f);
+__PRINT_CHAR(' ');
+__PRINT_DOUBLE(3.14159d);
+__PRINT_CHAR(' ');
+__PRINT_DECIMAL(19.99m);
+__PRINT_CHAR(' ');
+__PRINT_BOOL(true);
+__PRINT_CHAR(' ');
+__PRINT_STRING(value="ok");
+__PRINT_NEWLINE();
+
+# 3. Uso dentro de funções e procedimentos
+act log_pair(a: int, b: string) {
+  __PRINT_INT(a);
+  __PRINT_STRING(":");
+  __PRINT_STRING(b);
+  __PRINT_NEWLINE();
+}
+log_pair(7, "sigma");
+
+# 4. Diagnósticos estáticos esperados
+assert_error("E0104", "__PRINT_INT(\"42\");", "Tipo incompatível em __PRINT_INT");
+assert_error("E0104", "__PRINT_STRING(123);", "Tipo incompatível em __PRINT_STRING");
+assert_error("E0110", "__READ_LINE(1);", "Excesso de argumentos em __READ_LINE");
+assert_error("E0110", "__PRINT_INT();", "Falta de argumento em __PRINT_INT");
+assert_error("E0110", "__PRINT_NEWLINE(1);", "Excesso de argumentos em __PRINT_NEWLINE");
+assert_error("E0113", "var x := __PRINT_INT(1);", "Uso de retorno void de __PRINT_INT");
+assert_error("E0112", "var f := __PRINT_INT;", "Uso de intrínseco como valor de primeira classe");
+assert_error("E0103", "var __PRINT_INT := 1;", "Redeclaração de intrínseco via var");
+assert_error("E0103", "fun __READ_LINE(): string { return \"\"; }", "Redeclaração de intrínseco via fun");

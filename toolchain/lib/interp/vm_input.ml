@@ -22,6 +22,22 @@ let read_next_line (st : state) : (string, string) result =
      with End_of_file ->
        Error "Runtime error: unexpected end of input (EOF) while reading from stdin")
 
+let read_block (st : state) : (string, string) result =
+  match st.stdin_lines with
+  | Some lines ->
+    st.stdin_lines <- Some [];
+    Ok (String.concat "\n" (List.map strip_cr lines))
+  | None ->
+    flush stdout;
+    let buf = Buffer.create 128 in
+    (try
+       while true do
+         Buffer.add_char buf (input_char stdin)
+       done;
+       Ok ""
+     with End_of_file ->
+       Ok (Buffer.contents buf))
+
 let is_strict_base10_int (s : string) : bool =
   let len = String.length s in
   if len = 0 then false

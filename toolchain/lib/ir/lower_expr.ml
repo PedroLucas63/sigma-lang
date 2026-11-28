@@ -44,6 +44,37 @@ let lower_expr hooks b (e : Typed_ast.expr) =
         Ir.IrInputMask ir_parts
     in
     ignore (emit b (Ir.OP_INPUT ir_spec) e.span)
+  | Typed_ast.TExprIntrinsic (kind, args) ->
+    List.iter (hooks.lower_expr b) args;
+    (match kind with
+     | Typed_ast.IntrPrintString ->
+       ignore (emit b Ir.OP_PRINT_STR e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintInt ->
+       ignore (emit b Ir.OP_PRINT_I64 e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintFloat ->
+       ignore (emit b Ir.OP_PRINT_F32 e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintDouble ->
+       ignore (emit b Ir.OP_PRINT_F64 e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintDecimal ->
+       ignore (emit b Ir.OP_PRINT_DEC e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintBool ->
+       ignore (emit b Ir.OP_PRINT_BOOL e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintChar ->
+       ignore (emit b Ir.OP_PRINT_CHAR e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrPrintNewline ->
+       ignore (emit b Ir.OP_PRINT_NEWLINE e.span);
+       ignore (emit b (Ir.OP_CONST_I64 0L) e.span)
+     | Typed_ast.IntrReadLine ->
+       ignore (emit b Ir.OP_READ_LINE e.span)
+     | Typed_ast.IntrReadBlock ->
+       ignore (emit b Ir.OP_READ_BLOCK e.span))
   | Typed_ast.TExprIdent name -> ignore (emit b (get_global_opcode e.ty name) e.span)
   | Typed_ast.TExprTuple items ->
     List.iter

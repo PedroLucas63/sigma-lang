@@ -165,6 +165,8 @@ let pp_opcode fmt = function
   | OP_PRINT_OBJ -> Format.fprintf fmt "OP_PRINT_OBJ"
   | OP_PRINT_SPACE -> Format.fprintf fmt "OP_PRINT_SPACE"
   | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
+  | OP_READ_LINE -> Format.fprintf fmt "OP_READ_LINE"
+  | OP_READ_BLOCK -> Format.fprintf fmt "OP_READ_BLOCK"
   | OP_ASSERT_EQ -> Format.fprintf fmt "OP_ASSERT_EQ"
   | OP_ASSERT_ERR { expected_code; passed; _ } ->
     Format.fprintf fmt "OP_ASSERT_ERR %s (%B)" expected_code passed

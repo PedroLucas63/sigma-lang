@@ -32,6 +32,7 @@ let rec collect_inner_captures_expr (e : Typed_ast.expr) : string list =
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_inner_captures_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_inner_captures_expr p
+  | Typed_ast.TExprIntrinsic (_, args) -> List.concat_map collect_inner_captures_expr args
   | _ -> []
 
 and collect_inner_captures (s : Typed_ast.stmt) : string list =
@@ -98,6 +99,7 @@ let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_out_vars_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_out_vars_expr p
+  | Typed_ast.TExprIntrinsic (_, args) -> List.concat_map collect_out_vars_expr args
   | _ -> []
 
 let rec collect_out_vars_stmt (s : Typed_ast.stmt) : (string * Ty.t) list =
@@ -191,6 +193,7 @@ let rec collect_all_funs_expr (e : Typed_ast.expr) : Typed_ast.fun_decl list =
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_all_funs_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_all_funs_expr p
+  | Typed_ast.TExprIntrinsic (_, args) -> List.concat_map collect_all_funs_expr args
   | _ -> []
 
 and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =

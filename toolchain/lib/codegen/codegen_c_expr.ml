@@ -75,6 +75,18 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
     (match prompt with
      | None -> read_c
      | Some p -> Printf.sprintf "__extension__ ({ printf(\"%%s\", %s); fflush(stdout); %s; })" (hooks.emit_expr p) read_c)
+  | Typed_ast.TExprIntrinsic (kind, args) ->
+    let emit_a () = match args with [ a ] -> hooks.emit_expr a | _ -> "0" in
+    (match kind with
+     | Typed_ast.IntrPrintString | Typed_ast.IntrPrintChar -> Printf.sprintf "sgm_print_str(%s)" (emit_a ())
+     | Typed_ast.IntrPrintInt -> Printf.sprintf "sgm_print_i64(%s)" (emit_a ())
+     | Typed_ast.IntrPrintFloat -> Printf.sprintf "sgm_print_f32(%s)" (emit_a ())
+     | Typed_ast.IntrPrintDouble -> Printf.sprintf "sgm_print_f64(%s)" (emit_a ())
+     | Typed_ast.IntrPrintDecimal -> Printf.sprintf "sgm_print_dec(%s)" (emit_a ())
+     | Typed_ast.IntrPrintBool -> Printf.sprintf "sgm_print_bool(%s)" (emit_a ())
+     | Typed_ast.IntrPrintNewline -> "sgm_print_newline()"
+     | Typed_ast.IntrReadLine -> "sgm_read_line()"
+     | Typed_ast.IntrReadBlock -> "sgm_read_block()")
   | Typed_ast.TExprIdent name -> ident_c_expr name
   | Typed_ast.TExprTuple items -> emit_collection_literal hooks ~is_tuple:true e.ty items
   | Typed_ast.TExprArray items -> emit_collection_literal hooks ~is_tuple:false e.ty items

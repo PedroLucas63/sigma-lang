@@ -41,6 +41,12 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
      | Ok tparts -> Ok { Typed_ast.desc = Typed_ast.TExprInterp tparts; ty = Ty.String; span = e.span }
      | Error err -> Error err)
   | Ast.ExprInput { prompt; mode } -> Sema_expr_special.check_input_expr hooks env e.span prompt mode
+  | Ast.ExprIdent name when Sema_intrinsics.is_intrinsic name ->
+    Error
+      (Diagnostic.error
+         ~hint:(Printf.sprintf "intrinsics cannot be used as first-class values; call '%s(...)' directly" name)
+         ~code:"E0112" ~span:e.span
+         (Printf.sprintf "cannot use native intrinsic '%s' as a value" name))
   | Ast.ExprIdent name ->
     (match Hashtbl.find_opt env name with
      | Some info ->
@@ -137,6 +143,8 @@ let check_expr_any hooks (env : env) (e : Ast.expr) : (Typed_ast.expr, Diagnosti
                      (Printf.sprintf "cannot call a value of type '%s'" (Ty.to_string other)))))))
      | Ast.ExprIdent name when Hashtbl.mem Sema_generics.generic_funs name ->
        Sema_generics_calls.check_generic_fun_call hooks env e name None args
+     | Ast.ExprIdent name when Sema_intrinsics.is_intrinsic name ->
+       Sema_intrinsics.check_call (hooks.check_expr env) e name args
      | Ast.ExprIdent name ->
        (match Sema_user_types.check_record_ctor hooks env ~span:e.span name args with
         | Some res -> res
