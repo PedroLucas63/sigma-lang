@@ -25,7 +25,7 @@
 ## Fase B — Generics, Intrínsecos e Separação da Biblioteca `io` (`v0.3.0`)
 13. [x] **Templates / Generics (Métodos e Estruturas):** parâmetros de tipo em funções/métodos e `class`/`struct`/`record` semelhantes ao Java/C# (`<T>`, `<?>`, `<T where T is Type>`, variádicos `<Ts...>`).
 14. [x] **Acessores `get`/`set` Customizados em Propriedades:** permitir reescrever o comportamento de `get` e `set` com corpo em bloco ou expressão (`get { ... }`, `get => ...`, `set { ... }`, `set => ...`, parâmetro implícito `value` e *backing field* `field`).
-15. [ ] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (ex: `__PRINT_STRING(value: string)`, `__PRINT_INT(value: int)`, `__READ_LINE(): string`, `__READ_BLOCK(): string`).
+15. [x] **Intrínsecos Nativos Simplificados:** exposição de primitivas de baixo nível (`__PRINT_STRING`, `__PRINT_INT`, `__PRINT_FLOAT`, `__PRINT_DOUBLE`, `__PRINT_DECIMAL`, `__PRINT_BOOL`, `__PRINT_CHAR`, `__PRINT_NEWLINE`, `__READ_LINE`, `__READ_BLOCK`, `tests/23_native_intrinsics_test.sgm`).
 16. [ ] **Separação da Biblioteca de Entrada e Saída (`io`):** implementação de `print<Ts...>(Ts values...)`, `println<Ts...>`, `input`, `prompt`, etc. em módulo padrão dedicado sobre os intrínsecos nativos.
 
 ---

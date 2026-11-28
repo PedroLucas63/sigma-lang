@@ -52,6 +52,7 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
         | Typed_ast.TInterpExpr (sub, _) -> collect_used_expr used sub)
       parts
   | Typed_ast.TExprInput { prompt; _ } -> Option.iter (collect_used_expr used) prompt
+  | Typed_ast.TExprIntrinsic (_, args) -> List.iter (collect_used_expr used) args
   | Typed_ast.TExprInt _ | Typed_ast.TExprFloat _ | Typed_ast.TExprDouble _
   | Typed_ast.TExprDecimal _ | Typed_ast.TExprBool _ | Typed_ast.TExprChar _
   | Typed_ast.TExprString _ | Typed_ast.TExprNull -> ()

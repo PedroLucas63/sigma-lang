@@ -207,6 +207,14 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
     (match st.stack with ((VTuple _ | VArray _ | VFun _) as v) :: rest -> st.stack <- rest; emit_output st out_buf (value_to_string v); Ok () | _ -> Error "VM error on OP_PRINT_OBJ")
   | Ir.OP_PRINT_SPACE -> emit_output st out_buf " "; Ok ()
   | Ir.OP_PRINT_NEWLINE -> emit_output st out_buf "\n"; Ok ()
+  | Ir.OP_READ_LINE ->
+    (match Vm_input.read_next_line st with
+     | Ok line -> st.stack <- VString line :: st.stack; Ok ()
+     | Error msg -> Error msg)
+  | Ir.OP_READ_BLOCK ->
+    (match Vm_input.read_block st with
+     | Ok block -> st.stack <- VString block :: st.stack; Ok ()
+     | Error msg -> Error msg)
   | Ir.OP_ASSERT_EQ ->
     (match st.stack with
      | VString msg :: expected_val :: actual_val :: rest ->

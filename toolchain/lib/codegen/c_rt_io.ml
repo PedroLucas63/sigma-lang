@@ -256,4 +256,25 @@ __attribute__((unused)) static sgm_val_t sgm_input_mask(int n_parts, const int *
   free(vals);
   return sgm_val_obj(tup);
 }
+
+__attribute__((unused)) static const char* sgm_read_block(void) {
+  fflush(stdout);
+  size_t cap = 128, len = 0;
+  char *buf = (char*)malloc(cap);
+  int c;
+  while ((c = fgetc(stdin)) != EOF) {
+    if (len + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+    buf[len++] = (char)c;
+  }
+  buf[len] = '\0';
+  return buf;
+}
+
+__attribute__((unused)) static void sgm_print_str(const char *s) { fputs(s, stdout); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_i64(int64_t v) { printf("%" PRId64, v); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_f32(float v) { printf("%.6g", (double)v); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_f64(double v) { printf("%.15g", v); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_dec(sgm_decimal_t v) { fputs(sgm_fmt_dec(v), stdout); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_bool(bool v) { fputs(v ? "true" : "false", stdout); fflush(stdout); }
+__attribute__((unused)) static void sgm_print_newline(void) { putchar('\n'); fflush(stdout); }
 |}

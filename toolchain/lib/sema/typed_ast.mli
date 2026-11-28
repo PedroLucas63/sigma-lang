@@ -39,6 +39,18 @@ and typed_call_arg = {
   tca_is_this : bool;
 }
 
+and intrinsic_kind =
+  | IntrPrintString
+  | IntrPrintInt
+  | IntrPrintFloat
+  | IntrPrintDouble
+  | IntrPrintDecimal
+  | IntrPrintBool
+  | IntrPrintChar
+  | IntrPrintNewline
+  | IntrReadLine
+  | IntrReadBlock
+
 and expr_desc =
   | TExprInt of int64
   | TExprFloat of float
@@ -78,6 +90,7 @@ and expr_desc =
       prompt : expr option;
       mode : input_mode;
     }
+  | TExprIntrinsic of intrinsic_kind * expr list
 
 and interp_part =
   | TInterpLit of string
