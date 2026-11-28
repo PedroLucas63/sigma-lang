@@ -10,6 +10,9 @@ hero:
       text: Começar Agora
       link: /guide/00-getting-started
     - theme: alt
+      text: Referência Rápida (API)
+      link: /api/
+    - theme: alt
       text: Playground Interativo
       link: /playground.html
     - theme: alt
@@ -40,7 +43,7 @@ record Ponto(x: int, y: int);
 
 fun main(args: string[]): int {
     var p := new Ponto(10, 20);
-    println("Sigma v0.2.3 -> Ponto(${p.x}, ${p.y})");
+    println("Sigma v0.3.0 -> Ponto(${p.x}, ${p.y})");
     return 0;
 }
 ```
