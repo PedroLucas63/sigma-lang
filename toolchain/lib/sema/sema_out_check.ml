@@ -53,7 +53,13 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
       acc parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> assigned_in_expr p acc
   | Typed_ast.TExprIntrinsic (_, args) ->
-    List.fold_left (fun s a -> assigned_in_expr a s) acc args
+    List.fold_left
+      (fun s (a : Typed_ast.typed_call_arg) ->
+        let s1 = assigned_in_expr a.tca_expr s in
+        match a.tca_mode, a.tca_expr.desc with
+        | Ty.ParamOut, Typed_ast.TExprIdent vname -> SSet.add vname s1
+        | _ -> s1)
+      acc args
   | _ -> acc
 
 let check_fun

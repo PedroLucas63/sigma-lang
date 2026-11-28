@@ -167,6 +167,18 @@ let pp_opcode fmt = function
   | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
   | OP_READ_LINE -> Format.fprintf fmt "OP_READ_LINE"
   | OP_READ_BLOCK -> Format.fprintf fmt "OP_READ_BLOCK"
+  | OP_PARSE_I64 -> Format.fprintf fmt "OP_PARSE_I64"
+  | OP_PARSE_F32 -> Format.fprintf fmt "OP_PARSE_F32"
+  | OP_PARSE_F64 -> Format.fprintf fmt "OP_PARSE_F64"
+  | OP_PARSE_DEC -> Format.fprintf fmt "OP_PARSE_DEC"
+  | OP_PARSE_BOOL -> Format.fprintf fmt "OP_PARSE_BOOL"
+  | OP_PARSE_CHAR -> Format.fprintf fmt "OP_PARSE_CHAR"
+  | OP_TRY_PARSE_I64 -> Format.fprintf fmt "OP_TRY_PARSE_I64"
+  | OP_TRY_PARSE_F32 -> Format.fprintf fmt "OP_TRY_PARSE_F32"
+  | OP_TRY_PARSE_F64 -> Format.fprintf fmt "OP_TRY_PARSE_F64"
+  | OP_TRY_PARSE_DEC -> Format.fprintf fmt "OP_TRY_PARSE_DEC"
+  | OP_TRY_PARSE_BOOL -> Format.fprintf fmt "OP_TRY_PARSE_BOOL"
+  | OP_TRY_PARSE_CHAR -> Format.fprintf fmt "OP_TRY_PARSE_CHAR"
   | OP_ASSERT_EQ -> Format.fprintf fmt "OP_ASSERT_EQ"
   | OP_ASSERT_ERR { expected_code; passed; _ } ->
     Format.fprintf fmt "OP_ASSERT_ERR %s (%B)" expected_code passed

@@ -171,8 +171,10 @@ let fun_param_names : (Span.t, string list) Hashtbl.t = Hashtbl.create 16
 let var_param_names : (string, string list) Hashtbl.t = Hashtbl.create 16
 let expr_param_names : (Span.t, string list) Hashtbl.t = Hashtbl.create 16
 
+let is_intrinsic_fn : (string -> bool) ref = ref (fun _ -> false)
+
 let find_conflict (env : env) (name : string) : symbol_info option =
-  if Sema_intrinsics.is_intrinsic name then
+  if !is_intrinsic_fn name then
     Some { ty = Ty.Void; decl_span = Span.dummy; is_const = true; const_kind = DeepConst; is_ref_param = false; const_int = None }
   else
     match Hashtbl.find_opt env name with

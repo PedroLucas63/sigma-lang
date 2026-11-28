@@ -215,6 +215,32 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
     (match Vm_input.read_block st with
      | Ok block -> st.stack <- VString block :: st.stack; Ok ()
      | Error msg -> Error msg)
+  | Ir.OP_PARSE_I64 | Ir.OP_PARSE_F32 | Ir.OP_PARSE_F64 | Ir.OP_PARSE_DEC | Ir.OP_PARSE_BOOL | Ir.OP_PARSE_CHAR ->
+    let ty =
+      let module Ty = Sigma_sema.Ty in
+      match instr.op with
+      | Ir.OP_PARSE_I64 -> Ty.Int | Ir.OP_PARSE_F32 -> Ty.Float | Ir.OP_PARSE_F64 -> Ty.Double
+      | Ir.OP_PARSE_DEC -> Ty.Decimal | Ir.OP_PARSE_BOOL -> Ty.Bool | _ -> Ty.Char
+    in
+    (match st.stack with
+     | VString s :: rest ->
+       (match Vm_input.parse_prim_value ty s with
+        | Ok v -> st.stack <- v :: rest; Ok ()
+        | Error msg -> Error msg)
+     | _ -> Error "VM stack underflow or type error on OP_PARSE")
+  | Ir.OP_TRY_PARSE_I64 | Ir.OP_TRY_PARSE_F32 | Ir.OP_TRY_PARSE_F64 | Ir.OP_TRY_PARSE_DEC | Ir.OP_TRY_PARSE_BOOL | Ir.OP_TRY_PARSE_CHAR ->
+    let ty =
+      let module Ty = Sigma_sema.Ty in
+      match instr.op with
+      | Ir.OP_TRY_PARSE_I64 -> Ty.Int | Ir.OP_TRY_PARSE_F32 -> Ty.Float | Ir.OP_TRY_PARSE_F64 -> Ty.Double
+      | Ir.OP_TRY_PARSE_DEC -> Ty.Decimal | Ir.OP_TRY_PARSE_BOOL -> Ty.Bool | _ -> Ty.Char
+    in
+    (match st.stack with
+     | VRef r :: VString s :: rest ->
+       (match Vm_input.parse_prim_value ty s with
+        | Ok v -> r := v; st.stack <- VBool true :: rest; Ok ()
+        | Error _ -> st.stack <- VBool false :: rest; Ok ())
+     | _ -> Error "VM stack underflow or type error on OP_TRY_PARSE")
   | Ir.OP_ASSERT_EQ ->
     (match st.stack with
      | VString msg :: expected_val :: actual_val :: rest ->

@@ -1,0 +1,87 @@
+# Suite 24: Variádicos com ref/out e Intrínsecos __PARSE_* / __TRY_PARSE_*
+
+# 1. Variádicos com ref Ts... e alias direto no foreach
+act dobrar_todos<Ts...>(ref vars: Ts...) {
+    foreach (var v in vars) {
+        v += v;
+    }
+}
+
+act encaminhar_dobrar<Ts...>(ref vars: Ts...) {
+    dobrar_todos(vars...);
+}
+
+var a: int = 5;
+var b: double = 1.5d;
+var c: string = "oi";
+dobrar_todos(ref a, ref b, ref c);
+assert(a, 10, "variadico ref int dobrado");
+assert(b, 3.0d, "variadico ref double dobrado");
+assert(c, "oioi", "variadico ref string dobrado");
+
+encaminhar_dobrar(ref a, ref b);
+assert(a, 20, "repasse variadico ref int");
+assert(b, 6.0d, "repasse variadico ref double");
+
+# 2. Variádicos com out Ts... (inferência via out var: T e tipos explícitos <...>)
+act parse_todos<Ts...>(raws: string[], out vars: Ts...) {
+    # Exemplo simples de atribuição via foreach em out Ts...
+    foreach (var v in vars) {
+        v = __PARSE_INT(raws[0]);
+    }
+}
+
+var nums: string[1] = ["42"];
+parse_todos(nums, out var o1: int, out var o2: int);
+assert(o1, 42, "out var inferido #1");
+assert(o2, 42, "out var inferido #2");
+
+var o3: int = 0;
+parse_todos<int>(nums, out o3);
+assert(o3, 42, "out existente com tipo explicito");
+
+parse_todos<int>(nums, out var o4);
+assert(o4, 42, "out var sem anotacao com tipo explicito");
+
+# 3. Intrínsecos __PARSE_*
+assert(__PARSE_INT("  -123  "), -123, "__PARSE_INT com espacos e sinal");
+assert(__PARSE_FLOAT("2.5"), 2.5f, "__PARSE_FLOAT");
+assert(__PARSE_DOUBLE("3.14159"), 3.14159d, "__PARSE_DOUBLE");
+assert(__PARSE_DECIMAL("19.99"), 19.99m, "__PARSE_DECIMAL");
+assert(__PARSE_BOOL(" true "), true, "__PARSE_BOOL true");
+assert(__PARSE_BOOL("false"), false, "__PARSE_BOOL false");
+assert(__PARSE_CHAR("Z"), 'Z', "__PARSE_CHAR");
+assert(__PARSE_CHAR("λ"), 'λ', "__PARSE_CHAR unicode");
+
+# 4. Intrínsecos __TRY_PARSE_* (sucesso e falha)
+assert(__TRY_PARSE_INT("99", out var tp_i), true, "__TRY_PARSE_INT valido");
+assert(tp_i, 99, "__TRY_PARSE_INT valor out var");
+assert(__TRY_PARSE_INT("abc", out tp_i), false, "__TRY_PARSE_INT invalido");
+
+assert(__TRY_PARSE_FLOAT("1.25", out var tp_f), true, "__TRY_PARSE_FLOAT valido");
+assert(tp_f, 1.25f, "__TRY_PARSE_FLOAT valor");
+assert(__TRY_PARSE_FLOAT("nan_err", out tp_f), false, "__TRY_PARSE_FLOAT invalido");
+
+assert(__TRY_PARSE_DOUBLE("2.75", out var tp_d), true, "__TRY_PARSE_DOUBLE valido");
+assert(tp_d, 2.75d, "__TRY_PARSE_DOUBLE valor");
+assert(__TRY_PARSE_DOUBLE("", out tp_d), false, "__TRY_PARSE_DOUBLE vazio");
+
+assert(__TRY_PARSE_DECIMAL("10.50", out var tp_m), true, "__TRY_PARSE_DECIMAL valido");
+assert(tp_m, 10.50m, "__TRY_PARSE_DECIMAL valor");
+assert(__TRY_PARSE_DECIMAL("10.5.0", out tp_m), false, "__TRY_PARSE_DECIMAL invalido");
+
+assert(__TRY_PARSE_BOOL("false", out var tp_b), true, "__TRY_PARSE_BOOL valido");
+assert(tp_b, false, "__TRY_PARSE_BOOL valor");
+assert(__TRY_PARSE_BOOL("sim", out tp_b), false, "__TRY_PARSE_BOOL invalido");
+
+assert(__TRY_PARSE_CHAR("A", out var tp_c), true, "__TRY_PARSE_CHAR valido");
+assert(tp_c, 'A', "__TRY_PARSE_CHAR valor");
+assert(__TRY_PARSE_CHAR("AB", out tp_c), false, "__TRY_PARSE_CHAR multi-char");
+
+# 5. Diagnósticos estáticos esperados
+assert_error("E0141", "act f<Ts...>(out vs: Ts...) { foreach (var v in vs) { v = 1; } } f(out var x);", "out var sem tipo e sem <...>");
+assert_error("E0116", "act f<Ts...>(ref vs: Ts...) {} var x := 1; f(x);", "falta de ref em variadico ref");
+assert_error("E0116", "act f<Ts...>(out vs: Ts...) { foreach (var v in vs) { v = 1; } } var x := 1; f(ref x);", "ref passado para variadico out");
+assert_error("E0104", "var n := __PARSE_INT(123);", "tipo invalido em __PARSE_INT");
+assert_error("E0103", "var __PARSE_INT := 1;", "redeclaracao de __PARSE_INT");
+assert_error("E0112", "var f := __TRY_PARSE_INT;", "uso de __TRY_PARSE_INT como valor");

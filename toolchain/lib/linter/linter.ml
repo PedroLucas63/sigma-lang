@@ -29,7 +29,7 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
   | Typed_ast.TExprInput { prompt; _ } ->
     Option.iter (mark_expr_usage tbl) prompt
   | Typed_ast.TExprIntrinsic (_, args) ->
-    List.iter (mark_expr_usage tbl) args
+    List.iter (fun (a : Typed_ast.typed_call_arg) -> mark_expr_usage tbl a.tca_expr) args
   | Typed_ast.TExprIdent name ->
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true
