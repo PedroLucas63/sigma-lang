@@ -1,0 +1,29 @@
+# Biblioteca auxiliar para testes de modulos e tree-shaking
+
+public const PI := 3.14159d;
+private const SEGREDO := 999;
+
+private fun auxiliar_dobro(x: int): int {
+    return x * 2;
+}
+
+public fun dobro_mais_um(x: int): int {
+    return auxiliar_dobro(x) + 1;
+}
+
+public fun somar(a: int, b: int): int {
+    return a + b;
+}
+
+public fun funcao_nunca_usada_no_tree_shaking(): int {
+    return SEGREDO + 1;
+}
+
+public class Vetor(x: int, y: int) {
+    public x: int { get; } = x;
+    public y: int { get; } = y;
+
+    public fun norma_sq(): int {
+        return x * x + y * y;
+    }
+}

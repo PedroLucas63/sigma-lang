@@ -164,6 +164,9 @@ let rec parse_non_decl_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_CLASS | Token.KW_STRUCT | Token.KW_RECORD ->
     err_at tok ~hint:"declare 'class', 'struct', and 'record' at top level"
       "type declaration is not allowed directly inside an unbraced branch"
+  | Token.KW_PUBLIC | Token.KW_PROTECTED | Token.KW_PRIVATE | Token.KW_INTERNAL ->
+    err_at tok ~hint:"visibility modifiers are only valid on top-level type declarations or type members"
+      "visibility modifier is not allowed in this statement context"
   | Token.KW_RETURN -> bump st; parse_return_stmt hooks st tok
   | Token.KW_IF -> bump st; hooks.parse_if_stmt st tok ~stmt_parser:nd_parser
   | Token.KW_WHILE -> bump st; hooks.parse_while_stmt st tok.span ~label:None ~stmt_parser:nd_parser
@@ -188,13 +191,15 @@ let rec parse_non_decl_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
                lbl (Token.kind_to_string loop_tok.kind))))
   | Token.KW_BREAK -> bump st; parse_break_or_continue_stmt st tok ~is_break:true ~require_semi:true
   | Token.KW_CONTINUE -> bump st; parse_break_or_continue_stmt st tok ~is_break:false ~require_semi:true
+  | Token.KW_IMPORT -> bump st; Parser_accessors.parse_import_stmt st tok
+  | Token.KW_FROM -> bump st; Parser_accessors.parse_from_import_stmt st tok
   | Token.LBRACE -> bump st; parse_block_stmt hooks st tok
   | Token.KW_PRINT -> bump st; parse_print_stmt hooks st tok ~newline:false ~require_semi:true
   | Token.KW_PRINTLN -> bump st; parse_print_stmt hooks st tok ~newline:true ~require_semi:true
   | Token.KW_ASSERT -> bump st; parse_assert_stmt hooks st tok ~require_semi:true
   | Token.KW_ASSERT_ERROR -> bump st; parse_assert_error_stmt hooks st tok ~require_semi:true
   | Token.LPAREN ->
-    (match Parser_type_decl.try_parse_multi_assign hooks st tok with
+    (match Parser_accessors.try_parse_multi_assign hooks st tok with
      | Some res -> res
      | None ->
        (match hooks.parse_expr st with
@@ -222,6 +227,45 @@ let parse_stmt hooks st : (Ast.stmt, Diagnostic.t) result =
   | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
     bump st;
     Parser_decl.parse_fun_decl hooks st tok ~is_act:true
+  | Token.KW_EXTERN ->
+    bump st;
+    Parser_extern.parse_extern_stmt st tok
+  | Token.KW_PUBLIC | Token.KW_PROTECTED | Token.KW_PRIVATE | Token.KW_INTERNAL ->
+    let vis =
+      match tok.kind with
+      | Token.KW_PUBLIC -> Ast.VisPublic
+      | Token.KW_PROTECTED -> Ast.VisProtected
+      | Token.KW_PRIVATE -> Ast.VisPrivate
+      | _ -> Ast.VisInternal
+    in
+    bump st;
+    let nt = cur st in
+    let wrap_res res =
+      match res with
+      | Error e -> Error e
+      | Ok s -> Ok { Ast.desc = Ast.StmtVis (vis, s); span = Span.merge tok.span s.span }
+    in
+    (match nt.kind with
+     | Token.KW_CLASS ->
+       bump st;
+       Parser_type_decl.parse_type_decl hooks st ~td_vis:(Some vis) ~start_span:tok.span nt ~kind:Ast.KindClass
+     | Token.KW_STRUCT ->
+       bump st;
+       Parser_type_decl.parse_type_decl hooks st ~td_vis:(Some vis) ~start_span:tok.span nt ~kind:Ast.KindStruct
+     | Token.KW_RECORD ->
+       bump st;
+       Parser_type_decl.parse_type_decl hooks st ~td_vis:(Some vis) ~start_span:tok.span nt ~kind:Ast.KindRecord
+     | Token.KW_VAR -> bump st; wrap_res (hooks.parse_decl st nt ~is_const:false)
+     | Token.KW_CONST -> bump st; wrap_res (hooks.parse_decl st nt ~is_const:true)
+     | Token.KW_FUN when (peek_next st).kind <> Token.LPAREN ->
+       bump st; wrap_res (Parser_decl.parse_fun_decl hooks st nt ~is_act:false)
+     | Token.KW_ACT when (peek_next st).kind <> Token.LPAREN ->
+       bump st; wrap_res (Parser_decl.parse_fun_decl hooks st nt ~is_act:true)
+     | Token.KW_EXTERN ->
+       bump st; wrap_res (Parser_extern.parse_extern_stmt st nt)
+     | _ ->
+       err_at nt ~hint:"visibility modifiers at top level apply to 'class', 'struct', 'record', 'fun', 'act', 'var', or 'const'"
+         (Printf.sprintf "unexpected %s after %s" (Token.kind_to_string nt.kind) (Token.kind_to_string tok.kind)))
   | Token.KW_CLASS ->
     bump st;
     Parser_type_decl.parse_type_decl hooks st tok ~kind:Ast.KindClass

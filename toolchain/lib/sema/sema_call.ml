@@ -158,7 +158,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                           Typed_ast.tca_idx = i;
                           tca_expr = targ;
                           tca_mode = expected_param.pmode;
-                          tca_is_out_var = true;
+                          tca_is_out_var = true; tca_is_this = false;
                         }
                       in
                       loop (tca :: acc) rest))
@@ -190,7 +190,7 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                             Typed_ast.tca_idx = i;
                             tca_expr = targ;
                             tca_mode = expected_param.pmode;
-                            tca_is_out_var = false;
+                            tca_is_out_var = false; tca_is_this = false;
                           }
                         in
                         loop (tca :: acc) rest)
@@ -202,13 +202,19 @@ let check_call hooks (env : env) (e : Ast.expr) (tcallee : Typed_ast.expr)
                 (match hooks.check_expr env a.arg_value with
                  | Error err -> Error err
                  | Ok targ ->
-                   if Ty.equal targ.ty expected_param.pty then
+                   let arg_type_ok =
+                     Ty.is_compatible ~expected:expected_param.pty ~actual:targ.ty
+                     || (match expected_param.pty, targ.ty with
+                         | Ty.DynArray e_exp, Ty.Array (e_act, _) -> Ty.equal e_exp e_act
+                         | _ -> false)
+                   in
+                   if arg_type_ok then
                      let tca =
                        {
                          Typed_ast.tca_idx = i;
                          tca_expr = targ;
                          tca_mode = expected_param.pmode;
-                         tca_is_out_var = false;
+                         tca_is_out_var = false; tca_is_this = false;
                        }
                      in
                      loop (tca :: acc) rest

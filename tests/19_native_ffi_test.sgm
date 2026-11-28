@@ -1,0 +1,66 @@
+# Suite 19: Bibliotecas nativas em C/C++ (extern FFI) e paridade VM / C99
+
+extern "C" from "native_c_lib.c" {
+    fun c_mul_f32(a: float, b: float): float;
+    fun c_avg_f64(a: double, b: double): double;
+    fun c_is_even(n: int): bool;
+    fun c_next_char(c: char): char;
+    fun c_str_len(s: string): int;
+    fun c_greet(): string;
+    act c_acc_add(delta: int);
+    fun c_acc_get(): int;
+    fun c_sum_f64_arr(xs: double[], n: int): double;
+    act c_scale_i64_arr(xs: int[], n: int, factor: int);
+}
+
+extern "C++" from "native_cpp_lib.cpp" fun cpp_dot_i64(a: int[], b: int[], n: int): int;
+
+extern "C" from "m" fun libm_sqrt(x: double): double as "sqrt";
+
+import mod_native;
+from mod_native import c_sub;
+
+# 1. Escalares C99
+assert(c_mul_f32(2.5f, 4.0f), 10.0f, "float via C");
+assert(c_avg_f64(10.0d, 20.0d), 15.0d, "double via C");
+assert(c_is_even(42), true, "bool true via C");
+assert(c_is_even(43), false, "bool false via C");
+assert(c_next_char('A'), 'B', "char UTF-32 via C");
+assert(c_str_len("Sigma"), 5, "string length via C");
+assert(c_greet(), "hello_from_c", "string return via C");
+
+# 2. Procedimentos (act) com estado nativo
+c_acc_add(10);
+c_acc_add(32);
+assert(c_acc_get(), 42, "estado persistente em biblioteca C");
+
+# 3. Arrays primitivos (leitura e mutacao in-place)
+var ds : double[] = [1.5d, 2.5d, 3.0d];
+assert(c_sum_f64_arr(ds, 3), 7.0d, "soma de double[] em C");
+
+var ints : int[] = [2, 4, 6];
+c_scale_i64_arr(ints, 3, 10);
+assert(ints[0], 20, "mutacao in-place int[0] em C");
+assert(ints[1], 40, "mutacao in-place int[1] em C");
+assert(ints[2], 60, "mutacao in-place int[2] em C");
+
+# 4. C++ (std::vector + std::accumulate)
+var v1 : int[] = [1, 2, 3];
+var v2 : int[] = [4, 5, 6];
+assert(cpp_dot_i64(v1, v2, 3), 32, "produto escalar em C++");
+
+# 5. Biblioteca do sistema (libm)
+assert(libm_sqrt(81.0d), 9.0d, "libm sqrt");
+
+# 6. Importacao de modulo com extern + alias + named args + primeira classe + currying
+assert(mod_native.c_add(15, 27), 42, "extern via modulo");
+assert(c_sub(b=3, a=10), 7, "argumentos nomeados em extern");
+var f_add := mod_native.c_add;
+assert(f_add(8, 9), 17, "extern como funcao de primeira classe");
+var add10 := f_add(10);
+assert(add10(5), 15, "currying em funcao extern");
+
+# 7. Diagnosticos E0131 e E0132
+assert_error("E0131", "extern \"Python\" fun f(): int;", "ABI desconhecida deve falhar com E0131");
+assert_error("E0132", "extern \"C\" fun f(x: decimal): int;", "tipo decimal em extern deve falhar com E0132");
+assert_error("E0132", "extern \"C\" fun f(ref x: int): int;", "parametro ref em extern deve falhar com E0132");

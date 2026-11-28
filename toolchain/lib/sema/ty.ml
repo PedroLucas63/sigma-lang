@@ -27,6 +27,7 @@ and t =
   | Array of t * int
   | DynArray of t
   | User of user_type_kind * string
+  | WildcardUser of user_type_kind * string
   | Fun of fun_param list * t
   | Void
 
@@ -47,12 +48,33 @@ let rec equal a b =
     equal ta tb
   | User (ka, na), User (kb, nb) ->
     ka = kb && na = nb
+  | WildcardUser (ka, na), WildcardUser (kb, nb) ->
+    ka = kb && na = nb
   | Fun (pa, ra), Fun (pb, rb) ->
     List.length pa = List.length pb
     && List.for_all2 (fun p1 p2 -> p1.pmode = p2.pmode && equal p1.pty p2.pty) pa pb
     && equal ra rb
   | Void, Void -> true
-  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | DynArray _ | User _ | Fun _ | Void), _ -> false
+  | (Int | Float | Double | Decimal | Bool | Char | String | Tuple _ | Array _ | DynArray _ | User _ | WildcardUser _ | Fun _ | Void), _ -> false
+
+let rec is_compatible ~expected ~actual =
+  match expected, actual with
+  | WildcardUser (ke, ne), User (ka, na) ->
+    ke = ka && (na = ne || String.starts_with ~prefix:(ne ^ "__") na)
+  | WildcardUser (ke, ne), WildcardUser (ka, na) ->
+    ke = ka && ne = na
+  | Tuple xs, Tuple ys ->
+    List.length xs = List.length ys
+    && List.for_all2 (fun e a -> is_compatible ~expected:e ~actual:a) xs ys
+  | Array (te, ne), Array (ta, na) ->
+    ne = na && is_compatible ~expected:te ~actual:ta
+  | DynArray te, DynArray ta ->
+    is_compatible ~expected:te ~actual:ta
+  | Fun (pe, re), Fun (pa, ra) ->
+    List.length pe = List.length pa
+    && List.for_all2 (fun p1 p2 -> p1.pmode = p2.pmode && is_compatible ~expected:p1.pty ~actual:p2.pty) pe pa
+    && is_compatible ~expected:re ~actual:ra
+  | _ -> equal expected actual
 
 let rec to_string = function
   | Int -> "int"
@@ -65,6 +87,7 @@ let rec to_string = function
   | Tuple tys ->
     "(" ^ String.concat ", " (List.map to_string tys) ^ ")"
   | User (_, name) -> name
+  | WildcardUser (_, name) -> name ^ "<?>"
   | Void -> "void"
   | Fun (params, ret) ->
     let p_strs =

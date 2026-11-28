@@ -1,104 +1,7 @@
 (** Abstract Syntax Tree (AST) da linguagem Sigma [.sgm]. *)
 
 open Sigma_common
-
-type unop =
-  | UnPos
-  | UnNeg
-  | UnNot
-
-type binop =
-  | BinAdd
-  | BinSub
-  | BinMul
-  | BinDiv
-  | BinIntDiv
-  | BinPow
-  | BinMod
-  | BinShl
-  | BinShr
-  | BinEq
-  | BinNe
-  | BinLt
-  | BinGt
-  | BinLe
-  | BinGe
-  | BinAnd
-  | BinXor
-  | BinOr
-
-type assign_op =
-  | AssignEq
-  | AssignAdd
-  | AssignSub
-  | AssignMul
-  | AssignDiv
-  | AssignIntDiv
-  | AssignMod
-  | AssignPow
-  | AssignAnd
-  | AssignOr
-  | AssignXor
-  | AssignShl
-  | AssignShr
-
-type incdec_op =
-  | PreInc
-  | PreDec
-  | PostInc
-  | PostDec
-
-type align =
-  | AlignLeft
-  | AlignRight
-  | AlignCenter
-
-type format_spec = {
-  fill : string;
-  align : align option;
-  sign_plus : bool;
-  zero_pad : bool;
-  width : int option;
-  precision : int option;
-  span : Span.t;
-}
-
-type mask_part =
-  | MaskLit of string
-  | MaskType of string * Span.t
-
-type input_mode =
-  | InputLine
-  | InputTypes of (string * Span.t) list
-  | InputMask of mask_part list
-
-type param_mode =
-  | ParamVal
-  | ParamRef
-  | ParamOut
-
-type type_expr =
-  | TypeNamed of string * Span.t
-  | TypeTuple of type_expr list * Span.t
-  | TypeArray of type_expr * int option * Span.t
-  | TypeFun of type_expr * (param_mode * type_expr) list * Span.t
-
-type arg_mode =
-  | ArgVal
-  | ArgRef
-  | ArgOut
-  | ArgOutVar of {
-      var_name : string;
-      var_span : Span.t;
-      var_type : type_expr option;
-    }
-
-type fun_param = {
-  param_name : string;
-  param_span : Span.t;
-  param_mode : param_mode;
-  param_type : type_expr;
-}
+include module type of Ast_base
 
 type collection_item =
   | ItemExpr of expr
@@ -130,16 +33,14 @@ and expr_desc =
   | ExprString of string
   | ExprInterp of interp_part list
   | ExprIdent of string
+  | ExprThis
   | ExprTuple of collection_item list
   | ExprArray of collection_item list
   | ExprIndex of expr * expr
   | ExprField of expr * string
   | ExprStructInit of string * call_arg list
-  | ExprNew of {
-      new_name : string;
-      new_is_ctor : bool;
-      new_args : call_arg list;
-    }
+  | ExprNew of { new_name : string; new_type_args : type_expr list; new_is_ctor : bool; new_args : call_arg list; new_inits : call_arg list option }
+  | ExprTypeApp of expr * type_expr list * Span.t
   | ExprCall of expr * call_arg list
   | ExprLambda of lambda_expr
   | ExprUnary of unop * expr
@@ -156,6 +57,7 @@ and call_arg = {
   arg_name : (string * Span.t) option;
   arg_mode : arg_mode;
   arg_value : expr;
+  arg_spread : bool;
 }
 
 and interp_part =
@@ -197,6 +99,19 @@ and foreach_head = {
   ty_annot : type_expr option;
 }
 
+and import_item = { imp_name : string; imp_name_span : Span.t; imp_alias : (string * Span.t) option }
+and import_spec =
+  | ImportModule of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_alias : (string * Span.t) option }
+  | ImportFrom of { mod_path : string; mod_is_path : bool; mod_span : Span.t; mod_items : import_item list }
+and extern_item = {
+  ext_is_act : bool;
+  ext_name : string;
+  ext_name_span : Span.t;
+  ext_params : fun_param list;
+  ext_ret : type_expr option;
+  ext_symbol : string option;
+  ext_span : Span.t;
+}
 and stmt_desc =
   | StmtVarDecl of var_decl
   | StmtDestruct of destruct_decl
@@ -250,36 +165,55 @@ and stmt_desc =
     }
   | StmtReturn of expr option
   | StmtExpr of expr
+  | StmtImport of import_spec
+  | StmtExtern of {
+      ext_lang : string;
+      ext_lang_span : Span.t;
+      ext_from : string option;
+      ext_from_span : Span.t option;
+      ext_items : extern_item list;
+    }
+  | StmtVis of visibility * stmt
 
 and stmt = {
   desc : stmt_desc;
   span : Span.t;
 }
 
-and user_type_kind =
-  | KindClass
-  | KindStruct
-  | KindRecord
-
+and user_type_kind = KindClass | KindStruct | KindRecord
+and visibility = VisPublic | VisProtected | VisPrivate | VisInternal
+and accessor_kind = AccGet | AccSet | AccInit
+and accessor_body = AccAuto | AccExpr of expr | AccBlock of stmt list
+and accessor_spec = { acc_kind : accessor_kind; acc_vis : visibility option; acc_body : accessor_body; acc_span : Span.t }
 and field_decl = {
+  field_vis : visibility option;
+  field_is_positional : bool;
   field_name : string;
   field_span : Span.t;
   field_type : type_expr;
+  field_accessors : accessor_spec list option;
   field_default : expr option;
 }
-
+and ctor_param = { cp_name : string; cp_span : Span.t; cp_type : type_expr; cp_default : expr option }
+and ctor_decl = {
+  cd_vis : visibility option; cd_name : string; cd_name_span : Span.t;
+  cd_params : ctor_param list; cd_chain : call_arg list option; cd_body : stmt list; cd_span : Span.t;
+}
+and method_decl = { md_vis : visibility option; md_is_static : bool; md_fun : fun_decl; md_span : Span.t }
 and type_decl = {
-  td_kind : user_type_kind;
-  td_name : string;
-  td_name_span : Span.t;
-  td_fields : field_decl list;
+  td_vis : visibility option; td_kind : user_type_kind; td_name : string; td_name_span : Span.t;
+  td_type_params : type_param list; td_where : where_clause list;
+  td_ctor_params : ctor_param list option; td_fields : field_decl list;
+  td_ctors : ctor_decl list; td_methods : method_decl list;
 }
 
 and fun_decl = {
   fd_name : string;
   fd_name_span : Span.t;
+  fd_type_params : type_param list;
   fd_params : fun_param list;
   fd_ret : type_expr option;
+  fd_where : where_clause list;
   fd_body : stmt list;
 }
 

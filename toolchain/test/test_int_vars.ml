@@ -17,4 +17,8 @@ let () =
   Test_ops_matrix.test_linter_unused_variable ();
   Test_ops_matrix.test_debugger_trace ();
   Test_errors.test_syntax_and_semantic_errors ();
+  Test_url_import.test_url_import_parity ();
+  Test_lib_pkg.test_lib_project_and_pack_parity ();
+  Test_pkg_manager.test_semver_and_pkg_manager ();
+  Test_mirrors_git.test_mirrors_and_git_repos ();
   print_endline "All Sigma variable & arithmetic tests passed!"

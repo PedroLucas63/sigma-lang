@@ -43,7 +43,7 @@ let parse_interp_parts hooks segments str_span : (Ast.expr, Diagnostic.t) result
     | [] -> Ok (List.rev acc)
     | Token.SegLit s :: rest -> convert (Ast.InterpLit s :: acc) rest
     | Token.SegTokens (sub_toks, fmt_opt, seg_span) :: rest ->
-      let sub_st = { tokens = Array.of_list sub_toks; idx = 0 } in
+      let sub_st = { tokens = Array.of_list sub_toks; idx = 0; pending_gt = 0 } in
       if is_eof sub_st then
         Error (Diagnostic.error ~code:"E0002" ~span:seg_span "empty interpolation '${}' in string literal")
       else
@@ -166,6 +166,7 @@ let parse_primary hooks st : (Ast.expr, Diagnostic.t) result =
       Parser_type_decl.parse_struct_init hooks st name tok.span
     else
       Ok { Ast.desc = Ast.ExprIdent name; span = tok.span }
+  | Token.KW_THIS -> bump st; Ok { Ast.desc = Ast.ExprThis; span = tok.span }
   | Token.KW_FUN ->
     bump st;
     hooks.parse_lambda_expr st tok ~is_act:false

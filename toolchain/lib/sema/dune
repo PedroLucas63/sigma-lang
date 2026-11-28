@@ -1,4 +1,4 @@
 (library
  (name sigma_sema)
  (public_name sigma.sema)
- (libraries sigma_common sigma_diagnostics sigma_syntax))
+ (libraries sigma_common sigma_diagnostics sigma_syntax sigma_pkg))

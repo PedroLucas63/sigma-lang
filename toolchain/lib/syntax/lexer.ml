@@ -23,6 +23,16 @@ let keyword_or_ident st word =
   | "struct" -> Token.KW_STRUCT
   | "record" -> Token.KW_RECORD
   | "new" -> Token.KW_NEW
+  | "public" -> Token.KW_PUBLIC
+  | "protected" -> Token.KW_PROTECTED
+  | "private" -> Token.KW_PRIVATE
+  | "internal" -> Token.KW_INTERNAL
+  | "static" -> Token.KW_STATIC
+  | "this" -> Token.KW_THIS
+  | "import" -> Token.KW_IMPORT
+  | "from" -> Token.KW_FROM
+  | "as" -> Token.KW_AS
+  | "extern" -> Token.KW_EXTERN
   | "input" -> Token.KW_INPUT
   | "prompt" -> Token.KW_PROMPT
   | "print" -> Token.KW_PRINT
@@ -113,8 +123,12 @@ let read_symbol st tokens errors start_pos c =
   | '[' -> advance st; emit Token.LBRACKET
   | ']' -> advance st; emit Token.RBRACKET
   | '.' when peek_next st = '.' ->
-    advance st; advance st; emit Token.DOT_DOT
+    advance st; advance st;
+    if peek st = '.' then (advance st; emit Token.ELLIPSIS)
+    else emit Token.DOT_DOT
   | '.' -> advance st; emit Token.DOT
+  | '?' -> advance st; emit Token.QUESTION
+  | '|' -> advance st; emit Token.PIPE
   | ',' -> advance st; emit Token.COMMA
   | ';' -> advance st; emit Token.SEMI
   | _ ->

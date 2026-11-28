@@ -52,3 +52,52 @@ jobs:
       - name: Executar Suíte de Testes Sigma (Paridade VM vs Compilador C99)
         run: |
           ./toolchain/_build/default/bin/main.exe test tests/ --parity
+
+  docs-and-web:
+    name: Validação Docs, Web & VSCode
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v7.0.1
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Validar JSONs da Extensão VSCode
+        run: |
+          node -e '
+            const fs = require("fs");
+            const files = [
+              "editors/vscode/package.json",
+              "editors/vscode/language-configuration.json",
+              "editors/vscode/syntaxes/sigma.tmLanguage.json",
+              "editors/vscode/snippets/sigma.code-snippets"
+            ];
+            for (const f of files) {
+              JSON.parse(fs.readFileSync(f, "utf8"));
+              console.log("OK:", f);
+            }
+          '
+
+      - name: Construir Site & Wiki VitePress (web/)
+        run: |
+          cd web
+          npm ci
+          npm run docs:build
+
+  pr-policy:
+    name: Validação de PR (Conventional Commits)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar Título do PR (Conventional Commits)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "Título do PR: $PR_TITLE"
+          if ! echo "$PR_TITLE" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?(!)?: .+'; then
+            echo "Erro: o título do PR deve seguir Conventional Commits (ex: 'feat(sema): add generics (Closes #1)')."
+            exit 1
+          fi

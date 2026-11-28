@@ -36,7 +36,32 @@ and typed_call_arg = {
   tca_expr : expr;
   tca_mode : Ty.param_mode;
   tca_is_out_var : bool;
+  tca_is_this : bool;
 }
+
+and intrinsic_kind =
+  | IntrPrintString
+  | IntrPrintInt
+  | IntrPrintFloat
+  | IntrPrintDouble
+  | IntrPrintDecimal
+  | IntrPrintBool
+  | IntrPrintChar
+  | IntrPrintNewline
+  | IntrReadLine
+  | IntrReadBlock
+  | IntrParseInt
+  | IntrParseFloat
+  | IntrParseDouble
+  | IntrParseDecimal
+  | IntrParseBool
+  | IntrParseChar
+  | IntrTryParseInt
+  | IntrTryParseFloat
+  | IntrTryParseDouble
+  | IntrTryParseDecimal
+  | IntrTryParseBool
+  | IntrTryParseChar
 
 and expr_desc =
   | TExprInt of int64
@@ -58,6 +83,10 @@ and expr_desc =
       tsi_kind : Ty.user_type_kind;
       tsi_args : expr list;
     }
+  | TExprNewWithInits of {
+      nwi_ctor : expr;
+      nwi_inits : (int * expr) list;
+    }
   | TExprCall of {
       callee : expr;
       args : typed_call_arg list;  (** argumentos em ordem de avaliação *)
@@ -73,6 +102,7 @@ and expr_desc =
       prompt : expr option;
       mode : input_mode;
     }
+  | TExprIntrinsic of intrinsic_kind * typed_call_arg list
 
 and interp_part =
   | TInterpLit of string
@@ -187,6 +217,17 @@ and stmt_desc =
     }
   | TStmtReturn of expr option
   | TStmtExpr of expr
+  | TStmtExtern of extern_decl list
+
+and extern_decl = {
+  te_name : string;
+  te_name_span : Span.t;
+  te_lang : string;
+  te_from : string option;
+  te_symbol : string;
+  te_params : typed_param list;
+  te_ret : Ty.t;
+}
 
 and user_field_decl = {
   tuf_name : string;
@@ -199,6 +240,7 @@ and user_type_decl = {
   tud_name : string;
   tud_span : Span.t;
   tud_fields : user_field_decl list;
+  tud_methods : fun_decl list;
 }
 
 and stmt = {

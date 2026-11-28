@@ -43,6 +43,8 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
   | Typed_ast.TExprField (sub, _, _) -> collect_used_expr used sub
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.iter (collect_used_expr used) tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_used_expr used nwi_ctor; List.iter (fun (_, e) -> collect_used_expr used e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.iter
       (function
@@ -50,6 +52,8 @@ let rec collect_used_expr (used : (string, unit) Hashtbl.t) (e : Typed_ast.expr)
         | Typed_ast.TInterpExpr (sub, _) -> collect_used_expr used sub)
       parts
   | Typed_ast.TExprInput { prompt; _ } -> Option.iter (collect_used_expr used) prompt
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.iter (fun (a : Typed_ast.typed_call_arg) -> collect_used_expr used a.tca_expr) args
   | Typed_ast.TExprInt _ | Typed_ast.TExprFloat _ | Typed_ast.TExprDouble _
   | Typed_ast.TExprDecimal _ | Typed_ast.TExprBool _ | Typed_ast.TExprChar _
   | Typed_ast.TExprString _ | Typed_ast.TExprNull -> ()
@@ -125,7 +129,7 @@ let rec collect_used_stmt
         | Typed_ast.TTargetLVal (Typed_ast.TLValField (o, _, _), _) ->
           collect_used_expr used o)
       tma_targets
-  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ -> ()
+  | Typed_ast.TStmtBreak _ | Typed_ast.TStmtContinue _ | Typed_ast.TStmtExtern _ -> ()
 
 let compute_captures
     (env : env)

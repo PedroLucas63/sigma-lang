@@ -1,3 +1,4 @@
 (library
  (name sigma_pkg)
- (public_name sigma.pkg))
+ (public_name sigma.pkg)
+ (libraries unix))

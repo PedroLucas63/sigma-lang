@@ -111,7 +111,13 @@ let check_assign_expr hooks (env : env) (e_span : Span.t) lval op rhs
                    | Some pnames -> Hashtbl.replace var_param_names target_name pnames
                    | None -> Hashtbl.remove var_param_names target_name))
              | _ -> ());
-            Ok { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span }
+            Ok
+              (match tlval with
+               | Typed_ast.TLValField (tbase, field, _) ->
+                 (match Sema_prop_accessors.find_custom_prop_field tbase field with
+                  | Some (_, f) when f.uf_custom_set <> None -> Sema_prop_accessors.make_prop_write e_span tbase f trhs
+                  | _ -> { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span })
+               | _ -> { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span })
           end else
             Error
               (Diagnostic.error
@@ -159,7 +165,16 @@ let check_assign_expr hooks (env : env) (e_span : Span.t) lval op rhs
                  (Diagnostic.error ~code:"E0105" ~span:e_span
                     (Printf.sprintf "division or modulo by zero in '%s' operation" op_str))
              else
-               Ok { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span })))
+               Ok
+                 (match tlval with
+                  | Typed_ast.TLValField (tbase, field, _) ->
+                    (match Sema_prop_accessors.find_custom_prop_field tbase field with
+                     | Some (_, f) ->
+                       let read_e = Sema_prop_accessors.make_prop_read e_span tbase f in
+                       let new_val = { Typed_ast.desc = Typed_ast.TExprBinary (binop, read_e, trhs); ty = lval_ty; span = e_span } in
+                       Sema_prop_accessors.make_prop_write e_span tbase f new_val
+                     | None -> { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span })
+                  | _ -> { Typed_ast.desc = Typed_ast.TExprAssign (tlval, op, trhs); ty = lval_ty; span = e_span }))))
 
 let check_incdec_expr hooks (env : env) (e_span : Span.t) inc_op lval
     : (Typed_ast.expr, Diagnostic.t) result =
@@ -169,8 +184,45 @@ let check_incdec_expr hooks (env : env) (e_span : Span.t) inc_op lval
   | Ok (tlval, lval_ty, lval_label) ->
     (match lval_ty with
      | Ty.Int | Ty.Float | Ty.Double | Ty.Decimal | Ty.Char ->
-       Ok { Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, tlval); ty = lval_ty; span = e_span }
-     | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.Fun _ | Ty.Void ->
+       Ok
+         (match tlval with
+          | Typed_ast.TLValField (tbase, field, _) ->
+            (match Sema_prop_accessors.find_custom_prop_field tbase field with
+             | Some (_, f) ->
+               let delta =
+                 match lval_ty with
+                 | Ty.Float -> { Typed_ast.desc = Typed_ast.TExprFloat 1.0; ty = Ty.Float; span = e_span }
+                 | Ty.Double -> { Typed_ast.desc = Typed_ast.TExprDouble 1.0; ty = Ty.Double; span = e_span }
+                 | Ty.Decimal -> { Typed_ast.desc = Typed_ast.TExprDecimal (Decimal.of_int64 1L); ty = Ty.Decimal; span = e_span }
+                 | _ -> { Typed_ast.desc = Typed_ast.TExprInt 1L; ty = Ty.Int; span = e_span }
+               in
+               let bin = match inc_op with Ast.PreInc | Ast.PostInc -> Ast.BinAdd | Ast.PreDec | Ast.PostDec -> Ast.BinSub in
+               let read_e = Sema_prop_accessors.make_prop_read e_span tbase f in
+               let new_val = { Typed_ast.desc = Typed_ast.TExprBinary (bin, read_e, delta); ty = lval_ty; span = e_span } in
+               let write_e = Sema_prop_accessors.make_prop_write e_span tbase f new_val in
+               (match inc_op with
+                | Ast.PreInc | Ast.PreDec -> write_e
+                | Ast.PostInc | Ast.PostDec ->
+                  let id = !next_lambda_id in
+                  incr next_lambda_id;
+                  let lam_ty = Ty.Fun ([ { Ty.pty = lval_ty; pmode = Ty.ParamVal }; { Ty.pty = lval_ty; pmode = Ty.ParamVal } ], lval_ty) in
+                  let lam_fd : Typed_ast.fun_decl =
+                    { tf_name = Printf.sprintf "__post_prop_%d" id; tf_name_span = e_span;
+                      tf_params = [ { tp_name = "_old"; tp_ty = lval_ty; tp_mode = Ty.ParamVal };
+                                    { tp_name = "_new"; tp_ty = lval_ty; tp_mode = Ty.ParamVal } ];
+                      tf_ret = lval_ty; tf_captures = [];
+                      tf_body = [ { Typed_ast.desc = Typed_ast.TStmtReturn (Some { Typed_ast.desc = Typed_ast.TExprIdent "_old"; ty = lval_ty; span = e_span }); span = e_span } ] }
+                  in
+                  let lam_e = { Typed_ast.desc = Typed_ast.TExprLambda lam_fd; ty = lam_ty; span = e_span } in
+                  { Typed_ast.desc = Typed_ast.TExprCall
+                      { callee = lam_e;
+                        args = [ { tca_idx = 0; tca_mode = Ty.ParamVal; tca_is_out_var = false; tca_is_this = false; tca_expr = read_e };
+                                 { tca_idx = 1; tca_mode = Ty.ParamVal; tca_is_out_var = false; tca_is_this = false; tca_expr = write_e } ];
+                        full = true };
+                    ty = lval_ty; span = e_span })
+             | None -> { Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, tlval); ty = lval_ty; span = e_span })
+          | _ -> { Typed_ast.desc = Typed_ast.TExprIncDec (inc_op, tlval); ty = lval_ty; span = e_span })
+     | Ty.Bool | Ty.String | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.WildcardUser _ | Ty.Fun _ | Ty.Void ->
        Error
          (Diagnostic.error
             ~hint:"'++' and '--' are supported on numeric types ('int', 'float', 'double', 'decimal') and 'char'"

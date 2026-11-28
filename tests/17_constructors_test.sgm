@@ -1,0 +1,96 @@
+# Suite 17: Construtores primarios, construtores gerais, new(...) { ... } e this implicito
+
+public class Ponto(x: int, y: int = 0) {
+    public x: int { get; private set; } = x;
+    public y: int { get; private set; } = y;
+    public z: int { get; init; } = 0;
+
+    # Construtor geral adicional com shadowing -> this. obrigatorio
+    public Ponto(x: int, y: int, z: int) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    # Metodo sem shadowing -> this nao obrigatorio
+    public fun soma(): int {
+        return x + y + z;
+    }
+
+    public act deslocar(dx: int, dy: int) {
+        x += dx;
+        y += dy;
+    }
+}
+
+public class ConfigVazia() {
+    public host: string { get; init; } = "localhost";
+    public porta: int { get; set; } = 8080;
+}
+
+public struct Retangulo(largura: int, altura: int) {
+    public largura: int { get; set; } = largura;
+    public altura: int { get; set; } = altura;
+    public area: int { get; } = largura * altura;
+
+    public Retangulo(lado: int) : this(lado, lado) {}
+
+    public fun perimetro(): int {
+        return 2 * (largura + altura);
+    }
+}
+
+public class Cofre {
+    public codigo: int { get; }
+
+    private Cofre(c: int) {
+        codigo = c; # escrita em { get; } permitida dentro do construtor (sem shadowing)
+    }
+
+    public static fun abrir(c: int): Cofre {
+        return new Cofre(c);
+    }
+}
+
+# 1. Construtor primario (posicional, nomeado, default)
+var p1 := new Ponto(3, 4);
+var p2 := new Ponto(y = 10, x = 5);
+var p3 := new Ponto(7);
+assert((p1.x, p1.y, p1.z), (3, 4, 0), "construtor primario posicional");
+assert((p2.x, p2.y), (5, 10), "construtor primario nomeado");
+assert((p3.x, p3.y), (7, 0), "construtor primario com default");
+
+# 2. Construtor primario + inicializador de objeto { ... } (inclusive init-only)
+var p4 := new Ponto(3) { z = 10 };
+assert((p4.x, p4.y, p4.z, p4.soma()), (3, 0, 10, 13), "construtor primario + inicializador de objeto");
+
+# 3. Construtor geral e sobrecarga
+var p5 := new Ponto(1, 2, 3);
+assert((p5.x, p5.y, p5.z, p5.soma()), (1, 2, 3, 6), "construtor geral com 3 args e soma sem this");
+p5.deslocar(10, 20);
+assert((p5.x, p5.y), (11, 22), "mutacao implicita sem this quando nao ha shadowing");
+
+# 4. Construtor primario vazio e zero-init permitido
+var c1 := new ConfigVazia() { host = "127.0.0.1", porta = 9000 };
+var c2 : ConfigVazia;
+assert((c1.host, c1.porta), ("127.0.0.1", 9000), "construtor vazio + inicializador");
+assert((c2.host, c2.porta), ("localhost", 8080), "zero-init usa construtor vazio");
+
+# 5. Struct com construtor primario + delegacao : this(...) + copia por valor
+var r1 := new Retangulo(4, 5);
+var r2 := new Retangulo(6);
+assert((r1.area, r1.perimetro()), (20, 18), "struct com construtor primario e campo calculado");
+assert((r2.largura, r2.altura, r2.area), (6, 6, 36), "struct com delegacao : this(lado, lado)");
+
+# 6. Construtor privado via factory estatica
+var cf := Cofre.abrir(4242);
+assert(cf.codigo, 4242, "construtor privado chamado por metodo estatico");
+
+# 7. Diagnosticos estaticos
+assert_error("E0102", "class A(x: int) { public y: int = 0; public fun f(): int { return x; } }", "parametro de construtor primario nao e visivel em metodos");
+assert_error("E0121", "class A(x: int) { public x: int = x; } var a := new A { x = 1 };", "tipo com construtor rejeita new { ... }");
+assert_error("E0121", "class A(x: int) { public x: int = x; } var a : A;", "tipo com construtor obrigatorio rejeita zero-init");
+assert_error("E0124", "class A { private A() {} } var a := new A();", "construtor privado inacessivel externamente");
+assert_error("E0125", "class A() { public x: int { get; } = 1; } var a := new A() { x = 2 };", "read-only nao pode ser inicializado em new() { ... }");
+assert_error("E0002", "class A() { public x: int { get; set; } } var a := new A() { 10 };", "inicializador apos () exige campo = valor");
+assert_error("E0002", "class A { public B() {} }", "nome do construtor deve coincidir com o tipo");

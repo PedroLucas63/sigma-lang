@@ -63,7 +63,7 @@ let check_destruct_decl hooks (env : env) (scope_vars : string list ref) (s_span
   | _ :: _ as errors -> Error errors
   | [] ->
     (match resolved_annot, resolved_init with
-     | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+     | Some annot_ty, Some init_te when not (Ty.is_compatible ~expected:annot_ty ~actual:init_te.ty) ->
        Error
          [
            Diagnostic.error ~code:"E0104" ~span:init_te.span
@@ -164,7 +164,7 @@ let check_var_decl hooks (env : env) (scope_vars : string list ref) (s_span : Sp
   | _ :: _ as errors -> Error errors
   | [] ->
     (match resolved_annot, resolved_init with
-     | Some annot_ty, Some init_te when not (Ty.equal annot_ty init_te.ty) ->
+     | Some annot_ty, Some init_te when not (Ty.is_compatible ~expected:annot_ty ~actual:init_te.ty) ->
        let entity = if v.is_const then "constant" else "variable" in
        Error
          [
@@ -178,50 +178,57 @@ let check_var_decl hooks (env : env) (scope_vars : string list ref) (s_span : Sp
                 (Ty.to_string annot_ty) (Ty.to_string init_te.ty));
          ]
      | _ ->
-       let final_ty, final_init, was_default_initialized =
+       let def_res =
          match resolved_annot, resolved_init with
-         | Some annot_ty, Some init_te -> (annot_ty, init_te, false)
-         | None, Some init_te -> (init_te.ty, init_te, false)
-         | Some annot_ty, None -> (annot_ty, default_expr_for_type annot_ty v.name_span, true)
-         | None, None -> (Ty.Int, default_expr_for_type Ty.Int v.name_span, true)
+         | Some annot_ty, Some init_te -> Ok (annot_ty, init_te, false)
+         | None, Some init_te -> Ok (init_te.ty, init_te, false)
+         | Some (Ty.User (_, tname) as annot_ty), None ->
+           (match Sema_ctors.check_default_user_var hooks env ~span:v.name_span tname with
+            | Error err -> Error [ err ]
+            | Ok def_e -> Ok (annot_ty, def_e, true))
+         | Some annot_ty, None -> Ok (annot_ty, default_expr_for_type annot_ty v.name_span, true)
+         | None, None -> Ok (Ty.Int, default_expr_for_type Ty.Int v.name_span, true)
        in
-       let const_int =
-         if v.is_const && final_ty = Ty.Int then eval_const_int env final_init else None
-       in
-       Hashtbl.replace env v.name
-         {
-           ty = final_ty;
-           decl_span = v.name_span;
-           is_const = v.is_const;
-           const_kind = (if v.is_const then DeepConst else NotConst);
-           is_ref_param = false;
-           const_int;
-         };
-       (match v.init with
-        | Some { Ast.desc = Ast.ExprIdent orig_name; _ } ->
-          (match Hashtbl.find_opt var_param_names orig_name with
-           | Some pnames -> Hashtbl.replace var_param_names v.name pnames
-           | None ->
-             (match Hashtbl.find_opt env orig_name with
-              | Some info ->
-                (match Hashtbl.find_opt fun_param_names info.decl_span with
-                 | Some pnames -> Hashtbl.replace var_param_names v.name pnames
-                 | None -> ())
-              | None -> ()))
-        | Some ie ->
-          (match Hashtbl.find_opt expr_param_names ie.span with
-           | Some pnames -> Hashtbl.replace var_param_names v.name pnames
-           | None -> ())
-        | None -> ());
-       scope_vars := v.name :: !scope_vars;
-       let tdecl =
-         {
-           Typed_ast.name = v.name;
-           name_span = v.name_span;
-           is_const = v.is_const;
-           ty = final_ty;
-           init = final_init;
-           was_default_initialized;
-         }
-       in
-       Ok { Typed_ast.desc = Typed_ast.TStmtVarDecl tdecl; span = s_span })
+       (match def_res with
+        | Error es -> Error es
+        | Ok (final_ty, final_init, was_default_initialized) ->
+          let const_int =
+            if v.is_const && final_ty = Ty.Int then eval_const_int env final_init else None
+          in
+          Hashtbl.replace env v.name
+            {
+              ty = final_ty;
+              decl_span = v.name_span;
+              is_const = v.is_const;
+              const_kind = (if v.is_const then DeepConst else NotConst);
+              is_ref_param = false;
+              const_int;
+            };
+          (match v.init with
+           | Some { Ast.desc = Ast.ExprIdent orig_name; _ } ->
+             (match Hashtbl.find_opt var_param_names orig_name with
+              | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+              | None ->
+                (match Hashtbl.find_opt env orig_name with
+                 | Some info ->
+                   (match Hashtbl.find_opt fun_param_names info.decl_span with
+                    | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+                    | None -> ())
+                 | None -> ()))
+           | Some ie ->
+             (match Hashtbl.find_opt expr_param_names ie.span with
+              | Some pnames -> Hashtbl.replace var_param_names v.name pnames
+              | None -> ())
+           | None -> ());
+          scope_vars := v.name :: !scope_vars;
+          let tdecl =
+            {
+              Typed_ast.name = v.name;
+              name_span = v.name_span;
+              is_const = v.is_const;
+              ty = final_ty;
+              init = final_init;
+              was_default_initialized;
+            }
+          in
+          Ok { Typed_ast.desc = Typed_ast.TStmtVarDecl tdecl; span = s_span }))

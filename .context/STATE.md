@@ -4,8 +4,8 @@
 
 ## Fase Atual
 - **Linguagem:** **Sigma** (`.sgm`) — Propósito geral + Computação Científica & Estatística (performance compilada nível C/C++).
-- **Milestone:** `v0.2.3 — Release (Estruturas, main Automático, Scripts sigma.toml & Wiki VitePress)`
-- **Git Flow:** Branch ativa `develop` (`v0.2.3` lançada).
+- **Milestone:** `v0.3.0 — Release (Generics, get/set Customizados, Intrínsecos Nativos & Variádicos ref/out)`
+- **Git Flow:** Branch ativa `release/v0.3.0` (`v0.3.0` em preparação para `main`).
 - **Ambiente:** OCaml `5.5.1`, Dune `3.24.2`, Opam `2.6.1`, GCC & Clang operacionais.
 
 ## Funcionalidades Prontas na CLI Unificada (`sigma`)
@@ -30,31 +30,29 @@
 - [x] Funções e procedimentos anônimos `[fun|act]({<param>})[:<return-type>] => <command>` com inferência opcional do tipo de retorno em `fun`, corpo em expressão direta, comando inline sem chaves ou bloco `{ ... }`, closures léxicas, `ref`/`out`, currying, argumentos nomeados e IIFE (`tests/12_anonymous_functions_test.sgm`).
 - [x] Testes integrados nativos `assert(actual, expected [, msg])`, `assert(cond)` e `assert_error("E01xx", snippet [, msg])` com suporte total na VM e no compilador C99.
 - [x] Test runner `sigma test [--native | --parity]` e gerenciador de projetos (`sigma pkg init`, `sigma.toml`, `sigma run <script>`, `sigma pkg run <script>`).
-- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 434 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (14 suítes).
+- [x] Suíte modular de testes em arquivos `.sgm` reais em `tests/` com 541 asserções cobrindo todas as funcionalidades e diagnósticos da linguagem com paridade absoluta (20 suítes).
 - [x] Ponto de entrada automático `main` (`act main()`, `act main(args: string[])`, `fun main(): int`, `fun main(args: string[]): int`) quando o arquivo não possui instruções executáveis no topo, com suporte a `args[0]` + argumentos CLI e propagação de exit code (`tests/14_auto_main_test.sgm`).
 - [x] Scripts com funções de entrada no `sigma.toml` (`:fn`, `arquivo.sgm:fn`) e flag `--entry <fn>` em `sigma run`/`build`/`emit-c` com diagnóstico `E0123`.
 - [x] Estruturas definidas pelo usuário (`class`, `struct`, `record` — Fase 1) com instanciação obrigatória via `new` (`new T { ... }` / `new R(...)`, `E0122`), atribuição múltipla com parênteses `(a, b) = rhs;` (swap seguro e desempacotamento de tuplas, estruturas e arrays com *rest slice* no último alvo `var (a, b) := [1, 2, 3, 4]`), acesso `.campo`, operadores compostos/`++`/`--` e diagnósticos `E0119`..`E0122` (`tests/13_user_defined_types_test.sgm`).
+- [x] Modificadores de acesso (`public`, `protected`, `private`, `internal`; padrão `private` em `class`/`struct` e `public` em `record` posicional) e acessores estilo C# (`get`, `set`, `init` contextuais) com diagnósticos `E0124`..`E0126` (`tests/15_access_modifiers_properties_test.sgm`).
+- [x] Métodos de instância (`this` opcional quando não há *shadowing*, mutação livre em `class`/`struct` com bloqueio em `const struct`, primeira classe `obj.m`) e métodos estáticos (`static fun`/`act`, `Tipo.m`) com modificadores de acesso (`E0127`..`E0128`, `tests/16_methods_test.sgm`).
+- [x] Construtores primários (estilo C#, inclusive vazios `Ponto() {}`), construtores gerais sobrecarregados (`: this(...)`) e inicialização combinada `new T(...) { campo = val }` (`tests/17_constructors_test.sgm`).
+- [x] Sistema de módulos (`import`/`from ... import ...`/`as`), exportação por visibilidade (`public`/`internal`/`private` em top-level) e carregamento preguiçoso (*lazy* / *tree-shaking* em VM e C99, `E0129`..`E0130`, `tests/18_modules_test.sgm`).
 - [x] Detecção estática de divisão/módulo por zero (`E0105`).
-- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build`, `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init`, `pkg run`.
+- [x] Subcomandos da CLI (`dune exec sigma -- <cmd>`): `run`, `build` (`--lib`), `emit-c` (alias `transpile`), `test`, `check`, `lint`, `debug`, `pkg init|pack|add|remove|install|update|list|mirror|run`.
 - [x] Pipeline de CI/CD GitHub Actions (`.github/workflows/`): testes OCaml, testes em `.sgm`, release com empacotamento multi-formato (`.tar.gz`, `.zip`, `.deb`, `SHA256SUMS.txt`), instalador `install.sh` e deploy automático no GitHub Pages.
 - [x] Sincronização completa de `editors/vscode/`, `docs/` e `web/`.
 
-## Próximos Passos Planejados (Roadmap Oficial em Ordem de Execução)
-1. [x] **Manutenção e Modularização do Código:** Todos os 100 arquivos `.ml`/`.mli` reduzidos para $\le 300$ linhas, com guardrail `check_file_sizes.sh --strict` ativo no CI.
-2. [x] **Estruturas `class`, `struct` e `record` (Fase 1 — Campos e Igualdade):** `class` (igualdade por referência), `struct` (igualdade por valor) e `record` (imutável, igualdade por valor), com inicialização `{}`/`()`, acesso `.campo` e `==`/`!=` (`ADR-035`).
-3. [x] **Ponto de Entrada `main` Automático:** Executar automaticamente `act main()`, `act main(args: string[])`, `fun main(): int` ou `fun main(args: string[]): int` quando o arquivo não tiver operações soltas no topo.
-4. [x] **Scripts com Funções de Entrada no `sigma.toml`:** Permitir definir funções de ponto de entrada nos scripts do projeto.
-5. [ ] **Modificadores de acesso em estruturas (membros) (`public`, `protected`, `private`, `internal`) com modificadores `get`, `set` e `init` como no `C#`.**
-6. [ ] **Métodos de Instância e Estáticos para Estruturas com modificadores de acesso.**
-7. [ ] **Importação e Exportação Preguiçosa (`import`):** Sintaxe estilo Python (módulo, alias ou símbolo direto) com importação preguiçosa (*lazy* / *tree-shaking*) apenas do que for usado e no ponto de uso, incluindo no arquivo compilável em C --- exportação através de modificadores nas estruturas e em funções / ações (`public fun add(a: int, b: int): int`)**.
-8. [ ] **Suporte a criação de bibliotecas em C ou C++, com extensão para outras linguagens.**
-9. [ ] **Importação a partir de URL (`import "https://github.com/user/project/lib.sgm"`).**
-10. [ ] **Separação da Biblioteca de Entrada e Saída (`io`).**
-11. [ ] **Biblioteca de Estruturas de Dados Dinâmicas (em C/C++):** `list`, `stack`, `queue`, `set`, `dict`.
-12. [ ] **Biblioteca Matemática Simples (`math`) (em C/C++):** `sum`, `max`, `min`, `sin`, `cos` e constantes matemáticas.
-13. [ ] **Sistemas Internos de Runtime & Coletor de Lixo (GC):** coletor de lixo automático para objetos no heap (`class`, closures, arrays/tuplas, strings), sem `del`/`delete` manual, além de otimizações internas (análise de escape e gerência de arenas/stack).
-14. [ ] **Biblioteca de ciência de dados (C/C++), com computação adiantada de métricas e abertura de arquivos `csv` (inclusive com `import` e URL: `import "data.csv" as df` e `import "https://github.com/user/project/data.csv" as df`).**
-15. [ ] **Computação Vetorial, Matricial e Álgebra Linear com GPU Nativa (C/C++, Multi-etapas, estilo NumPy).**
+## Próximos Passos Planejados (Resumo — ver [`.context/ROADMAP.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/ROADMAP.md))
+- **1–12. Fase A Concluída** (`v0.2.3+`: modularização, `class`/`struct`/`record`, `main`, `sigma.toml`, acesso/propriedades, métodos, `import` *lazy*, FFI C/C++, `import` por URL, `lib` & `.sgmpkg`, gerenciador SemVer/`sigma.lock`/`.sigma_modules/`, *mirrors* & repositórios Git).
+- **13 (Concluído — Issue #1):** Templates / Generics (funções/métodos/estruturas `<T>`, `<?>`, `where`, variádicos `<Ts...>`, `E0141`..`E0143`, `tests/21_generics_templates_test.sgm`).
+- **14 (Concluído — Issue #2):** Acessores `get`/`set`/`init` customizados em propriedades (`get { ... }`, `get => ...`, `set { ... }`, `value`, *backing field* `field`, `E0144`, `tests/22_custom_property_accessors_test.sgm`).
+- **15 (Concluído — Issue #3):** Intrínsecos nativos de I/O (`__PRINT_STRING`, `__PRINT_INT`, `__PRINT_FLOAT`, `__PRINT_DOUBLE`, `__PRINT_DECIMAL`, `__PRINT_BOOL`, `__PRINT_CHAR`, `__PRINT_NEWLINE`, `__READ_LINE`, `__READ_BLOCK`, `tests/23_native_intrinsics_test.sgm`).
+- **16 (Concluído — Issue #35):** Variádicos com `ref`/`out` (`ref Ts...`, `out Ts...` com inferência `out var` e alias em `foreach`) e intrínsecos de conversão (`__PARSE_*`, `__TRY_PARSE_*`, `tests/24_variadic_ref_out_parse_test.sgm`).
+- **17–28 (Fase C — `v0.4.0`):** stdlib `io` (`#4`), biblioteca de primitivos (`#36`), estruturas aninhadas, `interface`, herança (`abstract`, `sealed`/`final`), `enum`, anotações `@`, sobrecarga, `object`, `null` safety (`T?`), `switch` pattern matching e exceções.
+- **22–25 (Fase D — `v0.5.0`):** base `Collection`/`Enumeration`, coleções dinâmicas em etapas (`list`, `stack`/`queue`, `set`, `dict`), `math` e GC/arenas.
+- **26–28 (Fase E — `v1.0.0`):** sub-roadmaps + implementação de Ciência de Dados/CSV e Vetores/Matrizes/GPU, e análise aprofundada para a `v1.0`.
+- **29–32 (Fase F — `v2.0.0`):** programação WEB (`udp`/`tcp`/`http`), `async`/`await` (`Task`), API de testes avançada em Sigma e reescrita de `sigma pkg` em Sigma.
 
 ## Histórico de Sessões (Resumo Compacto)
 - **2026-10-19:** Inicialização do monorepo AI-First, bootstrap OCaml 5.5.1 + Dune 3.24.2, identidade **Sigma (`.sgm`)** e primitivos (`ADR-001` a `ADR-014`).
@@ -66,4 +64,4 @@
 - **2026-11-02:** Streaming de stdout imediato (`v0.2.2`), funções/procedimentos (`fun`/`act`), currying, parâmetros nomeados (`ADR-028`), closures com captura léxica (`ADR-029`) e parâmetros `shallow const`, `ref`, `out` e `out var` (`ADR-030`, 334 asserções).
 - **2026-11-08:** Funções e procedimentos anônimos `[fun,act]({<param>})[:<ret>] => <command>` com inferência de retorno, comandos inline/bloco e paridade VM/C99 (`ADR-031`, 379 asserções em 12 suítes).
 - **2026-11-24:** Refatoração modular completa da toolchain (`syntax`, `sema`, `ir`, `interp`, `codegen`, `common`, `bin`, `test`) com 100 arquivos $\le 300$ linhas e `check_file_sizes.sh --strict` no CI (`ADR-034`), seguida da Fase 1 de `class`, `struct` e `record` com 415 asserções em 13 suítes (`ADR-035`).
-- **2026-11-25:** Ponto de entrada automático `main` (`act`/`fun`, com/sem `args: string[]`, exit code e `Ty.DynArray`) com 434 asserções em 14 suítes; scripts com funções de entrada no `sigma.toml` (`:fn`, `arquivo.sgm:fn`, `--entry <fn>`, `E0123`).
+- **2026-11-25:** Ponto de entrada automático `main`, scripts `sigma.toml` (`--entry`, `E0123`), modificadores de acesso e `get`/`set`/`init` (`E0124`..`E0126`), métodos (`this` implícito, primeira classe, `E0127`..`E0128`), construtores primários/gerais (`new(...) { ... }`) e sistema de módulos `import`/`from`/`as` com *tree-shaking* (`E0129`..`E0130`, **517 asserções em 18 suítes**).

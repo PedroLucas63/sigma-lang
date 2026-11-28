@@ -177,6 +177,8 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
     st.stack <- VFun { entry; fname; pnames = Array.of_list params; bound = Array.make (List.length params) None; env } :: st.stack;
     Ok ()
   | Ir.OP_CALL idxs -> exec_call st idxs
+  | Ir.OP_CALL_EXTERN { ext_lang; ext_from; ext_symbol; ext_params; ext_ret } ->
+    Vm_ffi.exec_call_extern st ~ext_lang ~ext_from ~ext_symbol ~ext_params ~ext_ret
   | Ir.OP_RETURN ->
     (match st.stack, st.frames with
      | v :: _, fr :: rest_frames -> st.frames <- rest_frames; st.stack <- v :: fr.saved_stack; st.ip <- fr.ret_ip; Ok ()
@@ -205,6 +207,40 @@ let exec_core_op ~out_buf (st : state) (instr : Ir.instr) : (unit, string) resul
     (match st.stack with ((VTuple _ | VArray _ | VFun _) as v) :: rest -> st.stack <- rest; emit_output st out_buf (value_to_string v); Ok () | _ -> Error "VM error on OP_PRINT_OBJ")
   | Ir.OP_PRINT_SPACE -> emit_output st out_buf " "; Ok ()
   | Ir.OP_PRINT_NEWLINE -> emit_output st out_buf "\n"; Ok ()
+  | Ir.OP_READ_LINE ->
+    (match Vm_input.read_next_line st with
+     | Ok line -> st.stack <- VString line :: st.stack; Ok ()
+     | Error msg -> Error msg)
+  | Ir.OP_READ_BLOCK ->
+    (match Vm_input.read_block st with
+     | Ok block -> st.stack <- VString block :: st.stack; Ok ()
+     | Error msg -> Error msg)
+  | Ir.OP_PARSE_I64 | Ir.OP_PARSE_F32 | Ir.OP_PARSE_F64 | Ir.OP_PARSE_DEC | Ir.OP_PARSE_BOOL | Ir.OP_PARSE_CHAR ->
+    let ty =
+      let module Ty = Sigma_sema.Ty in
+      match instr.op with
+      | Ir.OP_PARSE_I64 -> Ty.Int | Ir.OP_PARSE_F32 -> Ty.Float | Ir.OP_PARSE_F64 -> Ty.Double
+      | Ir.OP_PARSE_DEC -> Ty.Decimal | Ir.OP_PARSE_BOOL -> Ty.Bool | _ -> Ty.Char
+    in
+    (match st.stack with
+     | VString s :: rest ->
+       (match Vm_input.parse_prim_value ty s with
+        | Ok v -> st.stack <- v :: rest; Ok ()
+        | Error msg -> Error msg)
+     | _ -> Error "VM stack underflow or type error on OP_PARSE")
+  | Ir.OP_TRY_PARSE_I64 | Ir.OP_TRY_PARSE_F32 | Ir.OP_TRY_PARSE_F64 | Ir.OP_TRY_PARSE_DEC | Ir.OP_TRY_PARSE_BOOL | Ir.OP_TRY_PARSE_CHAR ->
+    let ty =
+      let module Ty = Sigma_sema.Ty in
+      match instr.op with
+      | Ir.OP_TRY_PARSE_I64 -> Ty.Int | Ir.OP_TRY_PARSE_F32 -> Ty.Float | Ir.OP_TRY_PARSE_F64 -> Ty.Double
+      | Ir.OP_TRY_PARSE_DEC -> Ty.Decimal | Ir.OP_TRY_PARSE_BOOL -> Ty.Bool | _ -> Ty.Char
+    in
+    (match st.stack with
+     | VRef r :: VString s :: rest ->
+       (match Vm_input.parse_prim_value ty s with
+        | Ok v -> r := v; st.stack <- VBool true :: rest; Ok ()
+        | Error _ -> st.stack <- VBool false :: rest; Ok ())
+     | _ -> Error "VM stack underflow or type error on OP_TRY_PARSE")
   | Ir.OP_ASSERT_EQ ->
     (match st.stack with
      | VString msg :: expected_val :: actual_val :: rest ->

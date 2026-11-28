@@ -1,0 +1,116 @@
+# Suite 21: Templates / Generics (funções, métodos, class/struct/record, where, <?>, <Ts...>)
+
+# 1. Funções e procedimentos genéricos (inferência e explícito)
+fun identidade<T>(x: T): T {
+    return x;
+}
+
+act trocar<T>(ref a: T, ref b: T) {
+    var tmp: T = a;
+    a = b;
+    b = tmp;
+}
+
+assert(identidade(42), 42, "inferencia de tipo em funcao generica int");
+assert(identidade<string>("sigma"), "sigma", "argumento de tipo explicito string");
+
+var x := 10;
+var y := 20;
+trocar(ref x, ref y);
+assert((x, y), (20, 10), "procedimento generico com ref");
+
+# 2. Estruturas genéricas: class, struct, record + métodos genéricos
+public class Caixa<T> {
+    public valor: T { get; set; }
+
+    public Caixa(valor: T) {
+        this.valor = valor;
+    }
+
+    public fun mapear<U>(f: U(T)): Caixa<U> {
+        return new Caixa<U>(f(this.valor));
+    }
+}
+
+public struct Par<A, B> {
+    public primeiro: A { get; set; }
+    public segundo: B { get; set; }
+}
+
+public record PontoG<T>(x: T, y: T);
+
+var c1 := new Caixa<int>(10);
+assert(c1.valor, 10, "class generica explicita");
+
+var c2 := new Caixa(25);
+assert(c2.valor, 25, "class generica com inferencia no new");
+
+var c3 := c2.mapear<string>(fun(n: int): string => "v=${n}");
+assert(c3.valor, "v=25", "metodo generico em class generica");
+
+var p := new Par<string, bool> { primeiro = "ok", segundo = true };
+assert((p.primeiro, p.segundo), ("ok", true), "struct generica");
+
+var pg := new PontoG<double>(1.5d, 2.5d);
+assert((pg.x, pg.y), (1.5d, 2.5d), "record generico");
+
+# 3. Tipos genéricos aninhados (split de >>)
+var aninhada := new Caixa<Caixa<int>>(new Caixa<int>(99));
+assert(aninhada.valor.valor, 99, "tipos genericos aninhados com >>");
+
+# 4. Métodos genéricos em classe não-genérica
+public class Util {
+    public static fun primeiro<T>(a: T, b: T): T {
+        return a;
+    }
+}
+assert(Util.primeiro<int>(7, 8), 7, "metodo estatico generico com tipo explicito");
+assert(Util.primeiro("a", "b"), "a", "metodo estatico generico com inferencia");
+
+# 5. Wildcard <?> como tipo existencial em parâmetros
+fun validar_caixa(c: Caixa<?>): bool {
+    return c == c;
+}
+assert(validar_caixa(c1), true, "wildcard Caixa<?> aceita Caixa<int>");
+assert(validar_caixa(c3), true, "wildcard Caixa<?> aceita Caixa<string>");
+
+# 6. Restrições where
+fun dobro<T>(v: T): T where T is numeric {
+    return v + v;
+}
+assert(dobro(5), 10, "where T is numeric com int");
+assert(dobro(2.5d), 5.0d, "where T is numeric com double");
+
+fun eco<T>(v: T): T where T is (int | string) {
+    return v;
+}
+assert(eco(123), 123, "where com uniao de tipos (int)");
+assert(eco("abc"), "abc", "where com uniao de tipos (string)");
+
+fun copia_struct<T>(s: T): T where T is struct {
+    return s;
+}
+var p2 := copia_struct(p);
+assert(p2.primeiro, "ok", "where T is struct");
+
+# 7. Variádicos <Ts...>(args: Ts...) com foreach e repasse args...
+fun somar_variadico<Ts...>(args: Ts...): int {
+    var total := 0;
+    foreach (var item in args) {
+        total += item;
+    }
+    return total;
+}
+assert(somar_variadico(1, 2, 3, 4), 10, "variadico <Ts...> com foreach desenrolado");
+
+fun encaminhar<Ts...>(args: Ts...): int {
+    return somar_variadico(args...);
+}
+assert(encaminhar(10, 20, 30), 60, "repasse variadico args...");
+
+# 8. Diagnósticos E0002, E0141, E0142, E0143
+assert_error("E0002", "fun f<>() {}", "lista de parametros de tipo vazia");
+assert_error("E0141", "fun id<T>(x: T): T { return x; } var v := id<int, string>(1);", "aridade incorreta de argumentos de tipo");
+assert_error("E0142", "fun dobro<T>(v: T): T where T is numeric { return v + v; } var v := dobro(\"oi\");", "violacao de constraint where T is numeric");
+assert_error("E0143", "fun dup<T, T>(x: T): T { return x; }", "parametro de tipo duplicado");
+assert_error("E0143", "class C<T> { public v: T; } var x := new C<?>(1);", "wildcard invalido em instanciacao new");

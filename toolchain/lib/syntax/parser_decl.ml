@@ -194,8 +194,12 @@ let parse_fun_params st : (Ast.fun_param list, Diagnostic.t) result =
           match Parser_types.parse_type_expr st with
           | Error e -> Error e
           | Ok te ->
+            let param_variadic =
+              if (cur st).kind = Token.ELLIPSIS then (bump st; true) else false
+            in
             let acc =
-              { Ast.param_name = pname; param_span = t.span; param_mode = pmode; param_type = te }
+              { Ast.param_name = pname; param_span = t.span; param_mode = pmode;
+                param_type = te; param_variadic }
               :: acc
             in
             let nt = cur st in
@@ -216,56 +220,64 @@ let parse_fun_decl hooks st kw_tok ~is_act : (Ast.stmt, Diagnostic.t) result =
   match name_tok.kind with
   | Token.IDENT name ->
     bump st;
-    let lp = cur st in
-    if lp.kind <> Token.LPAREN then
-      err_at lp
-        (Printf.sprintf "expected '(' after %s name '%s', found %s" kw_name name
-           (Token.kind_to_string lp.kind))
-    else begin
-      bump st;
-      match parse_fun_params st with
-      | Error e -> Error e
-      | Ok ps ->
-        let ret_res =
-          if is_act then Ok None
-          else if (cur st).kind = Token.COLON then begin
-            bump st;
-            match Parser_types.parse_type_expr st with
-            | Ok te -> Ok (Some te)
-            | Error e -> Error e
-          end else
-            err_at (cur st)
-              (Printf.sprintf "expected ':' and a return type after the parameters of 'fun %s'" name)
-        in
-        (match ret_res with
+    (match Parser_generics.parse_opt_type_params st with
+     | Error e -> Error e
+     | Ok fd_type_params ->
+       let lp = cur st in
+       if lp.kind <> Token.LPAREN then
+         err_at lp
+           (Printf.sprintf "expected '(' after %s name '%s', found %s" kw_name name
+              (Token.kind_to_string lp.kind))
+       else begin
+         bump st;
+         match parse_fun_params st with
          | Error e -> Error e
-         | Ok ret ->
-           let ob = cur st in
-           if ob.kind <> Token.LBRACE then
-             err_at ob
-               (Printf.sprintf "expected '{' to start the body of '%s %s', found %s" kw_name name
-                  (Token.kind_to_string ob.kind))
-           else begin
-             bump st;
-             match hooks.parse_block_stmt st ob with
-             | Error e -> Error e
-             | Ok { Ast.desc = Ast.StmtBlock body; span } ->
-               Ok
-                 {
-                   Ast.desc =
-                     Ast.StmtFunDecl
+         | Ok ps ->
+           let ret_res =
+             if is_act then Ok None
+             else if (cur st).kind = Token.COLON then begin
+               bump st;
+               match Parser_types.parse_type_expr st with
+               | Ok te -> Ok (Some te)
+               | Error e -> Error e
+             end else
+               err_at (cur st)
+                 (Printf.sprintf "expected ':' and a return type after the parameters of 'fun %s'" name)
+           in
+           (match ret_res with
+            | Error e -> Error e
+            | Ok ret ->
+              (match Parser_generics.parse_opt_where_clauses ~parse_type_expr:Parser_types.parse_type_expr st with
+               | Error e -> Error e
+               | Ok fd_where ->
+                 let ob = cur st in
+                 if ob.kind <> Token.LBRACE then
+                   err_at ob
+                     (Printf.sprintf "expected '{' to start the body of '%s %s', found %s" kw_name name
+                        (Token.kind_to_string ob.kind))
+                 else begin
+                   bump st;
+                   match hooks.parse_block_stmt st ob with
+                   | Error e -> Error e
+                   | Ok { Ast.desc = Ast.StmtBlock body; span } ->
+                     Ok
                        {
-                         Ast.fd_name = name;
-                         fd_name_span = name_tok.span;
-                         fd_params = ps;
-                         fd_ret = ret;
-                         fd_body = body;
-                       };
-                   span = Span.merge kw_tok.Token.span span;
-                 }
-             | Ok _ -> err_at ob "internal error: function body must be a block"
-           end)
-    end
+                         Ast.desc =
+                           Ast.StmtFunDecl
+                             {
+                               Ast.fd_name = name;
+                               fd_name_span = name_tok.span;
+                               fd_type_params;
+                               fd_params = ps;
+                               fd_ret = ret;
+                               fd_where;
+                               fd_body = body;
+                             };
+                         span = Span.merge kw_tok.Token.span span;
+                       }
+                   | Ok _ -> err_at ob "internal error: function body must be a block"
+                 end))
+       end)
   | _ ->
     err_at name_tok
       (Printf.sprintf "expected %s name after '%s', found %s" kw_name kw_name

@@ -22,6 +22,16 @@ type kind =
   | KW_STRUCT
   | KW_RECORD
   | KW_NEW
+  | KW_PUBLIC
+  | KW_PROTECTED
+  | KW_PRIVATE
+  | KW_INTERNAL
+  | KW_STATIC
+  | KW_THIS
+  | KW_IMPORT
+  | KW_FROM
+  | KW_AS
+  | KW_EXTERN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -82,6 +92,9 @@ type kind =
   | RBRACKET
   | DOT
   | DOT_DOT
+  | ELLIPSIS
+  | QUESTION
+  | PIPE
   | COMMA
   | SEMI
   | EOF

@@ -151,6 +151,8 @@ let pp_opcode fmt = function
       (String.concat ", " params) (String.concat ", " captures) entry
   | OP_CALL idxs ->
     Format.fprintf fmt "OP_CALL [%s]" (String.concat "; " (List.map string_of_int idxs))
+  | OP_CALL_EXTERN { ext_lang; ext_symbol; _ } ->
+    Format.fprintf fmt "OP_CALL_EXTERN %s %s" ext_lang ext_symbol
   | OP_RETURN -> Format.fprintf fmt "OP_RETURN"
   | OP_RETURN_VOID -> Format.fprintf fmt "OP_RETURN_VOID"
   | OP_PRINT_I64 -> Format.fprintf fmt "OP_PRINT_I64"
@@ -163,6 +165,20 @@ let pp_opcode fmt = function
   | OP_PRINT_OBJ -> Format.fprintf fmt "OP_PRINT_OBJ"
   | OP_PRINT_SPACE -> Format.fprintf fmt "OP_PRINT_SPACE"
   | OP_PRINT_NEWLINE -> Format.fprintf fmt "OP_PRINT_NEWLINE"
+  | OP_READ_LINE -> Format.fprintf fmt "OP_READ_LINE"
+  | OP_READ_BLOCK -> Format.fprintf fmt "OP_READ_BLOCK"
+  | OP_PARSE_I64 -> Format.fprintf fmt "OP_PARSE_I64"
+  | OP_PARSE_F32 -> Format.fprintf fmt "OP_PARSE_F32"
+  | OP_PARSE_F64 -> Format.fprintf fmt "OP_PARSE_F64"
+  | OP_PARSE_DEC -> Format.fprintf fmt "OP_PARSE_DEC"
+  | OP_PARSE_BOOL -> Format.fprintf fmt "OP_PARSE_BOOL"
+  | OP_PARSE_CHAR -> Format.fprintf fmt "OP_PARSE_CHAR"
+  | OP_TRY_PARSE_I64 -> Format.fprintf fmt "OP_TRY_PARSE_I64"
+  | OP_TRY_PARSE_F32 -> Format.fprintf fmt "OP_TRY_PARSE_F32"
+  | OP_TRY_PARSE_F64 -> Format.fprintf fmt "OP_TRY_PARSE_F64"
+  | OP_TRY_PARSE_DEC -> Format.fprintf fmt "OP_TRY_PARSE_DEC"
+  | OP_TRY_PARSE_BOOL -> Format.fprintf fmt "OP_TRY_PARSE_BOOL"
+  | OP_TRY_PARSE_CHAR -> Format.fprintf fmt "OP_TRY_PARSE_CHAR"
   | OP_ASSERT_EQ -> Format.fprintf fmt "OP_ASSERT_EQ"
   | OP_ASSERT_ERR { expected_code; passed; _ } ->
     Format.fprintf fmt "OP_ASSERT_ERR %s (%B)" expected_code passed

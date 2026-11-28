@@ -31,6 +31,10 @@ val run_source_with_exit :
 val build_source :
   ?entry_name:string -> output_path:string -> Source.t -> (unit, Diagnostic.t list) result
 
+(** Compila uma biblioteca Sigma para biblioteca compartilhada (.so/.dylib/.dll), .h e .sgm. *)
+val build_lib_source :
+  output_path:string -> Source.t -> (string * string * string, Diagnostic.t list) result
+
 (** Traduz um código-fonte Sigma para código C99 autônomo (e opcionalmente grava em [output_path]). *)
 val emit_c_source :
   ?output_path:string -> ?entry_name:string -> Source.t -> (string, Diagnostic.t list) result

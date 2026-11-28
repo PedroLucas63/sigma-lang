@@ -192,7 +192,7 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
           | Ty.Bool -> Ir.OP_PRINT_BOOL
           | Ty.Char -> Ir.OP_PRINT_CHAR
           | Ty.String -> Ir.OP_PRINT_STR
-          | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
+          | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.WildcardUser _ | Ty.Fun _ | Ty.Void -> Ir.OP_PRINT_OBJ
         in
         ignore (emit b op arg.span))
       args;
@@ -231,7 +231,10 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
          fd.tf_ret)
     in
     ignore (emit b (def_global_opcode fty fd.tf_name) s.span)
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> hooks.lower_stmt b [] { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     Lower_user_types.lower_multi_assign hooks b s.span tma_targets tma_rhs
   | Typed_ast.TStmtReturn None -> ignore (emit b Ir.OP_RETURN_VOID s.span)
@@ -242,3 +245,43 @@ let lower_stmt hooks b (loops : loop_frame list) (s : Typed_ast.stmt) =
   | Typed_ast.TStmtExpr e ->
     hooks.lower_expr b e;
     ignore (emit b Ir.OP_POP s.span)
+  | Typed_ast.TStmtExtern exts ->
+    List.iter
+      (fun (ext : Typed_ast.extern_decl) ->
+        let j_over = emit b (Ir.OP_JUMP 0) s.span in
+        let entry = cur_ip b in
+        List.iter
+          (fun (tp : Typed_ast.typed_param) ->
+            ignore (emit b (get_global_opcode tp.tp_ty tp.tp_name) s.span))
+          ext.te_params;
+        ignore
+          (emit b
+             (Ir.OP_CALL_EXTERN
+                {
+                  ext_lang = ext.te_lang;
+                  ext_from = ext.te_from;
+                  ext_symbol = ext.te_symbol;
+                  ext_params = List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_ty) ext.te_params;
+                  ext_ret = ext.te_ret;
+                })
+             s.span);
+        ignore (emit b (if ext.te_ret = Ty.Void then Ir.OP_RETURN_VOID else Ir.OP_RETURN) s.span);
+        patch b j_over (Ir.OP_JUMP (cur_ip b));
+        ignore
+          (emit b
+             (Ir.OP_MAKE_FUN
+                {
+                  entry;
+                  fname = ext.te_name;
+                  params = List.map (fun (tp : Typed_ast.typed_param) -> tp.tp_name) ext.te_params;
+                  captures = [];
+                })
+             s.span);
+        let fty =
+          Ty.Fun
+            (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode })
+               ext.te_params,
+             ext.te_ret)
+        in
+        ignore (emit b (def_global_opcode fty ext.te_name) s.span))
+      exts

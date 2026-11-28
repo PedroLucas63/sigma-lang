@@ -41,6 +41,9 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
   | Typed_ast.TExprField (base, _, _) -> assigned_in_expr base acc
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.fold_left (fun s a -> assigned_in_expr a s) acc tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    let s1 = assigned_in_expr nwi_ctor acc in
+    List.fold_left (fun s (_, e) -> assigned_in_expr e s) s1 nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.fold_left
       (fun s part ->
@@ -49,6 +52,14 @@ let rec assigned_in_expr (e : Typed_ast.expr) (acc : SSet.t) : SSet.t =
         | Typed_ast.TInterpExpr (sub, _) -> assigned_in_expr sub s)
       acc parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> assigned_in_expr p acc
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.fold_left
+      (fun s (a : Typed_ast.typed_call_arg) ->
+        let s1 = assigned_in_expr a.tca_expr s in
+        match a.tca_mode, a.tca_expr.desc with
+        | Ty.ParamOut, Typed_ast.TExprIdent vname -> SSet.add vname s1
+        | _ -> s1)
+      acc args
   | _ -> acc
 
 let check_fun

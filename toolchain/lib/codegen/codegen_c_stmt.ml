@@ -120,7 +120,7 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
         | Ty.Decimal -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_dec(%s), stdout);\n" indent c_e)
         | Ty.Bool -> Buffer.add_string buf (Printf.sprintf "%sfputs((%s) ? \"true\" : \"false\", stdout);\n" indent c_e)
         | Ty.Char | Ty.String -> Buffer.add_string buf (Printf.sprintf "%sfputs(%s, stdout);\n" indent c_e)
-        | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
+        | Ty.Tuple _ | Ty.Array _ | Ty.DynArray _ | Ty.User _ | Ty.WildcardUser _ -> Buffer.add_string buf (Printf.sprintf "%sfputs(sgm_fmt_obj(%s), stdout);\n" indent c_e)
         | Ty.Fun _ -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n%sfputs(\"<function>\", stdout);\n" indent c_e indent)
         | Ty.Void -> ())
       args;
@@ -154,7 +154,10 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
   | Typed_ast.TStmtReturn (Some e) ->
     let c_e = emit_copy_if_struct e (hooks.emit_expr e) in
     Buffer.add_string buf (Printf.sprintf "%sreturn %s;\n" indent (emit_box_val e.ty c_e))
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> hooks.emit_stmt buf indent { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     Codegen_c_user_types.emit_multi_assign hooks buf indent tma_targets tma_rhs
   | Typed_ast.TStmtFunDecl fd ->
@@ -176,3 +179,11 @@ let emit_stmt hooks (buf : Buffer.t) (indent : string) (s : Typed_ast.stmt) : un
            indent (mangle_ident fd.tf_name) c_fn_name (List.length fd.tf_params) env_var)
     end
   | Typed_ast.TStmtExpr e -> Buffer.add_string buf (Printf.sprintf "%s(void)(%s);\n" indent (hooks.emit_expr e))
+  | Typed_ast.TStmtExtern exts ->
+    List.iter
+      (fun (ext : Typed_ast.extern_decl) ->
+        let wrap_name = "sgm_ext_" ^ mangle_ident ext.te_name in
+        Buffer.add_string buf
+          (Printf.sprintf "%ssgm_fn_t *%s = sgm_fn_make(%s, INT64_C(%d), NULL);\n"
+             indent (mangle_ident ext.te_name) wrap_name (List.length ext.te_params)))
+      exts

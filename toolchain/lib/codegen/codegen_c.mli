@@ -12,3 +12,7 @@ val write_c_file :
 (** Compila um programa tipado para um executável nativo via GCC/Clang [-O3]. *)
 val compile_executable :
   ?test_mode:bool -> ?entry_name:string -> output_path:string -> Typed_ast.program -> (unit, string) result
+
+(** Compila uma biblioteca Sigma para biblioteca compartilhada (.so/.dylib/.dll), header .h e stub .sgm. *)
+val compile_library :
+  output_path:string -> Typed_ast.program -> (string * string * string, string) result

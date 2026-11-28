@@ -46,6 +46,26 @@
           "match": "\\b(class|struct|record)\\b"
         },
         {
+          "name": "storage.modifier.visibility.sigma",
+          "match": "\\b(public|protected|private|internal|static)\\b"
+        },
+        {
+          "name": "keyword.other.module.sigma",
+          "match": "\\b(import|from|as|extern)\\b"
+        },
+        {
+          "name": "keyword.other.generic.sigma",
+          "match": "\\b(where|is|numeric)\\b"
+        },
+        {
+          "name": "storage.modifier.accessor.sigma",
+          "match": "\\b(get|set|init)\\b"
+        },
+        {
+          "name": "variable.language.this.sigma",
+          "match": "\\b(this|value|field)\\b"
+        },
+        {
           "name": "keyword.operator.new.sigma",
           "match": "\\b(new)\\b"
         },
@@ -68,6 +88,10 @@
         {
           "name": "support.function.builtin.test.sigma",
           "match": "\\b(assert|assert_error)\\b"
+        },
+        {
+          "name": "support.function.intrinsic.sigma",
+          "match": "\\b(__PRINT_(?:STRING|INT|FLOAT|DOUBLE|DECIMAL|BOOL|CHAR|NEWLINE)|__READ_(?:LINE|BLOCK)|__(?:TRY_)?PARSE_(?:INT|FLOAT|DOUBLE|DECIMAL|BOOL|CHAR))\\b"
         },
         {
           "name": "keyword.operator.assignment.logical.sigma",
@@ -178,6 +202,10 @@
     },
     "operators": {
       "patterns": [
+        {
+          "name": "keyword.operator.variadic.sigma",
+          "match": "\\.\\.\\."
+        },
         {
           "name": "keyword.operator.spread.sigma",
           "match": "\\.\\."

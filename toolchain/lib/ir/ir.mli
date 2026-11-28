@@ -168,6 +168,13 @@ type opcode =
       captures : string list;
     }
   | OP_CALL of int list
+  | OP_CALL_EXTERN of {
+      ext_lang : string;
+      ext_from : string option;
+      ext_symbol : string;
+      ext_params : Sigma_sema.Ty.t list;
+      ext_ret : Sigma_sema.Ty.t;
+    }
   | OP_RETURN
   | OP_RETURN_VOID
   | OP_PRINT_I64
@@ -180,6 +187,20 @@ type opcode =
   | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_READ_LINE
+  | OP_READ_BLOCK
+  | OP_PARSE_I64
+  | OP_PARSE_F32
+  | OP_PARSE_F64
+  | OP_PARSE_DEC
+  | OP_PARSE_BOOL
+  | OP_PARSE_CHAR
+  | OP_TRY_PARSE_I64
+  | OP_TRY_PARSE_F32
+  | OP_TRY_PARSE_F64
+  | OP_TRY_PARSE_DEC
+  | OP_TRY_PARSE_BOOL
+  | OP_TRY_PARSE_CHAR
   | OP_ASSERT_EQ
   | OP_ASSERT_ERR of {
       expected_code : string;

@@ -1,0 +1,29 @@
+name: Issue Status — In Review (develop)
+
+on:
+  push:
+    branches: [ develop ]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  label-in-review:
+    name: Marcar Issues como in-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Adicionar label in-review às issues referenciadas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          IDS=$(echo "$COMMIT_MSG" | grep -oiE '(closes|resolves|fixes)[[:space:]]+#[0-9]+' | grep -oE '[0-9]+' | sort -u || true)
+          if [ -z "$IDS" ]; then
+            echo "Nenhuma issue referenciada no commit."
+            exit 0
+          fi
+          for id in $IDS; do
+            echo "Adicionando label 'in-review' na issue #$id..."
+            gh issue edit "$id" --add-label "in-review" || true
+          done

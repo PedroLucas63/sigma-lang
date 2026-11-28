@@ -1,24 +1,58 @@
 (** Gerenciador de pacotes, projetos e manifesto [sigma.toml]. *)
 
+type project_kind =
+  | KindApp
+  | KindLib
+
+type native_config = {
+  sources : string list;
+  libs : string list;
+  cflags : string list;
+  cxxflags : string list;
+  ldflags : string list;
+}
+
+type dep_spec =
+  | DepSemver of string
+  | DepPath of string
+  | DepUrl of {
+      url : string;
+      version : string option;
+    }
+  | DepGit of {
+      git : string;
+      tag : string option;
+      branch : string option;
+      rev : string option;
+    }
+
 type t = {
   name : string;
   version : string;
+  kind : project_kind;
   description : string;
   authors : string list;
   src_dir : string;
   entry : string;
   test_dir : string;
   scripts : (string * string) list;
+  native : native_config;
+  dependencies : (string * dep_spec) list;
+  mirrors : (string * string * int) list;
 }
 
 val default :
   ?version:string ->
+  ?kind:project_kind ->
   ?description:string ->
   ?authors:string list ->
   ?src_dir:string ->
   ?entry:string ->
   ?test_dir:string ->
   ?scripts:(string * string) list ->
+  ?native:native_config ->
+  ?dependencies:(string * dep_spec) list ->
+  ?mirrors:(string * string * int) list ->
   name:string ->
   unit ->
   t

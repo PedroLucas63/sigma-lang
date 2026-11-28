@@ -28,6 +28,8 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
       parts
   | Typed_ast.TExprInput { prompt; _ } ->
     Option.iter (mark_expr_usage tbl) prompt
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.iter (fun (a : Typed_ast.typed_call_arg) -> mark_expr_usage tbl a.tca_expr) args
   | Typed_ast.TExprIdent name ->
     (match Hashtbl.find_opt tbl name with
      | Some u -> u.used <- true
@@ -46,6 +48,8 @@ let rec mark_expr_usage tbl (e : Typed_ast.expr) =
     List.iter (fun (a : Typed_ast.typed_call_arg) -> mark_expr_usage tbl a.tca_expr) args
   | Typed_ast.TExprStructInit { tsi_args; _ } ->
     List.iter (mark_expr_usage tbl) tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    mark_expr_usage tbl nwi_ctor; List.iter (fun (_, e) -> mark_expr_usage tbl e) nwi_inits
   | Typed_ast.TExprField (base, _, _) ->
     mark_expr_usage tbl base
   | Typed_ast.TExprUnary (_, sub) ->
@@ -194,7 +198,10 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     List.iter (lint_stmt tbl decl_order) fd.tf_body;
     (* Restaura entradas escondidas por parâmetros/locais da função. *)
     Hashtbl.iter (fun k v -> if not (Hashtbl.mem tbl k) then Hashtbl.replace tbl k v) saved
-  | Typed_ast.TStmtTypeDecl _ -> ()
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.iter
+      (fun fd -> lint_stmt tbl decl_order { Typed_ast.desc = Typed_ast.TStmtFunDecl fd; span = s.span })
+      tud.tud_methods
   | Typed_ast.TStmtMultiAssign { tma_targets; tma_rhs } ->
     mark_expr_usage tbl tma_rhs;
     List.iter
@@ -210,6 +217,7 @@ and lint_stmt tbl decl_order (s : Typed_ast.stmt) =
     Option.iter (mark_expr_usage tbl) eo
   | Typed_ast.TStmtExpr e ->
     mark_expr_usage tbl e
+  | Typed_ast.TStmtExtern _ -> ()
 
 let lint_program (prog : Typed_ast.program) : Diagnostic.t list =
   let tbl : (string, var_usage) Hashtbl.t = Hashtbl.create 16 in

@@ -36,11 +36,12 @@ Sempre que o usuário pedir uma feature (ex: *"implemente a soma"*), siga estrit
    - **Perguntas de Design (se houver):** Use `ask_question` ou pergunte diretamente sobre pontos em aberto.
    - **PARE AQUI** e aguarde o usuário validar a sintaxe e autorizar a implementação.
 2. **Turno 2 — Execução (Somente Após Aprovação):**
-   - Inicie a branch via Git Flow: `git flow feature start <nome-da-feature>`.
+   - Atualize `develop` e inicie a branch via Git Flow: `git checkout develop && git pull && git flow feature start <nome-da-feature>`.
    - Atualize [`.context/GRAMMAR.md`](file:///var/home/pedrolcs/Dev/ocaml/.context/GRAMMAR.md).
    - Escreva/atualize as assinaturas `.mli` antes da lógica nos `.ml`.
-   - Implemente o pipeline completo, rode os testes (`dune runtest`) e sincronize `.context/` via skill `context-sync`.
-   - Faça commits atômicos usando *Conventional Commits* e conclua a feature com `git flow feature finish <nome-da-feature>` (quando todos os testes passarem).
+   - Implemente o pipeline completo, rode os testes locais (`dune runtest`, `./toolchain/scripts/check_file_sizes.sh --strict-ideal`, `sigma test tests/ --parity`) e sincronize `.context/` via skill `context-sync`.
+   - Faça commits atômicos usando *Conventional Commits*, envie a branch (`git push -u origin feature/<nome-da-feature>`) e abra um **Pull Request** para `develop` com `gh pr create --base develop` referenciando a issue (`Closes #<ID>`).
+   - Aguarde os checks do CI passarem (`gh pr checks --watch`) e conclua o merge com **Squash Merge** (`gh pr merge --squash --delete-branch`), sincronizando `develop` localmente em seguida.
 
 ## 4. Padrão de Qualidade, Modularidade e Limite de Linhas ("Profissional desde o Dia 1")
 
@@ -82,13 +83,19 @@ As próximas evoluções da linguagem devem seguir esta ordem e diretrizes de pr
 10. **Computação Científica Vetorial, Matricial e Álgebra Linear com GPU Nativa (Multi-etapas):**
     - Arquitetura de alto desempenho inspirada no NumPy para vetores, matrizes e álgebra linear avançada, projetada em múltiplas etapas e com suporte nativo à aceleração por **GPU**.
 
-## 6. Rastreabilidade com Git & Git Flow (`git-flow-next`)
+## 6. Rastreabilidade com Git, Git Flow (`git-flow-next`) & GitHub Issues
 
-- **Modelo de Branches (Preset Classic):**
-  - `main`: Código de produção / releases fechadas com tags (`v0.1.0`, etc.).
-  - `develop`: Branch principal de integração de desenvolvimento.
-  - `feature/<nome>`: Toda nova funcionalidade nasce de `develop` via `git flow feature start <nome>` e retorna via `git flow feature finish <nome>`.
-  - `release/<versao>` & `hotfix/<nome>`: Para preparação de lançamentos e correções urgentes em `main`.
-- **Padrão de Commits (Conventional Commits):**
+- **Modelo de Branches, Rulesets & Pull Requests (Preset Classic + Squash):**
+  - `main`: Código de produção / releases fechadas com tags (`v0.1.0`, etc.). Protegida por ruleset: exige PR a partir de `release/*` ou `hotfix/*` com checks de CI verdes (sem push direto).
+  - `develop`: Branch principal de integração de desenvolvimento. Protegida por ruleset: exige PR a partir de `feature/*` com checks de CI verdes e **Squash Merge** obrigatório (`gh pr merge --squash --delete-branch`).
+  - `feature/<nome>`: Toda nova funcionalidade nasce de `develop` via `git flow feature start <nome>` e retorna exclusivamente via **Pull Request com Squash Merge** para `develop` (não usar `git flow feature finish`, pois `develop` bloqueia push direto).
+  - `release/<versao>` & `hotfix/<nome>`: Para preparação de lançamentos e correções urgentes em `main` via Pull Request.
+- **Padrão de Commits & Título de PR (Conventional Commits):**
   - Formato: `<tipo>(<escopo>): <descrição curta>` (ex: `feat(syntax): add integer literal and plus token`, `feat(interp): execute OP_ADD_INT in stack VM`, `docs(context): sync MAP and STATE for M0`).
-  - Nunca faça commits na `main` diretamente. Mudanças estruturais ou features devem sempre passar por branches do Git Flow.
+  - O **título do PR** também deve seguir Conventional Commits (validado automaticamente pelo CI) e incluir `Resolves #<ID>` ou `Closes #<ID>` quando concluir uma issue (ex: `feat(sema): add generics support (Closes #1)`), pois o Squash Merge usa o título e corpo do PR como commit final na `develop`.
+  - Nunca faça commits na `main` ou `develop` diretamente. Mudanças estruturais ou features devem sempre passar por Pull Request com CI verde.
+- **Gerenciamento de Tarefas via GitHub Issues & Milestones (`gh`):**
+  - As tarefas do roadmap são rastreadas como **Issues** no GitHub vinculadas a **Milestones** de lançamento (ex: `v0.3.0`, `v0.4.0`, `v1.0.0`, `v2.0.0`).
+  - **Ao iniciar uma tarefa:** consulte as issues abertas sem a label `in-review` (`gh issue list --search "-label:in-review"`) e priorize a próxima/mais prioritária da milestone ativa (ou a indicada pelo usuário).
+  - **Ciclo `develop` → `main`:** ao fazer Squash Merge de uma feature na `develop` com `Closes #<ID>`, a issue **não** é fechada manualmente; ela recebe automaticamente a label `in-review` (via workflow) e será fechada automaticamente pelo GitHub quando a `release/*` for mergeada na `main`.
+  - **Registro obrigatório de adiamentos:** se durante o planejamento ou implementação ficar estabelecido que algum comportamento/requisito ficará para uma issue futura, **adicione imediatamente um comentário ou atualize a descrição da issue futura** correspondente no GitHub (ou crie a issue se ainda não existir) deixando devidamente anotado que ela deve resolver aquele ponto.

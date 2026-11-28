@@ -75,6 +75,37 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
     (match prompt with
      | None -> read_c
      | Some p -> Printf.sprintf "__extension__ ({ printf(\"%%s\", %s); fflush(stdout); %s; })" (hooks.emit_expr p) read_c)
+  | Typed_ast.TExprIntrinsic (kind, args) ->
+    let emit_a () = match args with a :: _ -> hooks.emit_expr a.Typed_ast.tca_expr | _ -> "0" in
+    let emit_try fn =
+      match args with
+      | [ a0; a1 ] ->
+        let vname = match a1.Typed_ast.tca_expr.desc with Typed_ast.TExprIdent nm -> nm | _ -> "tmp" in
+        Printf.sprintf "%s(%s, &(%s))" fn (hooks.emit_expr a0.Typed_ast.tca_expr) (ident_c_expr vname)
+      | _ -> "false"
+    in
+    (match kind with
+     | Typed_ast.IntrPrintString | Typed_ast.IntrPrintChar -> Printf.sprintf "sgm_print_str(%s)" (emit_a ())
+     | Typed_ast.IntrPrintInt -> Printf.sprintf "sgm_print_i64(%s)" (emit_a ())
+     | Typed_ast.IntrPrintFloat -> Printf.sprintf "sgm_print_f32(%s)" (emit_a ())
+     | Typed_ast.IntrPrintDouble -> Printf.sprintf "sgm_print_f64(%s)" (emit_a ())
+     | Typed_ast.IntrPrintDecimal -> Printf.sprintf "sgm_print_dec(%s)" (emit_a ())
+     | Typed_ast.IntrPrintBool -> Printf.sprintf "sgm_print_bool(%s)" (emit_a ())
+     | Typed_ast.IntrPrintNewline -> "sgm_print_newline()"
+     | Typed_ast.IntrReadLine -> "sgm_read_line()"
+     | Typed_ast.IntrReadBlock -> "sgm_read_block()"
+     | Typed_ast.IntrParseInt -> Printf.sprintf "sgm_parse_prim(SGM_TAG_I64, %s).u.i64" (emit_a ())
+     | Typed_ast.IntrParseFloat -> Printf.sprintf "sgm_parse_prim(SGM_TAG_F32, %s).u.f32" (emit_a ())
+     | Typed_ast.IntrParseDouble -> Printf.sprintf "sgm_parse_prim(SGM_TAG_F64, %s).u.f64" (emit_a ())
+     | Typed_ast.IntrParseDecimal -> Printf.sprintf "sgm_parse_prim(SGM_TAG_DEC, %s).u.dec" (emit_a ())
+     | Typed_ast.IntrParseBool -> Printf.sprintf "sgm_parse_prim(SGM_TAG_BOOL, %s).u.b" (emit_a ())
+     | Typed_ast.IntrParseChar -> Printf.sprintf "sgm_parse_prim(SGM_TAG_CHAR, %s).u.str" (emit_a ())
+     | Typed_ast.IntrTryParseInt -> emit_try "sgm_try_parse_i64"
+     | Typed_ast.IntrTryParseFloat -> emit_try "sgm_try_parse_f32"
+     | Typed_ast.IntrTryParseDouble -> emit_try "sgm_try_parse_f64"
+     | Typed_ast.IntrTryParseDecimal -> emit_try "sgm_try_parse_dec"
+     | Typed_ast.IntrTryParseBool -> emit_try "sgm_try_parse_bool"
+     | Typed_ast.IntrTryParseChar -> emit_try "sgm_try_parse_char")
   | Typed_ast.TExprIdent name -> ident_c_expr name
   | Typed_ast.TExprTuple items -> emit_collection_literal hooks ~is_tuple:true e.ty items
   | Typed_ast.TExprArray items -> emit_collection_literal hooks ~is_tuple:false e.ty items
@@ -92,8 +123,11 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
                let vname = match a.tca_expr.desc with Typed_ast.TExprIdent nm -> nm | _ -> "tmp" in
                Printf.sprintf "%s[%d] = sgm_val_ref(&(%s));" av j (ident_c_expr vname)
              | Ty.ParamVal ->
-               Printf.sprintf "%s[%d] = %s;" av j
-                 (emit_box_val a.tca_expr.ty (emit_copy_if_struct a.tca_expr (hooks.emit_expr a.tca_expr))))
+               let c_val =
+                 if a.tca_is_this then hooks.emit_expr a.tca_expr
+                 else emit_copy_if_struct a.tca_expr (hooks.emit_expr a.tca_expr)
+               in
+               Printf.sprintf "%s[%d] = %s;" av j (emit_box_val a.tca_expr.ty c_val))
            args)
     in
     let idxs =
@@ -118,6 +152,18 @@ let emit_expr hooks (e : Typed_ast.expr) : string =
     Printf.sprintf "((%s)->items[%d].u.%s)" (hooks.emit_expr target) idx (c_val_union_field e.ty)
   | Typed_ast.TExprStructInit { tsi_name; tsi_kind; tsi_args } ->
     Codegen_c_user_types.emit_struct_init hooks tsi_name tsi_kind tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    incr chain_counter;
+    let obj_v = Printf.sprintf "_sgm_nwi_%d" !chain_counter in
+    let sets =
+      nwi_inits
+      |> List.map (fun (idx, (ve : Typed_ast.expr)) ->
+           let c_v = emit_copy_if_struct ve (hooks.emit_expr ve) in
+           Printf.sprintf "%s->items[%d].u.%s = (%s);" obj_v idx (c_val_union_field ve.ty) c_v)
+      |> String.concat " "
+    in
+    Printf.sprintf "__extension__ ({ sgm_obj_t *%s = (%s); (void)%s; %s %s; })"
+      obj_v (hooks.emit_expr nwi_ctor) obj_v sets obj_v
   | Typed_ast.TExprUnary (unop, sub) -> Codegen_c_expr_ops.emit_unary hooks e unop sub
   | Typed_ast.TExprBinary (binop, lhs, rhs) -> Codegen_c_expr_ops.emit_binary hooks binop lhs rhs
   | Typed_ast.TExprChainCmp (e1, op1, e2, op2, e3) -> Codegen_c_expr_ops.emit_chain_cmp hooks e1 op1 e2 op2 e3

@@ -214,5 +214,46 @@
       "}"
     ],
     "description": "Declare a Sigma void procedure (act)"
+  },
+  "Generic Function": {
+    "prefix": "fung",
+    "body": [
+      "fun ${1:name}<${2:T}>(${3:x}: ${2:T}): ${4:T} {",
+      "  $0",
+      "  return ${3:x};",
+      "}"
+    ],
+    "description": "Declare a generic Sigma function"
+  },
+  "Property with Custom Get/Set": {
+    "prefix": "prop",
+    "body": [
+      "public ${1:name}: ${2:int} {",
+      "  get => field;",
+      "  set { field = value; }",
+      "}"
+    ],
+    "description": "Declare a property with custom get/set accessors using field and value"
+  },
+  "Import Module": {
+    "prefix": "import",
+    "body": [
+      "import ${1:module};"
+    ],
+    "description": "Import a Sigma module lazily"
+  },
+  "From Import": {
+    "prefix": "from",
+    "body": [
+      "from ${1:module} import ${2:symbol};"
+    ],
+    "description": "Import specific symbols lazily from a module"
+  },
+  "Try Parse Int Intrinsic": {
+    "prefix": "tryparse",
+    "body": [
+      "__TRY_PARSE_INT(${1:str}, out var ${2:num})"
+    ],
+    "description": "Try parsing a string into an integer using __TRY_PARSE_INT"
   }
 }

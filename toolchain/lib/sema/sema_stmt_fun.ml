@@ -15,7 +15,15 @@ let check_return_stmt hooks (env : env) (s_span : Span.t) (eo : Ast.expr option)
   | RetExplicit ret_ty ->
     (match eo with
      | None ->
-       if ret_ty = Ty.Void then Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span }
+       if !in_ctor then
+         (match !current_type_ctx with
+          | Some (tname, kind, false) ->
+            let this_e =
+              { Typed_ast.desc = Typed_ast.TExprIdent "this"; ty = Ty.User (kind, tname); span = s_span }
+            in
+            Ok { Typed_ast.desc = Typed_ast.TStmtReturn (Some this_e); span = s_span }
+          | _ -> Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span })
+       else if ret_ty = Ty.Void then Ok { Typed_ast.desc = Typed_ast.TStmtReturn None; span = s_span }
        else
          ret_err
            (Printf.sprintf "'return' without a value in a function returning '%s'" (Ty.to_string ret_ty))
@@ -58,6 +66,13 @@ let check_return_stmt hooks (env : env) (s_span : Span.t) (eo : Ast.expr option)
 
 let check_fun_decl hooks (env : env) (scope_vars : string list ref) (next_loop_id : int ref)
     (s_span : Span.t) (fd : Ast.fun_decl) : (Typed_ast.stmt, Diagnostic.t list) result =
+  if fd.fd_type_params <> [] then begin
+    match Sema_generics.check_duplicate_type_params fd.fd_type_params with
+    | Error e -> Error [ e ]
+    | Ok () ->
+      Hashtbl.replace Sema_generics.generic_funs fd.fd_name fd;
+      Ok { Typed_ast.desc = Typed_ast.TStmtBlock []; span = s_span }
+  end else
   let conflict_errs =
     match find_conflict env fd.fd_name with
     | None -> []

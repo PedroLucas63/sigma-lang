@@ -20,6 +20,16 @@ type kind =
   | KW_STRUCT
   | KW_RECORD
   | KW_NEW
+  | KW_PUBLIC
+  | KW_PROTECTED
+  | KW_PRIVATE
+  | KW_INTERNAL
+  | KW_STATIC
+  | KW_THIS
+  | KW_IMPORT
+  | KW_FROM
+  | KW_AS
+  | KW_EXTERN
   | KW_INPUT
   | KW_PROMPT
   | KW_PRINT
@@ -80,6 +90,9 @@ type kind =
   | RBRACKET
   | DOT
   | DOT_DOT
+  | ELLIPSIS
+  | QUESTION
+  | PIPE
   | COMMA
   | SEMI
   | EOF
@@ -113,6 +126,16 @@ let kind_to_string = function
   | KW_STRUCT -> "'struct'"
   | KW_RECORD -> "'record'"
   | KW_NEW -> "'new'"
+  | KW_PUBLIC -> "'public'"
+  | KW_PROTECTED -> "'protected'"
+  | KW_PRIVATE -> "'private'"
+  | KW_INTERNAL -> "'internal'"
+  | KW_STATIC -> "'static'"
+  | KW_THIS -> "'this'"
+  | KW_IMPORT -> "'import'"
+  | KW_FROM -> "'from'"
+  | KW_AS -> "'as'"
+  | KW_EXTERN -> "'extern'"
   | KW_INPUT -> "'input'"
   | KW_PROMPT -> "'prompt'"
   | KW_PRINT -> "'print'"
@@ -173,6 +196,9 @@ let kind_to_string = function
   | RBRACKET -> "']'"
   | DOT -> "'.'"
   | DOT_DOT -> "'..'"
+  | ELLIPSIS -> "'...'"
+  | QUESTION -> "'?'"
+  | PIPE -> "'|'"
   | COMMA -> "','"
   | SEMI -> "';'"
   | EOF -> "end of file"

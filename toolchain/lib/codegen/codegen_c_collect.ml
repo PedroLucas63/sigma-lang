@@ -27,9 +27,13 @@ let rec collect_inner_captures_expr (e : Typed_ast.expr) : string list =
   | Typed_ast.TExprIndex (b, i) -> collect_inner_captures_expr b @ collect_inner_captures_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_inner_captures_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_inner_captures_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_inner_captures_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_inner_captures_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_inner_captures_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_inner_captures_expr p
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_inner_captures_expr a.tca_expr) args
   | _ -> []
 
 and collect_inner_captures (s : Typed_ast.stmt) : string list =
@@ -91,9 +95,23 @@ let rec collect_out_vars_expr (e : Typed_ast.expr) : (string * Ty.t) list =
   | Typed_ast.TExprIndex (b, i) -> collect_out_vars_expr b @ collect_out_vars_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_out_vars_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_out_vars_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_out_vars_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_out_vars_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_out_vars_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_out_vars_expr p
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.concat_map
+      (fun (a : Typed_ast.typed_call_arg) ->
+        let own =
+          if a.tca_is_out_var then
+            match a.tca_expr.desc with
+            | Typed_ast.TExprIdent vname -> [ (vname, a.tca_expr.ty) ]
+            | _ -> []
+          else []
+        in
+        own @ collect_out_vars_expr a.tca_expr)
+      args
   | _ -> []
 
 let rec collect_out_vars_stmt (s : Typed_ast.stmt) : (string * Ty.t) list =
@@ -142,6 +160,16 @@ let toplevel_decls (prog : Typed_ast.program) : (string * Ty.t) list =
           List.filter_map (fun (b : Typed_ast.destruct_binding) -> Option.map (fun n -> (n, b.ty)) b.name) d.bindings
         | Typed_ast.TStmtFunDecl fd ->
           [ (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)) ]
+        | Typed_ast.TStmtExtern exts ->
+          List.map
+            (fun (ext : Typed_ast.extern_decl) ->
+              (ext.te_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) ext.te_params, ext.te_ret)))
+            exts
+        | Typed_ast.TStmtTypeDecl tud ->
+          List.map
+            (fun (fd : Typed_ast.fun_decl) ->
+              (fd.tf_name, Ty.Fun (List.map (fun (tp : Typed_ast.typed_param) -> { Ty.pty = tp.tp_ty; pmode = tp.tp_mode }) fd.tf_params, fd.tf_ret)))
+            tud.tud_methods
         | _ -> []
       in
       out_vars @ base)
@@ -172,9 +200,13 @@ let rec collect_all_funs_expr (e : Typed_ast.expr) : Typed_ast.fun_decl list =
   | Typed_ast.TExprIndex (b, i) -> collect_all_funs_expr b @ collect_all_funs_expr i
   | Typed_ast.TExprField (o, _, _) -> collect_all_funs_expr o
   | Typed_ast.TExprStructInit { tsi_args; _ } -> List.concat_map collect_all_funs_expr tsi_args
+  | Typed_ast.TExprNewWithInits { nwi_ctor; nwi_inits } ->
+    collect_all_funs_expr nwi_ctor @ List.concat_map (fun (_, e) -> collect_all_funs_expr e) nwi_inits
   | Typed_ast.TExprInterp parts ->
     List.concat_map (function Typed_ast.TInterpLit _ -> [] | Typed_ast.TInterpExpr (sub, _) -> collect_all_funs_expr sub) parts
   | Typed_ast.TExprInput { prompt = Some p; _ } -> collect_all_funs_expr p
+  | Typed_ast.TExprIntrinsic (_, args) ->
+    List.concat_map (fun (a : Typed_ast.typed_call_arg) -> collect_all_funs_expr a.tca_expr) args
   | _ -> []
 
 and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
@@ -182,6 +214,8 @@ and collect_all_funs (s : Typed_ast.stmt) : Typed_ast.fun_decl list =
   | Typed_ast.TStmtVarDecl v -> collect_all_funs_expr v.init
   | Typed_ast.TStmtDestruct d -> collect_all_funs_expr d.init
   | Typed_ast.TStmtFunDecl fd -> fd :: List.concat_map collect_all_funs fd.tf_body
+  | Typed_ast.TStmtTypeDecl tud ->
+    List.concat_map (fun (fd : Typed_ast.fun_decl) -> fd :: List.concat_map collect_all_funs fd.tf_body) tud.tud_methods
   | Typed_ast.TStmtBlock stmts -> List.concat_map collect_all_funs stmts
   | Typed_ast.TStmtIf { cond; then_branch; else_branch } ->
     collect_all_funs_expr cond @ collect_all_funs then_branch

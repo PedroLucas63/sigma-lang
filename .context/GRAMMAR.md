@@ -25,6 +25,16 @@
 | Palavra-chave | `KW_STRUCT` | `struct` |
 | Palavra-chave | `KW_RECORD` | `record` |
 | Palavra-chave | `KW_NEW` | `new` |
+| Palavra-chave | `KW_PUBLIC` | `public` |
+| Palavra-chave | `KW_PROTECTED` | `protected` |
+| Palavra-chave | `KW_PRIVATE` | `private` |
+| Palavra-chave | `KW_INTERNAL` | `internal` |
+| Palavra-chave | `KW_STATIC` | `static` |
+| Palavra-chave | `KW_THIS` | `this` |
+| Palavra-chave | `KW_IMPORT` | `import` |
+| Palavra-chave | `KW_FROM` | `from` |
+| Palavra-chave | `KW_AS` | `as` |
+| Palavra-chave | `KW_EXTERN` | `extern` |
 | Palavra-chave | `KW_INPUT` | `input` |
 | Palavra-chave | `KW_PROMPT` | `prompt` |
 | Palavra-chave | `KW_PRINT` | `print` |
@@ -85,6 +95,9 @@
 | Delimitador | `RBRACKET` | `]` |
 | Operador | `DOT` | `.` |
 | Operador | `DOT_DOT` | `..` |
+| Operador | `ELLIPSIS` | `...` |
+| Delimitador | `QUESTION` | `?` |
+| Operador | `PIPE` | `\|` |
 | Delimitador | `COMMA` | `,` |
 | Delimitador | `SEMI` | `;` |
 | Controle | `EOF` | Fim de arquivo |
@@ -98,19 +111,41 @@ program       ::= stmt* EOF ;
 
 stmt          ::= type_decl
                 | decl_stmt ";"
+                | import_stmt ";"
                 | non_decl_stmt ;
 
-decl_stmt     ::= var_decl
-                | const_decl
-                | destruct_decl
-                | fun_decl
-                | act_decl ;
+decl_stmt     ::= visibility? ( var_decl | const_decl | destruct_decl | fun_decl | act_decl ) ;
 
-type_decl     ::= ( "class" | "struct" ) IDENT "{" field_decl* "}"
-                | "record" IDENT "(" record_params? ")" ( "{" "}" | ";" ) ;
-field_decl    ::= IDENT ":" type_expr ( "=" expr )? ";" ;
+import_target ::= IDENT | STRING ;
+import_item   ::= IDENT ( "as" IDENT )? ;
+import_stmt   ::= "import" import_target ( "as" IDENT )?
+                | "from" import_target "import" import_item ( "," import_item )* ","? ;
+extern_item   ::= ( "fun" | "act" ) IDENT "(" [ param_list ] ")" [ ":" type_expr ] [ "as" STRING ] ";" ;
+type_params   ::= "<" type_param ( "," type_param )* ">" ;
+type_param    ::= IDENT "..."? ;
+where_clause  ::= "where" IDENT "is" type_constr ( "," IDENT "is" type_constr )* ;
+type_constr   ::= "numeric" | "class" | "struct" | "record" | type_expr | "(" type_expr ( "|" type_expr )* ")" ;
+type_args     ::= "<" type_arg ( "," type_arg )* ">" ;
+type_arg      ::= "?" | type_expr ;
+extern_decl   ::= [ visibility ] "extern" STRING [ "from" STRING ] ( "{" { extern_item } "}" | extern_item ) ;
+
+visibility    ::= "public" | "protected" | "private" | "internal" ;
+
+ctor_param    ::= IDENT ":" type_expr ( "=" expr )? ;
+ctor_params   ::= "(" ( ctor_param ( "," ctor_param )* ","? )? ")" ;
+
+type_decl     ::= visibility? ( "class" | "struct" ) IDENT ctor_params? "{" member_decl* "}"
+                | visibility? "record" IDENT "(" record_params? ")" ( "{" member_decl* "}" | ";" ) ;
+member_decl   ::= field_decl | ctor_decl | method_decl ;
+field_decl    ::= visibility? IDENT ":" type_expr ( accessor_blk ( "=" expr )? ";"? | ( "=" expr )? ";" ) ;
+ctor_decl     ::= visibility? IDENT "(" params? ")" ( ":" "this" "(" call_args? ")" )? block_stmt ;
+method_decl   ::= visibility? "static"? ( "fun" IDENT "(" params? ")" ":" type_expr block_stmt
+                                        | "act" IDENT "(" params? ")" block_stmt ) ;
+accessor_blk  ::= "{" accessor+ "}" ;
+accessor_body ::= ";" | "=>" expr ";" | block ;
+accessor      ::= visibility? ( "get" | "set" | "init" ) accessor_body ;
 record_params ::= record_param ( "," record_param )* ","? ;
-record_param  ::= IDENT ":" type_expr ( "=" expr )? ;
+record_param  ::= visibility? IDENT ":" type_expr ( "=" expr )? ;
 
 non_decl_stmt ::= if_stmt
                 | loop_stmt
@@ -199,6 +234,7 @@ primary       ::= INT
                 | STRING
                 | INTERP_STRING
                 | IDENT
+                | "this"
                 | new_expr
                 | lambda_expr
                 | input_expr
@@ -209,7 +245,8 @@ primary       ::= INT
 
 lambda_expr   ::= "fun" "(" params? ")" ( ":" type_expr )? "=>" lambda_body
                 | "act" "(" params? ")" "=>" lambda_body ;
-new_expr      ::= "new" IDENT ( "{" call_args? "}" | "(" call_args? ")" ) ;
+new_expr      ::= "new" IDENT "(" call_args? ")" ( "{" call_args? "}" )?
+                | "new" IDENT "{" call_args? "}" ;
 lambda_body   ::= block_stmt
                 | inline_stmt
                 | expr ;
@@ -547,6 +584,20 @@ type opcode =
   | OP_PRINT_OBJ
   | OP_PRINT_SPACE
   | OP_PRINT_NEWLINE
+  | OP_READ_LINE
+  | OP_READ_BLOCK
+  | OP_PARSE_I64
+  | OP_PARSE_F32
+  | OP_PARSE_F64
+  | OP_PARSE_DEC
+  | OP_PARSE_BOOL
+  | OP_PARSE_CHAR
+  | OP_TRY_PARSE_I64
+  | OP_TRY_PARSE_F32
+  | OP_TRY_PARSE_F64
+  | OP_TRY_PARSE_DEC
+  | OP_TRY_PARSE_BOOL
+  | OP_TRY_PARSE_CHAR
   | OP_ASSERT_EQ
   | OP_ASSERT_ERR of {
       expected_code : string;

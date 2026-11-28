@@ -47,6 +47,7 @@ export default defineConfig({
       { text: 'Início', link: '/' },
       { text: 'Começar', link: '/guide/00-getting-started' },
       { text: 'Guia', link: '/guide/01-variables-and-types' },
+      { text: 'API', link: '/api/' },
       { text: 'Especificação', link: '/spec/grammar-and-types' },
       { text: 'CLI', link: '/tools/cli-reference' },
       { text: 'Playground', link: '/playground.html', target: '_self' }
@@ -57,20 +58,31 @@ export default defineConfig({
         text: 'Começando',
         items: [
           { text: 'Instalação e Primeiros Passos', link: '/guide/00-getting-started' },
-          { text: 'Visão Geral da Documentação', link: '/README' }
+          { text: 'Visão Geral da Documentação', link: '/README' },
+          { text: 'Referência Rápida (API)', link: '/api/' }
         ]
       },
       {
         text: 'Guia da Linguagem',
         items: [
-          { text: '01. Variáveis, Tipos, Decimal e E/S', link: '/guide/01-variables-and-types' },
+          { text: '01. Tipos Primitivos e Variáveis', link: '/guide/01-variables-and-types' },
           { text: '02. Operadores e Expressões', link: '/guide/02-operators-and-expressions' },
           { text: '03. Condicionais, Laços e Blocos', link: '/guide/03-control-flow-and-blocks' },
           { text: '04. Testes e Projetos (sigma.toml)', link: '/guide/04-testing-and-project-management' },
           { text: '05. Tuplas, Arrays e Referências', link: '/guide/05-tuples-and-arrays' },
           { text: '06. Funções, Act, Closures e ref/out', link: '/guide/06-functions-and-actions' },
-          { text: '07. Class, Struct, Record e new', link: '/guide/07-user-defined-types' },
-          { text: '08. Ponto de Entrada main e Scripts', link: '/guide/08-entry-points-and-scripts' }
+          { text: '08. Ponto de Entrada main e Scripts', link: '/guide/08-entry-points-and-scripts' },
+          { text: '09. Funções do Sistema & Intrínsecos', link: '/guide/09-system-functions' },
+          { text: '10. Generics e Módulos (import/FFI)', link: '/guide/10-generics-and-modules' }
+        ]
+      },
+      {
+        text: 'Estruturas (OOP & Dados)',
+        items: [
+          { text: 'Visão Geral & Comparativo', link: '/guide/structures/' },
+          { text: 'class (Referência Mutável)', link: '/guide/structures/class' },
+          { text: 'struct (Valor Mutável)', link: '/guide/structures/struct' },
+          { text: 'record (Valor Imutável)', link: '/guide/structures/record' }
         ]
       },
       {
@@ -87,7 +99,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Linguagem Sigma v0.2.3 — Interpretador VM + Compilador Nativo C99',
+      message: 'Linguagem Sigma v0.3.0 — Interpretador VM + Compilador Nativo C99',
       copyright: 'MIT License'
     }
   }
