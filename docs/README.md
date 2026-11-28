@@ -4,17 +4,25 @@ Bem-vindo à documentação oficial da **Sigma**, uma linguagem de programação
 
 ## Sumário
 
-1. **Especificação da Linguagem (`spec/`)**
+1. **Referência Rápida (`api/`)**
+   - [API & Referência Direta (Para Experientes)](./api/index.md)
+2. **Especificação da Linguagem (`spec/`)**
    - [Gramática, Sistema de Tipos, Precedência, IR e Diagnósticos](./spec/grammar-and-types.md)
-2. **Guia de Aprendizado (`guide/`)**
+3. **Guia de Aprendizado (`guide/`)**
    - [00. Instalação e Primeiros Passos](./guide/00-getting-started.md)
-   - [01. Variáveis, Tipos Primitivos, Ponto Flutuante Exato (`decimal`), Strings Formatadas (`${expr:spec}`) e Entrada/Saída (`input`, `prompt`, `print`, `println`)](./guide/01-variables-and-types.md)
-   - [02. Operadores Aritméticos, Lógicos, Bitwise, Relacionais, Atribuições Compostas e Incremento/Decremento](./guide/02-operators-and-expressions.md)
-   - [03. Estruturas Condicionais (`if`/`else`), Laços (`while`, `for`, `foreach`), Rótulos (`break`/`continue`) e Blocos (`{ ... }`)](./guide/03-control-flow-and-blocks.md)
-   - [04. Testes Nativos (`assert`, `assert_error`), Test Runner (`sigma test`) e Gerenciador de Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)
-   - [05. Tuplas Imutáveis, Desempacotamento, Arrays Estáticos (`T[N]` / `T[]`), Spread (`..`) e Semântica de Referência](./guide/05-tuples-and-arrays.md)
-   - [06. Funções (`fun`), Procedimentos (`act`), Funções Anônimas (`=>`), Closures, `ref`/`out` e Chamadas Parciais](./guide/06-functions-and-actions.md)
-   - [07. Estruturas Definidas pelo Usuário (`class`, `struct`, `record`), `new` e Atribuição Múltipla](./guide/07-user-defined-types.md)
-   - [08. Ponto de Entrada `main` Automático e Scripts no `sigma.toml`](./guide/08-entry-points-and-scripts.md)
-3. **Ferramentas e CLI Unificada (`tools/`)**
+   - [01. Variáveis, Tipos Primitivos e Interpolação](./guide/01-variables-and-types.md)
+   - [02. Operadores e Expressões](./guide/02-operators-and-expressions.md)
+   - [03. Condicionais, Laços e Blocos](./guide/03-control-flow-and-blocks.md)
+   - [04. Testes Nativos e Projetos (`sigma.toml`)](./guide/04-testing-and-project-management.md)
+   - [05. Tuplas, Arrays Estáticos e Referências](./guide/05-tuples-and-arrays.md)
+   - [06. Funções (`fun`), Procedimentos (`act`), Closures e `ref`/`out`](./guide/06-functions-and-actions.md)
+   - **Estruturas (`guide/structures/`)**
+     - [Visão Geral & Quadro Comparativo (`class` vs `struct` vs `record`)](./guide/structures/index.md)
+     - [`class` (Referência Mutável)](./guide/structures/class.md)
+     - [`struct` (Valor Mutável)](./guide/structures/struct.md)
+     - [`record` (Valor Imutável)](./guide/structures/record.md)
+   - [08. Ponto de Entrada `main` Automático e Scripts](./guide/08-entry-points-and-scripts.md)
+   - [09. Funções do Sistema & Intrínsecos Nativos](./guide/09-system-functions.md)
+   - [10. Generics (`<T>`, `<Ts...>`) e Módulos (`import`, `extern`)](./guide/10-generics-and-modules.md)
+4. **Ferramentas e CLI Unificada (`tools/`)**
    - [Referência da CLI `sigma` (Interpretador, Compilador Nativo, Linter, Debugger e Pacotes)](./tools/cli-reference.md)

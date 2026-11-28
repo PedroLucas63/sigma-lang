@@ -80,7 +80,7 @@ A extensão oficial fornece realce de sintaxe completo para arquivos `.sgm`, fec
 Baixe o arquivo `sigma-lang-<versao>.vsix` na página de **Releases** e instale pelo terminal ou pela interface do VSCode:
 
 ```bash
-code --install-extension sigma-lang-0.2.3.vsix
+code --install-extension sigma-lang-0.3.0.vsix
 ```
 
 *(Ou no VSCode: **Extensions** → menu `...` → **Install from VSIX...**)*
